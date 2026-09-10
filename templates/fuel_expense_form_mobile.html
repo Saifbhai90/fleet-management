@@ -1,0 +1,691 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  body.fuel-mobile-preview-page .navbar,
+  body.fuel-mobile-preview-page #sidebar,
+  body.fuel-mobile-preview-page .sidebar-overlay,
+  body.fuel-mobile-preview-page .mobile-bottom-nav,
+  body.fuel-mobile-preview-page .fm-aurora-bg,
+  body.fuel-mobile-preview-page .ws-mini-nav,
+  body.fuel-mobile-preview-page #no-internet-banner {
+    display: none !important;
+  }
+  body.fuel-mobile-preview-page #mainContent {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #eef2f6;
+  }
+  body.fuel-mobile-preview-page .flash-message {
+    top: 10px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    z-index: 5000;
+    min-width: 280px;
+    max-width: min(360px, calc(100vw - 16px));
+  }
+  body.fuel-mobile-preview-page .ts-dropdown {
+    max-width: min(340px, calc(100vw - 24px));
+  }
+  .fuel-device {
+    width: 100%;
+    margin: 0;
+  }
+  .fuel-phone-shell {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    padding: 0;
+    background: #eef2f6;
+    box-shadow: none;
+    position: relative;
+  }
+  .fuel-phone-inner {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: #eef2f6;
+    border-radius: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-width: 0;
+  }
+  .fuel-appbar {
+    background: linear-gradient(180deg, #1558c7 0%, #0e4dad 100%);
+    color: #fff;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 10px;
+    flex-shrink: 0;
+  }
+  .fuel-appbar-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .fuel-icon-btn {
+    width: 34px; height: 34px; border: 0; border-radius: 50%;
+    background: rgba(255,255,255,.12); color: #fff;
+    display: grid; place-items: center; text-decoration: none; flex-shrink: 0;
+  }
+  .fuel-appbar-title { flex: 1; min-width: 0; }
+  .fuel-appbar h1 { margin: 0; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fuel-appbar .sub {
+    margin: 2px 0 0; font-size: 11px; color: #d7e6ff; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .fuel-ticker {
+    display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px;
+    background: #e8f7ef; border-bottom: 1px solid #cdeadb;
+    font-size: 11px; color: #14532d; flex-shrink: 0; min-width: 0;
+  }
+  .fuel-ticker.fuel-info-click,
+  .fuel-ticker .fuel-info-click,
+  .last-entry.fuel-info-click {
+    cursor: pointer;
+  }
+  .fuel-ticker .fuel-info-click:hover,
+  .fuel-saved-bar:hover,
+  .last-entry.fuel-info-click:hover {
+    filter: brightness(0.98);
+  }
+  .fuel-ticker .fuel-info-click.is-open,
+  .fuel-saved-bar.is-open,
+  .last-entry.fuel-info-click.is-open {
+    box-shadow: inset 0 0 0 1px rgba(18, 70, 181, .28);
+  }
+  .fuel-saved-bar {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 4px 6px;
+    line-height: 1.4;
+    background: #eef2ff;
+    border-bottom-color: #d5e3fb;
+    color: #1e3a5f;
+  }
+  .fuel-saved-bar .fuel-saved-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+  }
+  .fuel-saved-bar .badge { font-size: 9px; }
+  .fuel-saved-edit {
+    flex-shrink: 0;
+    color: #1246b5;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+  .fuel-label-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .fuel-label-row label { margin-bottom: 4px; }
+  .fuel-task-km {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    line-height: 1.4;
+  }
+  .fuel-task-km strong,
+  .fuel-task-km .is-neutral {
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+  }
+  .fuel-task-km .is-ok { color: #15803d; }
+  .fuel-task-km .is-bad { color: #b91c1c; }
+  .fuel-task-km .sep { color: #94a3b8; font-weight: 600; margin: 0 4px; }
+  .fuel-metrics-line { margin: 8px 0 0; }
+  .fuel-ticker .grow {
+    flex: 1; min-width: 0; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    line-height: 1.35;
+  }
+  .fuel-scan-btn {
+    border: 0; background: #0f7a4a; color: #fff; border-radius: 6px;
+    height: 24px; padding: 0 8px; font-size: 10px; font-weight: 800; flex-shrink: 0;
+  }
+  .fuel-scroll {
+    flex: 1; overflow-x: hidden; overflow-y: auto; padding: 10px;
+    min-width: 0; min-height: 0;
+  }
+  .fuel-card {
+    background: #fff; border: 1px solid #dde3eb; border-radius: 16px; padding: 10px;
+    box-shadow: 0 8px 18px rgba(16, 32, 51, .04);
+    min-width: 0; max-width: 100%; overflow: hidden;
+  }
+  .fuel-card + .fuel-card { margin-top: 10px; }
+  .fuel-card-h {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eef2f6;
+    font-size: 12px; font-weight: 800; min-width: 0;
+  }
+  .fuel-type-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 64px; height: 24px; padding: 0 10px; border-radius: 999px;
+    background: #eef4ff; color: #1246b5; border: 1px solid #c9d8f7;
+    font-size: 11px; font-weight: 800; letter-spacing: .01em;
+  }
+  .fuel-type-chip.is-empty { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+  .fuel-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-width: 0; }
+  .fuel-grid-2 > * { min-width: 0; }
+  .fuel-pay-seg {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: #eef2f7;
+    border-radius: 10px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .fuel-pay-seg button {
+    height: 34px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #526274;
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 0;
+    padding: 0 2px;
+  }
+  .fuel-pay-seg button.on {
+    background: #fff;
+    color: #1246b5;
+    box-shadow: 0 1px 4px rgba(16, 32, 51, .08);
+  }
+  .fuel-phone-inner label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 700; color: #5b6b7c; }
+  .fuel-phone-inner .form-control,
+  .fuel-phone-inner .form-select,
+  .fuel-phone-inner .ts-wrapper .ts-control {
+    min-height: 42px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    min-width: 0; width: 100%; max-width: 100%;
+  }
+  .fuel-phone-inner .ts-wrapper { width: 100%; min-width: 0; max-width: 100%; }
+  .fuel-phone-inner .ts-control { overflow: hidden; }
+  .fuel-phone-inner .ts-control .item {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  }
+  .fuel-row {
+    display: flex; gap: 8px; align-items: stretch; min-width: 0; width: 100%;
+  }
+  .fuel-row .ts-wrapper,
+  .fuel-row .form-control,
+  .fuel-row .form-select {
+    flex: 1 1 0;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none;
+  }
+  .fuel-side {
+    height: 42px; border-radius: 10px; border: 1px solid #c9d4e3; background: #fff;
+    color: #1e3a5f; font-size: 10px; font-weight: 800; padding: 0 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    text-decoration: none; white-space: nowrap; flex: 0 0 auto;
+  }
+  .fuel-side.dash { border-style: dashed; border-color: #8fb0f0; color: #1246b5; }
+  #fuelingDate { font-variant-numeric: tabular-nums; letter-spacing: 0; padding-left: 10px; padding-right: 8px; }
+  .last-entry {
+    margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+    background: #fff6e8; border: 1px solid #f3d7a6; font-size: 11px; color: #6b4a16;
+    line-height: 1.4; white-space: normal; overflow-wrap: anywhere;
+  }
+  #pumpBalanceHint, #expenseByBalanceHint {
+    white-space: normal; overflow-wrap: anywhere; line-height: 1.35;
+  }
+  .fuel-phone-inner .odometer-gauge-wrap {
+    margin: 0 0 8px; padding: 8px 9px; background: #f8fafc;
+    border: 1px solid #dbe3ee; border-radius: 10px; min-width: 0;
+  }
+  .fuel-phone-inner .odometer-gauge-labels { display: none; }
+  .fuel-row > select.search-select,
+  .fuel-row > .ts-wrapper {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 100px) !important;
+  }
+  .fuel-phone-inner.fuel-booting #paneForm { visibility: hidden; }
+  .fuel-phone-inner .odometer-gauge-labels span {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .fuel-phone-inner .odometer-gauge-labels strong { color: #0f172a; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .fuel-phone-inner .odometer-gauge-track {
+    position: relative; height: 8px; background: #e2e8f0; border-radius: 999px; margin: 4px 0;
+  }
+  .fuel-phone-inner .odometer-gauge-zone {
+    position: absolute; top: 0; height: 100%; background: rgba(34, 197, 94, .4); border-radius: 999px;
+  }
+  .fuel-phone-inner .odometer-gauge-marker {
+    position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
+    transform: translate(-50%, -50%); border: 2px solid #fff; z-index: 2;
+  }
+  .fuel-phone-inner .odometer-gauge-marker.in-range { background: #22c55e; }
+  .fuel-phone-inner .odometer-gauge-marker.out-range { background: #ef4444; }
+  .fuel-phone-inner .odometer-gauge-tick {
+    position: absolute; top: -2px; width: 2px; height: 12px; background: #64748b; transform: translateX(-50%);
+  }
+  .fuel-phone-inner .odometer-gauge-status {
+    font-size: 11px; line-height: 1.35; margin-top: 4px; overflow-wrap: anywhere;
+  }
+  .fuel-phone-inner .odometer-gauge-status.is-ok { color: #15803d; font-weight: 700; }
+  .fuel-phone-inner .odometer-gauge-status.is-bad { color: #b91c1c; font-weight: 700; }
+  .fuel-phone-inner .odometer-gauge-status.is-muted { color: #64748b; }
+  .fuel-phone-inner .form-control[readonly] { background: #f8fafc; color: #334155; }
+  .fuel-money { display: grid; grid-template-columns: 1fr 1.5fr 0.8fr; gap: 6px; min-width: 0; }
+  .fuel-money > * { min-width: 0; }
+  .fuel-money .form-control { font-variant-numeric: tabular-nums; font-size: 13px; padding: 8px; }
+  .fuel-price-wrap {
+    display: flex; align-items: stretch; gap: 4px; min-width: 0;
+  }
+  .fuel-price-wrap .form-control {
+    flex: 1 1 0; min-width: 0; padding-right: 8px; font-size: 12px;
+    appearance: textfield; -moz-appearance: textfield;
+  }
+  .fuel-price-wrap .form-control::-webkit-outer-spin-button,
+  .fuel-price-wrap .form-control::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .fuel-insights-chip {
+    position: static; transform: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; height: auto; min-height: 42px; margin: 0; padding: 0 7px;
+    border-radius: 10px; border: 1px solid #c9d8f7; background: #eef4ff;
+    color: #1246b5; font-size: 10px; font-weight: 800; cursor: pointer;
+  }
+  .fuel-insights-chip.is-open { box-shadow: inset 0 0 0 1px rgba(18, 70, 181, .35); }
+  .fuel-facts {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px;
+    margin-top: 6px; font-size: 12px; font-weight: 700; color: #475569; line-height: 1.35;
+  }
+  .fuel-facts.d-none { display: none !important; }
+  .fuel-fact {
+    align-items: baseline; gap: 4px; min-width: 0; max-width: 100%;
+    padding: 0; border: 0; background: transparent;
+    flex-direction: row;
+  }
+  .fuel-fact.d-none { display: none !important; }
+  .fuel-fact-k { font-size: 11px; font-weight: 700; color: #64748b; }
+  .fuel-fact-v, .fuel-fact-v span {
+    font-size: 12px; font-weight: 800; color: #0f172a;
+    font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  }
+  .fuel-fact--rate.is-bad .fuel-fact-v { color: #b91c1c; }
+  .fuel-fact--mpg .fuel-fact-v { color: #047857; }
+  .fuel-fact-meta { display: none; }
+  .fuel-fact .meter-info-tile__unit { font-size: 10px; font-weight: 700; color: #64748b; margin-left: 2px; }
+  .fuel-phone-inner .meter-alerts-panel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .fuel-phone-inner .meter-alerts-panel.d-none { display: none !important; }
+  .fuel-phone-inner .meter-alert-item {
+    font-size: 11px; line-height: 1.4; padding: 8px 9px; border-radius: 10px;
+    border: 1px solid #fed7aa; background: #fffbeb; color: #7c2d12; overflow-wrap: anywhere;
+  }
+  .fuel-phone-inner .field-error-msg { color: #dc3545; font-size: 11px; margin-top: 4px; overflow-wrap: anywhere; }
+  .drop {
+    border: 1.5px dashed #c5d0dc; background: #f8fafc; border-radius: 12px;
+    padding: 16px 10px; text-align: center; font-size: 13px; font-weight: 700;
+  }
+  .insight-item {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 9px 10px; border: 1px solid #e4e9ef; border-radius: 10px; background: #f8fafc;
+    font-size: 12px; min-width: 0;
+  }
+  .insight-item + .insight-item { margin-top: 7px; }
+  .fuel-dock {
+    display: grid; grid-template-columns: 70px 1fr 1.4fr; gap: 6px;
+    margin-top: 10px; padding: 0 0 4px; background: transparent; border: 0;
+  }
+  .fuel-dock .fuel-action-btn, .fuel-dock a, .fuel-dock button {
+    height: 44px; border-radius: 12px; font-size: 11px; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    padding: 0 6px; min-width: 0;
+  }
+  .fuel-action-btn--cancel { border: 1px solid #d5dde6; background: #fff; color: #475569; }
+  .fuel-action-btn--list { border: 1px solid #c9d4e3; background: #f4f7fb; color: #1e3a5f; }
+  .fuel-action-btn--primary { border: 0; background: #1246b5; color: #fff; }
+  .last-entry { position: relative; padding-right: 22px; }
+  .last-entry::after {
+    content: ">";
+    position: absolute; right: 8px; top: 8px;
+    color: #9a5808; font-size: 14px; font-weight: 800; line-height: 1;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-panel {
+    position: absolute; z-index: 6000;
+    box-sizing: border-box;
+    min-width: 0 !important;
+    display: flex; flex-direction: column;
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .28); overflow: hidden;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-panel.d-none { display: none !important; }
+  body.fuel-mobile-preview-page .fuel-info-float-panel--entry-detail,
+  body.fuel-mobile-preview-page .fuel-info-float-panel--wide {
+    min-width: 0 !important;
+    max-width: none;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-panel--entry-detail:not(.is-user-resized) .fuel-info-float-body {
+    overflow: auto !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-resize-handle { display: none !important; }
+  body.fuel-mobile-preview-page .fuel-info-float-header {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; flex-shrink: 0;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-header h6 { margin: 0; font-size: 14px; font-weight: 800; }
+  body.fuel-mobile-preview-page .fuel-info-float-body {
+    padding: 10px 12px; font-size: 13px; overflow: auto; flex: 1 1 auto; min-height: 0;
+  }
+  body.fuel-mobile-preview-page .fuel-info-float-footer {
+    padding: 8px 12px; border-top: 1px solid #e2e8f0; background: #fff; flex-shrink: 0; text-align: right;
+  }
+  body.fuel-mobile-preview-page .fuel-entry-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-item .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-item .val { font-size: 12px; font-weight: 700; color: #0f172a; word-break: break-word; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-total { background: linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%); color: #fff; border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-total .lbl { font-size: 10px; text-transform: uppercase; opacity: .9; }
+  body.fuel-mobile-preview-page .fuel-entry-detail-total .val { font-size: 18px; font-weight: 800; }
+  body.fuel-mobile-preview-page .fuel-insight-block + .fuel-insight-block { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e8eef7; }
+  body.fuel-mobile-preview-page .fuel-insight-block .fuel-card-h { margin-bottom: 6px; padding-bottom: 0; border: 0; }
+  body.fuel-mobile-preview-page .price-history-row {
+    font-size: 11px; color: #334155; border-top: 1px dashed #dbe4ef; padding: 5px 0;
+    overflow-wrap: anywhere; line-height: 1.35;
+  }
+  body.fuel-mobile-preview-page .price-history-row:first-child { border-top: 0; }
+  body.fuel-mobile-preview-page .price-history-empty { font-size: 12px; color: #94a3b8; }
+  body.fuel-mobile-preview-page .price-date-pill {
+    background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a;
+    border-radius: 999px; padding: 0 6px; font-weight: 700; font-size: 10px;
+  }
+  body.fuel-mobile-preview-page .price-value-pill {
+    background: #ecfdf3; border: 1px solid #86efac; color: #166534;
+    border-radius: 999px; padding: 0 6px; font-weight: 700; font-size: 10px;
+  }
+  .hidden-pane { display: none !important; }
+</style>
+
+<div class="fuel-device">
+  <div class="fuel-phone-shell">
+    <div class="fuel-phone-inner fuel-booting">
+      <div class="fuel-appbar">
+        <div class="fuel-appbar-row">
+          <a class="fuel-icon-btn" href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" aria-label="Back">‹</a>
+          <div class="fuel-appbar-title">
+            <h1>Add Fuel Expense</h1>
+            <p class="sub" id="fuelMobileContext">
+              {% if workspace_selected_employee %}{{ workspace_selected_employee.name }}{% else %}Workspace{% endif %}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="fuel-ticker">
+        <div id="fuelMarketScanStatusBar" class="grow fuel-info-click" role="button" tabindex="0" title="Click for PSO scan details">
+          {% if fuel_market_scan and fuel_market_scan.sources %}
+          {% set pso = fuel_market_scan.sources['pso'] if fuel_market_scan.sources is mapping else {} %}
+          <strong>Last Scan:</strong> {{ fuel_market_scan.scanned_at or '-' }}
+          {% if pso.ok %}
+          | PSO: OK
+          {% if pso.petrol is not none %}| Petrol: Rs {{ '%.2f'|format(pso.petrol|float) }}{% endif %}
+          {% if pso.diesel is not none %}| Diesel: Rs {{ '%.2f'|format(pso.diesel|float) }}{% endif %}
+          {% else %}
+          | PSO: {{ pso.error or 'Scan failed' }}
+          {% endif %}
+          {% else %}
+          <strong>Last Scan:</strong> Loading...
+          {% endif %}
+        </div>
+        <button type="button" class="fuel-scan-btn" id="fuelPsoScanNowBtn">Scan</button>
+      </div>
+      {% if not rec %}
+      <div id="fuelLastSavedBar" class="fuel-ticker fuel-saved-bar fuel-info-click" role="button" tabindex="0" title="Click for last saved details">
+        <strong>Last Saved:</strong>
+        {% if last_rec %}
+        <span class="fuel-saved-main">
+          <span>{{ last_rec.fueling_date.strftime('%d-%m-%Y') if last_rec.fueling_date else '—' }}</span>
+          <span>|</span>
+          <span>{{ last_rec.vehicle.vehicle_no if last_rec.vehicle else '—' }}</span>
+          <span>|</span>
+          <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
+        </span>
+        <a class="fuel-saved-edit" href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" title="Edit last saved">Edit</a>
+        {% else %}
+        <span>No fuel expense saved yet.</span>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('fuel_expense_add') }}" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" data-no-spinner="1" enctype="multipart/form-data" style="display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;">
+        <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
+        <script type="application/json" id="fuelExpenseSettingsData">{{ fuel_expense_settings|default({'price_tolerance_rs': 5, 'km_gap_default_max_km': 500, 'km_gap_rules': []})|tojson }}</script>
+        {{ form.hidden_tag() }}
+        {% if return_to_path is defined and return_to_path %}
+        <input type="hidden" name="return_to" value="{{ return_to_path }}">
+        {% endif %}
+
+        <div class="fuel-scroll" id="paneForm">
+          <section class="fuel-card" id="fuelLocationSection">
+            <div class="fuel-grid-2">
+              <div>
+                <label>District</label>
+                {{ form.district_id(class="form-select search-select", id="districtSelect") }}
+              </div>
+              <div>
+                <label>Project</label>
+                {{ form.project_id(class="form-select search-select", id="projectSelect") }}
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <div class="fuel-label-row">
+                <label>Vehicle No *</label>
+                {{ form.fuel_type(class="d-none", id="fuelTypeSelect") }}
+                <span class="fuel-type-chip{% if not form.fuel_type.data %} is-empty{% endif %}" id="fuelTypeDisplay">{% if form.fuel_type.data %}{{ form.fuel_type.data }}{% else %}Auto{% endif %}</span>
+              </div>
+              <div class="fuel-row">
+                {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
+                <a class="fuel-side" href="{{ url_for('vehicle_reading_setup_form') }}">Set Reading</a>
+              </div>
+              <div id="vehicleLastEntryStrip" class="last-entry fuel-info-click fleet-enter-skip d-none" role="button" tabindex="0" title="Click for last entry details"></div>
+            </div>
+            <div style="margin-top:8px">
+              <label>Fuel Pump Name</label>
+              <div class="fuel-row">
+                {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
+                <a class="fuel-side dash" id="fuelAddPumpBtn" href="{{ url_for('workspace_party_new', type='Pump', next=request.url) }}">+ Pump</a>
+              </div>
+              <div id="pumpBalanceHint" class="small mt-1 d-none"></div>
+            </div>
+            <div class="fuel-grid-2" style="margin-top:8px">
+              <div>
+                <label>Fueling Date *</label>
+                {{ form.fueling_date(class="form-control datepicker", id="fuelingDate", type="text", inputmode="numeric", autocomplete="off") }}
+              </div>
+              <div>
+                <label>Slip No</label>
+                {{ form.slip_no(class="form-control", placeholder="Optional") }}
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <label>Payment Type</label>
+              <div class="fuel-pay-seg" id="fuelPayChips" role="group" aria-label="Payment Type">
+                <button type="button" data-pay="Cash"{% if form.payment_type.data == 'Cash' %} class="on"{% endif %}>Cash</button>
+                <button type="button" data-pay="Credit"{% if (form.payment_type.data or 'Credit') == 'Credit' %} class="on"{% endif %}>Credit</button>
+                <button type="button" data-pay="Tp/Card"{% if form.payment_type.data == 'Tp/Card' %} class="on"{% endif %}>Tp/Card</button>
+                <button type="button" data-pay="Shl/Card"{% if form.payment_type.data == 'Shl/Card' %} class="on"{% endif %}>Shl/Card</button>
+              </div>
+              <div class="d-none">
+                {{ form.payment_type(class="form-select search-select", id="paymentTypeSelect") }}
+              </div>
+            </div>
+            <div id="cardSwipeField" class="hidden-pane" style="margin-top:8px">
+              <label>Card Swipe Date</label>
+              {{ form.card_swipe_date(class="form-control datepicker", id="cardSwipeDate", type="text", inputmode="numeric", autocomplete="off") }}
+            </div>
+          </section>
+
+          <section class="fuel-card">
+            <p class="fuel-task-km">Start Reading <strong id="kmOutTask">—</strong><span class="sep">·</span>Close Reading <strong id="kmInTask">—</strong></p>
+            <div id="odometerGaugeWrap" class="odometer-gauge-wrap d-none">
+              <div class="odometer-gauge-labels">
+                <span>Prev <strong id="gaugePrevLabel">—</strong></span>
+                <span id="gaugeTaskOutLabel" class="d-none">Out <strong>—</strong></span>
+                <span>In <strong id="gaugeTaskInLabel">—</strong></span>
+              </div>
+              <div class="odometer-gauge-track">
+                <div id="gaugeTaskZone" class="odometer-gauge-zone d-none"></div>
+                <div id="gaugeTaskOutTick" class="odometer-gauge-tick d-none"></div>
+                <div id="gaugeCurrentMarker" class="odometer-gauge-marker d-none"></div>
+              </div>
+              <div id="gaugeStatusText" class="odometer-gauge-status is-muted"></div>
+            </div>
+            <div class="fuel-grid-2" style="margin-top:8px">
+              <div>
+                <label for="previousReading">Prev Bill MR</label>
+                {{ form.previous_reading(class="form-control", id="previousReading", step="0.01", placeholder="Auto", readonly=True) }}
+              </div>
+              <div>
+                <label for="currentReading">Current MR *</label>
+                {{ form.current_reading(class="form-control", id="currentReading", step="0.01", placeholder="0", autocomplete="off") }}
+              </div>
+            </div>
+            <div id="currentReadingError" class="field-error-msg d-none"></div>
+            <div class="fuel-money" style="margin-top:8px">
+              <div>
+                <label>Amount</label>
+                {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
+                <div id="amountInputError" class="field-error-msg d-none"></div>
+              </div>
+              <div>
+                <label for="fuelPrice">Fuel Price</label>
+                <div class="fuel-price-wrap">
+                  {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
+                  <button type="button" class="fuel-insights-chip" id="fuelPriceInsightsBtn" title="Price insights">Insights</button>
+                </div>
+              </div>
+              <div>
+                <label>Ltr</label>
+                <input type="number" id="litersInput" class="form-control" step="0.01" min="0" placeholder="0">
+                <div id="litersInputError" class="field-error-msg d-none"></div>
+              </div>
+            </div>
+            <div id="meterInfoStrip" class="fuel-facts d-none">
+              <span id="psoRateDatePanel" class="fuel-fact fuel-fact--rate" style="display:none;">
+                <span id="psoRateLabel" class="fuel-fact-k">PSO</span>
+                <strong id="psoRateValue" class="fuel-fact-v">—</strong>
+                <span id="psoRateMeta" class="fuel-fact-meta"></span>
+              </span>
+              <span id="monthMpgInfo" class="fuel-fact fuel-fact--mpg d-none">
+                <span class="fuel-fact-k">Curr. Month MPG</span>
+                <strong id="monthMpgValue" class="fuel-fact-v">—</strong>
+                <span id="monthMpgMeta" class="fuel-fact-meta"></span>
+              </span>
+            </div>
+            <p class="fuel-task-km fuel-metrics-line">
+              KM <strong id="kmMetricCard" class="is-neutral"><span id="kmDisplay">—</span></strong>
+              <span class="sep">·</span>
+              Matched <strong id="matchedMetricCard" class="is-neutral"><span id="meterMatched">—</span></strong>
+              <span class="sep">·</span>
+              MPG <strong id="mpgMetricCard" class="is-neutral"><span id="mpgDisplay">—</span></strong>
+            </p>
+            <div id="meterAlertsPanel" class="meter-alerts-panel d-none">
+              <div id="alertOdometerGap" class="meter-alert-item d-none"></div>
+              <div id="alertRangeAlignment" class="meter-alert-item d-none"></div>
+              <div id="alertVolumeCapacity" class="meter-alert-item d-none"></div>
+              <div id="alertPriceBenchmark" class="meter-alert-item d-none"></div>
+            </div>
+          </section>
+
+          <section class="fuel-card">
+            <div class="drop fuel-attach-zone" id="fuelAttachZone" tabindex="0">
+              <input type="file" name="attachments" id="fuelAttachmentFiles" multiple accept="image/*,video/*" class="d-none">
+              <div id="fuelAttachPlaceholder">Photo / video slip — camera ya gallery</div>
+            </div>
+            <div class="small text-success mt-1" id="fuelAttachmentPasteHint"></div>
+            <div id="fuelAttachmentError" class="field-error-msg d-none mt-2"></div>
+            <div style="margin-top:10px">
+              <label>Expense By (Workspace COA)</label>
+              {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
+              <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
+            </div>
+          </section>
+
+          <div class="fuel-dock">
+            <a href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" id="fuelCancelBtn" class="fuel-action-btn fuel-action-btn--cancel">Cancel</a>
+            <button type="submit" name="_save_action" value="save_list" class="fuel-action-btn fuel-action-btn--list">Save to List</button>
+            <button type="submit" name="_save_action" value="save_add" id="fuelSaveAddNextBtn" class="fuel-action-btn fuel-action-btn--primary">Save &amp; Add Next</button>
+          </div>
+        </div>
+      </form>
+      <div id="fuelPriceInsightsPanel" class="fuel-info-float-panel fuel-info-float-panel--wide d-none" aria-hidden="true" role="dialog" aria-label="Price Insights">
+        <div class="fuel-info-float-header">
+          <h6>Price Insights</h6>
+          <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+        </div>
+        <div class="fuel-info-float-body">
+          <div class="fuel-insight-block">
+            <div class="fuel-card-h">Same date · different pumps</div>
+            <div id="datePumpHistoryWrap" class="price-history-empty">No data.</div>
+          </div>
+          <div class="fuel-insight-block">
+            <div class="fuel-card-h">Selected pump / date</div>
+            <div id="pumpOrDateHistoryWrap" class="price-history-empty">No data.</div>
+          </div>
+          <div class="fuel-insight-block">
+            <div class="fuel-card-h">Last 3 fuel prices</div>
+            <div id="allPumpHistoryWrap" class="price-history-empty">No data.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    var chips = document.getElementById('fuelPayChips');
+    var sel = document.getElementById('paymentTypeSelect');
+    var swipe = document.getElementById('cardSwipeField');
+    if (!chips || !sel) return;
+    function isCard(v) { return v === 'Tp/Card' || v === 'Shl/Card'; }
+    function syncChips() {
+      var v = sel.value || '';
+      chips.querySelectorAll('button').forEach(function(btn) {
+        btn.classList.toggle('on', btn.getAttribute('data-pay') === v);
+      });
+      if (swipe) swipe.classList.toggle('hidden-pane', !isCard(v));
+    }
+    function setPay(v) {
+      if (sel.tomselect) sel.tomselect.setValue(v);
+      else {
+        sel.value = v;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      syncChips();
+    }
+    chips.addEventListener('click', function(e) {
+      var btn = e.target.closest('button[data-pay]');
+      if (!btn) return;
+      setPay(btn.getAttribute('data-pay'));
+    });
+    sel.addEventListener('change', syncChips);
+    if (!(sel.value || '').trim()) setPay('Credit');
+    else syncChips();
+    window.setTimeout(function() {
+      if (!(sel.value || '').trim()) setPay('Credit');
+      else syncChips();
+    }, 250);
+  })();
+</script>
+
+{% include "_fuel_expense_form_overlays.html" %}
+{% include "_fuel_expense_form_logic.html" %}
+{% endblock %}
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/fuel_expense_offline.js') }}"></script>
+{% endblock %}

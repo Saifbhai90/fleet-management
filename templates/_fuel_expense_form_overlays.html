@@ -1,0 +1,149 @@
+{% if last_rec %}
+<script type="application/json" id="lastSavedPreviewData">{{ {
+  'id': last_rec.id,
+  'district': last_rec.district.name if last_rec.district else '',
+  'project': last_rec.project.name if last_rec.project else '',
+  'vehicle_no': last_rec.vehicle.vehicle_no if last_rec.vehicle else '',
+  'fueling_date': last_rec.fueling_date.strftime('%d-%m-%Y') if last_rec.fueling_date else '',
+  'amount': last_rec.amount|float if last_rec.amount is not none else None,
+  'liters': last_rec.liters|float if last_rec.liters is not none else None,
+  'mpg': last_rec.mpg|float if last_rec.mpg is not none else None,
+  'fuel_price': last_rec.fuel_price|float if last_rec.fuel_price is not none else None,
+  'upload_status': last_rec.upload_status or '',
+  'edit_url': url_for('fuel_expense_edit', pk=last_rec.id)
+}|tojson }}</script>
+{% else %}
+<script type="application/json" id="lastSavedPreviewData">null</script>
+{% endif %}
+
+<div id="fuelScanDetailPanel" class="fuel-info-float-panel d-none" aria-hidden="true" role="dialog" aria-label="PSO Scan Details">
+  <div class="fuel-info-float-header">
+    <h6>PSO Scan Details</h6>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body" id="fuelScanDetailBody">Loading...</div>
+</div>
+<div id="vehicleLastEntryPanel" class="fuel-info-float-panel fuel-info-float-panel--wide fuel-info-float-panel--entry-detail d-none" aria-hidden="true" role="dialog" aria-label="Fuel Entry Detail">
+  <div class="fuel-info-float-header">
+    <h6>Fuel Entry Detail</h6>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body" id="vehicleLastEntryBody"></div>
+  <div class="fuel-info-float-footer">
+    <a href="#" id="vehicleLastEntryViewLink" class="btn btn-outline-primary btn-sm me-1 d-none" target="_blank" rel="noopener"><i class="bi bi-images me-1"></i>View Media</a>
+    <a href="#" id="vehicleLastEntryEditLink" class="btn btn-primary btn-sm d-none">Edit Entry</a>
+  </div>
+  <div class="fuel-info-float-resize-handle" aria-hidden="true"></div>
+</div>
+<div id="fuelDuplicatePanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelDuplicatePanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelDuplicatePanelLabel">Duplicate Entry</h6>
+        <div class="fuel-warning-float-panel__subtitle">Same details already saved</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelDuplicateBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelDuplicateCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelDuplicateContinueBtn">Continue Anyway</button>
+  </div>
+</div>
+
+<div id="fuelTankCapacityPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelTankCapacityPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelTankCapacityPanelLabel">Tank Capacity Warning</h6>
+        <div class="fuel-warning-float-panel__subtitle">Calculated liters exceed tank limit</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelTankCapacityBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelTankCapacityCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelTankCapacityContinueBtn">Continue Anyway</button>
+  </div>
+</div>
+
+<div id="fuelKmGapPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelKmGapPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelKmGapPanelLabel">High KM Gap</h6>
+        <div class="fuel-warning-float-panel__subtitle">Odometer reading gap alert</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelKmGapBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelKmGapCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelKmGapContinueBtn">Continue Anyway</button>
+  </div>
+</div>
+
+<div id="fuelPriceBenchmarkPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelPriceBenchmarkPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelPriceBenchmarkPanelLabel">Price Benchmark</h6>
+        <div class="fuel-warning-float-panel__subtitle">Fuel price differs from PSO benchmark</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body" id="fuelPriceBenchmarkBody"></div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="fuelPriceBenchmarkCancelBtn">Cancel</button>
+    <button type="button" class="btn btn-warning btn-sm" id="fuelPriceBenchmarkContinueBtn">Continue Anyway</button>
+  </div>
+</div>
+
+<div id="fuelMeterMatchBackdrop" class="fuel-meter-match-backdrop" aria-hidden="true"></div>
+<div id="fuelMeterMatchPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" aria-modal="true" role="alertdialog" aria-labelledby="fuelMeterMatchPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelMeterMatchPanelLabel">Meter Reading Warning</h6>
+        <div class="fuel-warning-float-panel__subtitle">Verify reading before entering amount</div>
+      </div>
+    </div>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body">
+    <p class="fuel-warning-float-panel__lead mb-2">The meter reading does not match the task report (<strong>Matched = No</strong>).</p>
+    <p class="fuel-warning-float-panel__hint mb-0">Please verify KM Out, KM In, and Current Reading before entering the amount.</p>
+    <div id="fuelMeterMatchDetail" class="fuel-warning-float-panel__detail d-none"></div>
+  </div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer">
+    <button type="button" class="btn btn-primary btn-sm px-3" id="fuelMeterMatchOkBtn">Understood</button>
+  </div>
+</div>
+
+<div id="fuelAttachmentWarningPanel" class="fuel-info-float-panel fuel-warning-float-panel d-none" aria-hidden="true" role="alert" aria-labelledby="fuelAttachmentWarningPanelLabel">
+  <div class="fuel-info-float-header fuel-warning-float-panel__header">
+    <div class="fuel-warning-float-panel__title-wrap">
+      <div class="fuel-warning-float-panel__icon" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></div>
+      <div>
+        <h6 id="fuelAttachmentWarningPanelLabel">Attachment Required</h6>
+        <div class="fuel-warning-float-panel__subtitle">Photos / Videos</div>
+      </div>
+    </div>
+    <button type="button" class="btn-close btn-close-sm fuel-info-float-close" aria-label="Close"></button>
+  </div>
+  <div class="fuel-info-float-body fuel-warning-float-panel__body">
+    <p class="fuel-warning-float-panel__lead mb-0">Please attach at least one photo or video before saving.</p>
+  </div>
+  <div class="fuel-info-float-footer fuel-warning-float-panel__footer">
+    <button type="button" class="btn btn-warning btn-sm px-3" id="fuelAttachmentWarningOkBtn">Understood</button>
+  </div>
+</div>
+

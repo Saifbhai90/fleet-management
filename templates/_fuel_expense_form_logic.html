@@ -1,0 +1,2918 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  window._cascadeCache = window._cascadeCache || {};
+  var FUEL_CASCADE = null;
+  try {
+    var _fcEl = document.getElementById('locationCascadeData');
+    if (_fcEl && _fcEl.textContent) {
+      FUEL_CASCADE = JSON.parse(_fcEl.textContent);
+    }
+  } catch (e) {
+    FUEL_CASCADE = null;
+  }
+  if (FUEL_CASCADE && FUEL_CASCADE.projects_by_district) {
+    Object.keys(FUEL_CASCADE.projects_by_district).forEach(function(dk) {
+      window._cascadeCache['proj_d' + dk] = FUEL_CASCADE.projects_by_district[dk];
+    });
+  }
+  function projectsFromColdCache(did) {
+    if (!FUEL_CASCADE || !FUEL_CASCADE.projects_by_district) return null;
+    return FUEL_CASCADE.projects_by_district[String(did)] || [];
+  }
+  function vehiclesFromColdCache(pid, did) {
+    if (!FUEL_CASCADE || !FUEL_CASCADE.vehicles) return null;
+    var list = FUEL_CASCADE.vehicles;
+    var out = [];
+    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (String(v.project_id) !== String(pid)) continue;
+      if (!restrictDid) {
+        out.push(v);
+        continue;
+      }
+      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
+    }
+    out.sort(function(a, b) {
+      return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true });
+    });
+    return out;
+  }
+  var _vehicleFuelTypeMap = {};
+  var _vehicleTankCapacityMap = {};
+  var _vehicleFamilyMap = {};
+  var FUEL_SETTINGS = { price_tolerance_rs: 5, km_gap_default_max_km: 500, km_gap_rules: [] };
+  try {
+    var _fsEl = document.getElementById('fuelExpenseSettingsData');
+    if (_fsEl && _fsEl.textContent) {
+      FUEL_SETTINGS = JSON.parse(_fsEl.textContent);
+    }
+  } catch (eFs) { /* keep defaults */ }
+  var _lastSuggestedBenchmark = null;
+  var _lastPsoBenchmark = null;
+  if (FUEL_CASCADE && FUEL_CASCADE.vehicles) {
+    FUEL_CASCADE.vehicles.forEach(function(v) {
+      _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol';
+      _vehicleTankCapacityMap[String(v.id)] = parseFloat(v.fuel_tank_capacity || 0) || 0;
+      _vehicleFamilyMap[String(v.id)] = v.vehicle_family || '';
+    });
+  }
+  function _rememberVehicleMeta(v) {
+    if (!v || v.id == null) return;
+    _vehicleFuelTypeMap[String(v.id)] = v.fuel_type || 'Petrol';
+    _vehicleTankCapacityMap[String(v.id)] = parseFloat(v.fuel_tank_capacity || 0) || 0;
+    _vehicleFamilyMap[String(v.id)] = v.vehicle_family || '';
+  }
+  function _smoothFillSelect(sel, arr, buildOptionFn) {
+    if (!sel) return;
+    var opts = [];
+    if (arr && buildOptionFn) arr.forEach(function(item) { opts.push(buildOptionFn(item)); });
+    if (typeof fleetFillSelect === 'function') {
+      fleetFillSelect(sel, opts, { placeholder: '-- Select --', placeholderValue: '0' });
+      return;
+    }
+    if (sel.tomselect) {
+      var ts = sel.tomselect;
+      ts.clear(true); ts.clearOptions();
+      opts.forEach(function(opt) { ts.addOption(opt); });
+      ts.enable(); return;
+    }
+    sel.innerHTML = '<option value="0">-- Select --</option>';
+    opts.forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value; o.textContent = opt.text; sel.appendChild(o);
+    });
+    initSearchableDropdowns(sel.parentNode);
+  }
+  function _smoothLoadingSelect(sel) {
+    if (!sel) return;
+    if (typeof fleetSetSelectLoading === 'function') { fleetSetSelectLoading(sel); return; }
+    if (sel.tomselect) { sel.tomselect.clear(true); sel.tomselect.clearOptions(); sel.tomselect.disable(); return; }
+    sel.innerHTML = '<option value="0">-- Loading... --</option>';
+  }
+
+  var fuelExpenseForm = document.getElementById('fuelExpenseForm');
+  var fuelSubmitLocked = false;
+  var districtSelect = document.getElementById('districtSelect');
+  var projectSelect = document.getElementById('projectSelect');
+  var vehicleSelect = document.getElementById('vehicleSelect');
+  var fuelPumpSelect = document.getElementById('fuelPumpSelect');
+  var fuelingDateInput = document.getElementById('fuelingDate');
+  var previousReadingInput = document.getElementById('previousReading');
+  var currentReadingInput = document.getElementById('currentReading');
+  var fuelPriceInput = document.getElementById('fuelPrice');
+  var amountInput = document.getElementById('amountInput');
+  var fuelTypeSelect = document.getElementById('fuelTypeSelect');
+  var fuelTypeDisplay = document.getElementById('fuelTypeDisplay');
+  var paymentTypeSelect = document.getElementById('paymentTypeSelect');
+  var cardSwipeDateInput = document.getElementById('cardSwipeDate');
+  var expenseBySelect = document.getElementById('expenseBySelect');
+  var expenseByBalanceHint = document.getElementById('expenseByBalanceHint');
+  var fuelSaveAddNextBtn = document.getElementById('fuelSaveAddNextBtn');
+  var fuelCancelBtn = document.getElementById('fuelCancelBtn');
+  var litersInput = document.getElementById('litersInput');
+  var litersInputError = document.getElementById('litersInputError');
+  var currentReadingError = document.getElementById('currentReadingError');
+  var amountInputError = document.getElementById('amountInputError');
+  var meterMatchedDetail = null;
+  var monthMpgNote = document.getElementById('monthMpgInfo');
+  var monthMpgValue = document.getElementById('monthMpgValue');
+  var monthMpgMeta = document.getElementById('monthMpgMeta');
+  var fuelLastSavedBar = document.getElementById('fuelLastSavedBar');
+  var fuelAttachZone = document.getElementById('fuelAttachZone');
+  var fuelAttachPlaceholder = document.getElementById('fuelAttachPlaceholder');
+  var vehicleLastEntryStrip = document.getElementById('vehicleLastEntryStrip');
+  var vehicleLastEntryPanel = document.getElementById('vehicleLastEntryPanel');
+  var vehicleLastEntryBody = document.getElementById('vehicleLastEntryBody');
+  var vehicleLastEntryViewLink = document.getElementById('vehicleLastEntryViewLink');
+  var vehicleLastEntryEditLink = document.getElementById('vehicleLastEntryEditLink');
+  var _vehicleLastEntryCache = null;
+
+  function scheduleFuelTomSelectReposition() {
+    if (typeof window.fleetRepositionOpenTomSelects !== 'function') return;
+    window.fleetRepositionOpenTomSelects();
+    requestAnimationFrame(function() {
+      window.fleetRepositionOpenTomSelects();
+    });
+  }
+
+  function showVehicleLastEntryLoading() {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.remove('d-none', 'is-open');
+    vehicleLastEntryStrip.classList.add('is-loading');
+    vehicleLastEntryStrip.innerHTML = '<span class="text-muted">Loading last entry...</span>';
+    scheduleFuelTomSelectReposition();
+  }
+
+  function renderVehicleLastEntryStrip(html) {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.remove('d-none', 'is-loading');
+    vehicleLastEntryStrip.innerHTML = html;
+    scheduleFuelTomSelectReposition();
+  }
+
+  function hideVehicleLastEntryStrip() {
+    if (!vehicleLastEntryStrip) return;
+    vehicleLastEntryStrip.classList.add('d-none');
+    vehicleLastEntryStrip.classList.remove('is-open', 'is-loading');
+    vehicleLastEntryStrip.innerHTML = '';
+    scheduleFuelTomSelectReposition();
+  }
+  var fuelDuplicatePanel = document.getElementById('fuelDuplicatePanel');
+  var fuelDuplicateBody = document.getElementById('fuelDuplicateBody');
+  var fuelDuplicateContinueBtn = document.getElementById('fuelDuplicateContinueBtn');
+  var fuelDuplicateCancelBtn = document.getElementById('fuelDuplicateCancelBtn');
+  var tankCapacityWarn = null;
+  var odometerGaugeWrap = document.getElementById('odometerGaugeWrap');
+  var gaugePrevLabel = document.getElementById('gaugePrevLabel');
+  var gaugeTaskInLabel = document.getElementById('gaugeTaskInLabel');
+  var gaugeTaskOutLabel = document.getElementById('gaugeTaskOutLabel');
+  var gaugeTaskZone = document.getElementById('gaugeTaskZone');
+  var gaugeTaskOutTick = document.getElementById('gaugeTaskOutTick');
+  var gaugeCurrentMarker = document.getElementById('gaugeCurrentMarker');
+  var gaugeStatusText = document.getElementById('gaugeStatusText');
+  var fuelTankCapacityPanel = document.getElementById('fuelTankCapacityPanel');
+  var fuelTankCapacityBody = document.getElementById('fuelTankCapacityBody');
+  var fuelTankCapacityContinueBtn = document.getElementById('fuelTankCapacityContinueBtn');
+  var fuelTankCapacityCancelBtn = document.getElementById('fuelTankCapacityCancelBtn');
+  var _tankCapacityBypass = false;
+  var _pendingSubmitBtn = null;
+  var _duplicateBypass = false;
+  var _calcFromLiters = false;
+  var kmOutTask = document.getElementById('kmOutTask');
+  var kmInTask = document.getElementById('kmInTask');
+  var meterMatched = document.getElementById('meterMatched');
+  var kmDisplay = document.getElementById('kmDisplay');
+  var mpgDisplay = document.getElementById('mpgDisplay');
+  var fuelAttachmentFiles = document.getElementById('fuelAttachmentFiles');
+  var fuelAttachmentPasteHint = document.getElementById('fuelAttachmentPasteHint');
+  var fuelAttachmentError = document.getElementById('fuelAttachmentError');
+  var fuelAttachmentWarningPanel = document.getElementById('fuelAttachmentWarningPanel');
+  var fuelAttachmentWarningOkBtn = document.getElementById('fuelAttachmentWarningOkBtn');
+  var _fuelExistingAttachmentCount = {{ rec.attachments.count() if rec else 0 }};
+  var datePumpHistoryWrap = document.getElementById('datePumpHistoryWrap');
+  var pumpOrDateHistoryWrap = document.getElementById('pumpOrDateHistoryWrap');
+  var allPumpHistoryWrap = document.getElementById('allPumpHistoryWrap');
+  var fuelPriceInsightsBtn = document.getElementById('fuelPriceInsightsBtn');
+  var fuelPriceInsightsPanel = document.getElementById('fuelPriceInsightsPanel');
+  var psoRateDatePanel = document.getElementById('psoRateDatePanel');
+  var psoRateLabel = document.getElementById('psoRateLabel');
+  var psoRateValue = document.getElementById('psoRateValue');
+  var psoRateMeta = document.getElementById('psoRateMeta');
+  var fuelMarketScanStatusBar = document.getElementById('fuelMarketScanStatusBar');
+  var kmMetricCard = document.getElementById('kmMetricCard');
+  var matchedMetricCard = document.getElementById('matchedMetricCard');
+  var mpgMetricCard = document.getElementById('mpgMetricCard');
+  var meterInfoStrip = document.getElementById('meterInfoStrip');
+  var meterAlertsPanel = document.getElementById('meterAlertsPanel');
+  var alertOdometerGap = document.getElementById('alertOdometerGap');
+  var alertRangeAlignment = document.getElementById('alertRangeAlignment');
+  var alertVolumeCapacity = document.getElementById('alertVolumeCapacity');
+  var alertPriceBenchmark = document.getElementById('alertPriceBenchmark');
+  var kmGapWarn = null;
+  var fuelPriceToleranceWarn = alertPriceBenchmark;
+  var fuelKmGapPanel = document.getElementById('fuelKmGapPanel');
+  var fuelKmGapBody = document.getElementById('fuelKmGapBody');
+  var fuelKmGapContinueBtn = document.getElementById('fuelKmGapContinueBtn');
+  var fuelKmGapCancelBtn = document.getElementById('fuelKmGapCancelBtn');
+  var fuelPriceBenchmarkPanel = document.getElementById('fuelPriceBenchmarkPanel');
+  var fuelPriceBenchmarkBody = document.getElementById('fuelPriceBenchmarkBody');
+  var fuelPriceBenchmarkContinueBtn = document.getElementById('fuelPriceBenchmarkContinueBtn');
+  var fuelPriceBenchmarkCancelBtn = document.getElementById('fuelPriceBenchmarkCancelBtn');
+  var _priceBenchmarkBypass = false;
+  var fuelMeterMatchBackdrop = document.getElementById('fuelMeterMatchBackdrop');
+  var fuelMeterMatchPanel = document.getElementById('fuelMeterMatchPanel');
+  var fuelMeterMatchDetail = document.getElementById('fuelMeterMatchDetail');
+  var fuelMeterMatchOkBtn = document.getElementById('fuelMeterMatchOkBtn');
+  var _meterMatchTrapHandler = null;
+  var _meterMatchFocusGuard = null;
+  var _kmGapBypass = false;
+  var taskStartReading = null;
+  var taskCloseReading = null;
+  var cashExpenseByValue = '';
+  function setFuelTypeAuto(fuelType) {
+    var ft = (fuelType || '').trim();
+    if (fuelTypeSelect) fuelTypeSelect.value = ft;
+    if (!fuelTypeDisplay) return;
+    if (fuelTypeDisplay.tagName === 'INPUT' || fuelTypeDisplay.tagName === 'SELECT' || fuelTypeDisplay.tagName === 'TEXTAREA') {
+      fuelTypeDisplay.value = ft;
+      return;
+    }
+    fuelTypeDisplay.textContent = ft || 'Auto';
+    fuelTypeDisplay.classList.toggle('is-empty', !ft);
+  }
+  if (fuelTypeSelect && fuelTypeSelect.value) {
+    setFuelTypeAuto(fuelTypeSelect.value);
+  }
+  if (expenseBySelect && expenseBySelect.options) {
+    for (var e = 0; e < expenseBySelect.options.length; e += 1) {
+      var opt = expenseBySelect.options[e];
+      if ((opt.textContent || '').toLowerCase().indexOf('1110 - hbl bank') === 0) {
+        cashExpenseByValue = opt.value;
+        break;
+      }
+    }
+  }
+  function parseNum(val) {
+    if (val === '' || val === null || val === undefined) return null;
+    var n = parseFloat(String(val).replace(/,/g, ''));
+    return isNaN(n) ? null : n;
+  }
+  function setTaskKmField(el, val) {
+    if (!el) return;
+    var text = (val === null || val === undefined || val === '') ? '' : String(val);
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      el.value = text;
+      return;
+    }
+    el.textContent = text || '—';
+  }
+
+  function fetchSuggestedPrice() {
+    var ft = fuelTypeSelect && fuelTypeSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var pumpId = fuelPumpSelect && fuelPumpSelect.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (fuelPriceInput) fuelPriceInput.setAttribute('placeholder', '0');
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
+    var url = '/api/fuel-expense/suggested-price?fuel_type=' + encodeURIComponent(ft);
+    if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
+    if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + encodeURIComponent(pumpId);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!fuelPriceInput) return;
+        if (!data || data.fuel_price == null) {
+          _lastSuggestedBenchmark = null;
+          checkFuelPriceTolerance();
+          if (fuelPriceInput.dataset.autoSuggested === '1') {
+            fuelPriceInput.value = '';
+            fuelPriceInput.dataset.autoSuggested = '0';
+            computeMpgAndLiters();
+          }
+          return;
+        }
+        var suggested = parseFloat(data.fuel_price);
+        if (!isFinite(suggested) || suggested <= 0) return;
+        _lastSuggestedBenchmark = suggested;
+        fuelPriceInput.setAttribute('placeholder', 'Suggested: ' + suggested.toFixed(2));
+        var entered = parseNum(fuelPriceInput.value);
+        if (entered == null || entered <= 0 || fuelPriceInput.dataset.autoSuggested === '1') {
+          fuelPriceInput.value = suggested.toFixed(2);
+          fuelPriceInput.dataset.autoSuggested = '1';
+          computeMpgAndLiters();
+        }
+        checkFuelPriceTolerance();
+      })
+      .catch(function() {});
+  }
+
+  function setMetricCard(cardEl, valueEl, value, state) {
+    if (valueEl) valueEl.textContent = (value === null || value === undefined || value === '') ? '—' : String(value);
+    if (!cardEl) return;
+    cardEl.classList.remove('is-ok', 'is-bad', 'is-neutral');
+    cardEl.classList.add(state || 'is-neutral');
+  }
+
+  function parseMetricText(el) {
+    if (!el) return null;
+    var raw = (el.textContent || '').replace(/,/g, '').trim();
+    if (!raw || raw === '—') return null;
+    return parseNum(raw);
+  }
+
+  function refreshMeterInfoStrip() {
+    if (!meterInfoStrip) return;
+    var hasPso = psoRateDatePanel && psoRateDatePanel.style.display !== 'none';
+    var hasMpg = monthMpgNote && !monthMpgNote.classList.contains('d-none');
+    meterInfoStrip.classList.toggle('d-none', !hasPso && !hasMpg);
+  }
+
+  function compactPsoRateLabel(label) {
+    var text = label || 'PSO Rate';
+    if (!isFuelMobilePreviewPage()) return text;
+    return /diesel/i.test(text) ? 'PSO Diesel' : 'PSO';
+  }
+
+  function setPsoRateTileLoading(label) {
+    if (!psoRateDatePanel) return;
+    psoRateDatePanel.style.display = 'flex';
+    psoRateDatePanel.classList.add('is-loading');
+    psoRateDatePanel.classList.remove('is-bad');
+    if (psoRateLabel) psoRateLabel.textContent = compactPsoRateLabel(label);
+    if (psoRateValue) psoRateValue.textContent = 'Checking...';
+    if (psoRateMeta) psoRateMeta.textContent = '';
+    refreshMeterInfoStrip();
+  }
+
+  function renderPsoRateTile(label, valueHtml, metaHtml, isBad) {
+    if (!psoRateDatePanel) return;
+    psoRateDatePanel.style.display = 'flex';
+    psoRateDatePanel.classList.remove('is-loading');
+    psoRateDatePanel.classList.toggle('is-bad', !!isBad);
+    if (psoRateLabel) psoRateLabel.textContent = compactPsoRateLabel(label);
+    if (psoRateValue) psoRateValue.innerHTML = valueHtml || '—';
+    if (psoRateMeta) psoRateMeta.innerHTML = metaHtml || '';
+    refreshMeterInfoStrip();
+  }
+
+  function renderMonthMpgTile(mpg, fromDate, toDate) {
+    if (!monthMpgNote) return;
+    if (mpg == null) {
+      monthMpgNote.classList.add('d-none');
+      if (monthMpgValue) monthMpgValue.textContent = '—';
+      if (monthMpgMeta) monthMpgMeta.textContent = '';
+      refreshMeterInfoStrip();
+      return;
+    }
+    monthMpgNote.classList.remove('d-none');
+    if (monthMpgValue) monthMpgValue.textContent = parseFloat(mpg).toFixed(2);
+    if (monthMpgMeta) {
+      monthMpgMeta.innerHTML = '<strong>Period:</strong> ' + (fromDate || '—') + ' <span aria-hidden="true">→</span> ' + (toDate || '—');
+    }
+    refreshMeterInfoStrip();
+  }
+
+  function setMeterAlert(el, html) {
+    if (!el) return false;
+    if (html) {
+      el.innerHTML = html;
+      el.classList.remove('d-none');
+      return true;
+    }
+    el.innerHTML = '';
+    el.classList.add('d-none');
+    return false;
+  }
+
+  function updateMeterAlertsPanel() {
+    var any = false;
+    any = setMeterAlert(alertOdometerGap, getKmGapAlertHtml()) || any;
+    any = setMeterAlert(alertRangeAlignment, getRangeAlignmentAlertHtml()) || any;
+    any = setMeterAlert(alertVolumeCapacity, getVolumeCapacityAlertHtml()) || any;
+    any = setMeterAlert(alertPriceBenchmark, getPriceBenchmarkAlertHtml()) || any;
+    if (meterAlertsPanel) meterAlertsPanel.classList.toggle('d-none', !any);
+  }
+
+  function getActivePriceBenchmark() {
+    if (_lastPsoBenchmark != null && isFinite(_lastPsoBenchmark) && _lastPsoBenchmark > 0) {
+      return _lastPsoBenchmark;
+    }
+    if (_lastSuggestedBenchmark != null && isFinite(_lastSuggestedBenchmark) && _lastSuggestedBenchmark > 0) {
+      return _lastSuggestedBenchmark;
+    }
+    return null;
+  }
+
+  function checkFuelPriceTolerance() {
+    if (!fuelPriceInput) return;
+    var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
+    if (!isFinite(tolerance) || tolerance <= 0) {
+      fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
+      return;
+    }
+    var benchmark = getActivePriceBenchmark();
+    if (benchmark == null) {
+      fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
+      return;
+    }
+    var entered = parseNum(fuelPriceInput.value);
+    if (entered == null || entered <= 0) {
+      fuelPriceInput.classList.remove('field-invalid');
+      updateMeterAlertsPanel();
+      return;
+    }
+    var diff = Math.abs(entered - benchmark);
+    if (diff > tolerance) {
+      fuelPriceInput.classList.add('field-invalid');
+    } else {
+      fuelPriceInput.classList.remove('field-invalid');
+    }
+    updateMeterAlertsPanel();
+  }
+
+  function getPriceBenchmarkAlertHtml() {
+    if (!fuelPriceInput) return '';
+    var tolerance = parseFloat(FUEL_SETTINGS.price_tolerance_rs);
+    if (!isFinite(tolerance) || tolerance <= 0) return '';
+    var benchmark = getActivePriceBenchmark();
+    if (benchmark == null) return '';
+    var entered = parseNum(fuelPriceInput.value);
+    if (entered == null || entered <= 0) return '';
+    var diff = Math.abs(entered - benchmark);
+    if (diff <= tolerance) return '';
+    return '<strong>Price Benchmark:</strong> Price Rs ' + entered.toFixed(2) +
+      ' is Rs ' + diff.toFixed(2) + ' away from benchmark Rs ' + benchmark.toFixed(2) +
+      ' (max ± Rs ' + tolerance.toFixed(2) + ' allowed).';
+  }
+
+  function resolveKmGapMaxClient() {
+    var defaultMax = parseInt(FUEL_SETTINGS.km_gap_default_max_km, 10);
+    if (!isFinite(defaultMax) || defaultMax <= 0) defaultMax = 500;
+    var districtId = districtSelect && districtSelect.value && districtSelect.value !== '0' ? parseInt(districtSelect.value, 10) : null;
+    var projectId = projectSelect && projectSelect.value && projectSelect.value !== '0' ? parseInt(projectSelect.value, 10) : null;
+    var vehicleFamily = '';
+    if (vehicleSelect && vehicleSelect.value && vehicleSelect.value !== '0') {
+      vehicleFamily = (_vehicleFamilyMap[String(vehicleSelect.value)] || '').toLowerCase();
+    }
+    var rules = FUEL_SETTINGS.km_gap_rules || [];
+    var best = null;
+    var bestScore = -1;
+    rules.forEach(function(rule) {
+      var score = 0;
+      var rid = rule.district_id != null ? parseInt(rule.district_id, 10) : null;
+      var rpid = rule.project_id != null ? parseInt(rule.project_id, 10) : null;
+      var rfam = (rule.vehicle_family || '').toLowerCase();
+      if (rid && rid !== districtId) return;
+      if (rid) score += 1;
+      if (rpid && rpid !== projectId) return;
+      if (rpid) score += 4;
+      if (rfam && rfam !== vehicleFamily) return;
+      if (rfam) score += 2;
+      if (score > bestScore) {
+        bestScore = score;
+        best = rule;
+      }
+    });
+    if (best && best.max_km) return parseInt(best.max_km, 10);
+    return defaultMax;
+  }
+
+  function getKmGapAlertHtml() {
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (prev == null || curr == null || curr <= prev) return '';
+    var gap = curr - prev;
+    var maxKm = resolveKmGapMaxClient();
+    if (!isFinite(maxKm) || maxKm <= 0 || gap <= maxKm) return '';
+    return '<strong>Odometer Gap:</strong> ' + gap.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
+      ' KM running delta vs max ' + maxKm.toLocaleString(undefined, { maximumFractionDigits: 0 }) +
+      ' KM configured threshold. Was a middle fueling slip missed?';
+  }
+
+  function getRangeAlignmentAlertHtml() {
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (curr == null || taskStartReading == null || taskCloseReading == null) return '';
+    var low = Math.min(taskStartReading, taskCloseReading);
+    var high = Math.max(taskStartReading, taskCloseReading);
+    if (curr >= low && curr <= high) return '';
+    var diff = curr < low ? (low - curr) : (curr - high);
+    return '<strong>Range Alignment:</strong> Task KM Out: ' + taskStartReading +
+      ', KM In: ' + taskCloseReading + '. Your entry reading is outside range by ' +
+      diff.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' KM.';
+  }
+
+  function getVolumeCapacityAlertHtml() {
+    var cap = getSelectedVehicleTankCapacity();
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    if (cap <= 0 || liters == null || liters <= cap) return '';
+    return '<strong>Volume Capacity:</strong> Calculated Liters (' + liters.toFixed(2) +
+      'L) exceed this vehicle profile\'s maximum physical tank capacity (' + cap.toFixed(0) + 'L).';
+  }
+
+  function getKmGapWarningText() {
+    var html = getKmGapAlertHtml();
+    if (!html) return '';
+    return html.replace(/<\/?strong>/gi, '');
+  }
+
+  function updateKmMetricCard() {
+    var km = parseMetricText(kmDisplay);
+    var hasGap = !!getKmGapAlertHtml();
+    if (km == null) {
+      setMetricCard(kmMetricCard, kmDisplay, '—', 'is-neutral');
+      return;
+    }
+    var label = km.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setMetricCard(kmMetricCard, kmDisplay, label, hasGap ? 'is-bad' : 'is-ok');
+  }
+
+  function updateKmGapWarning() {
+    updateKmMetricCard();
+    updateMeterAlertsPanel();
+  }
+
+  function _selectedVehicleId() {
+    if (!vehicleSelect) return '';
+    if (vehicleSelect.tomselect) {
+      var v = vehicleSelect.tomselect.getValue();
+      if (Array.isArray(v)) return v.length ? String(v[0]) : '';
+      return v ? String(v) : '';
+    }
+    return vehicleSelect.value || '';
+  }
+
+  function _fmtEntryNum(val, digits) {
+    if (val == null || val === '') return '—';
+    var n = parseFloat(val);
+    if (isNaN(n)) return '—';
+    return n.toLocaleString(undefined, { maximumFractionDigits: digits != null ? digits : 2 });
+  }
+
+  function formatVehicleLastEntryStrip(entry) {
+    var parts = ['<strong>Last Entry:</strong>'];
+    parts.push('<span>' + (entry.fueling_date || '—') + '</span>');
+    parts.push('<span class="text-muted">|</span>');
+    parts.push('<span>' + (entry.current_reading != null ? _fmtEntryNum(entry.current_reading, 0) : '—') + '</span>');
+    parts.push('<span class="text-muted">|</span>');
+    parts.push('<strong>Rs ' + (entry.amount != null ? _fmtEntryNum(entry.amount, 0) : '—') + '</strong>');
+    if (entry.liters != null) {
+      parts.push('<span class="text-muted">|</span>');
+      parts.push('<span>' + parseFloat(entry.liters).toFixed(2) + ' L</span>');
+    }
+    if (entry.fuel_price != null) {
+      parts.push('<span class="text-muted">|</span>');
+      parts.push('<span>@ Rs ' + parseFloat(entry.fuel_price).toFixed(2) + '</span>');
+    }
+    return parts.join(' ');
+  }
+
+  function renderFuelEntryDetail(entry) {
+    if (!vehicleLastEntryBody || !entry) return;
+    function displayVal(val) {
+      if (val === null || val === undefined || val === '') return '—';
+      return String(val);
+    }
+    function item(label, val) {
+      return '<div class="fuel-entry-detail-item"><div class="lbl">' + label + '</div><div class="val">' + displayVal(val) + '</div></div>';
+    }
+    var html = '<div class="small text-muted mb-2">Entry #' + (entry.id || '—') + '</div><div class="fuel-entry-detail-grid">';
+    html += item('Fueling Date', entry.fueling_date);
+    html += item('Vehicle', entry.vehicle_no);
+    html += item('District', entry.district);
+    html += item('Project', entry.project);
+    html += item('Pump', entry.pump_name);
+    html += item('Fuel Type', entry.fuel_type);
+    html += item('Payment', entry.payment_type);
+    html += item('Slip No', entry.slip_no);
+    html += item('Card Swipe', entry.card_swipe_date);
+    html += item('Prev Reading', entry.previous_reading != null ? _fmtEntryNum(entry.previous_reading, 0) : '—');
+    html += item('Current Reading', entry.current_reading != null ? _fmtEntryNum(entry.current_reading, 0) : '—');
+    html += item('KM', entry.km != null ? _fmtEntryNum(entry.km, 2) : '—');
+    html += item('KM Out (Task)', entry.km_out_task != null ? _fmtEntryNum(entry.km_out_task, 2) : '—');
+    html += item('KM In (Task)', entry.km_in_task != null ? _fmtEntryNum(entry.km_in_task, 2) : '—');
+    html += item('Matched', entry.meter_reading_matched);
+    html += item('MPG', entry.mpg != null ? _fmtEntryNum(entry.mpg, 2) : '—');
+    html += item('Liters', entry.liters != null ? _fmtEntryNum(entry.liters, 2) + ' L' : '—');
+    html += item('Price/Ltr', entry.fuel_price != null ? 'Rs ' + _fmtEntryNum(entry.fuel_price, 2) : '—');
+    html += item('Upload', (entry.upload_status || '—').toUpperCase());
+    html += '</div>';
+    html += '<div class="fuel-entry-detail-total"><div class="lbl">Amount</div><div class="val">Rs ' +
+      (entry.amount != null ? _fmtEntryNum(entry.amount, 0) : '—') + '</div></div>';
+    vehicleLastEntryBody.innerHTML = html;
+    if (vehicleLastEntryViewLink) {
+      if (entry.media_url && entry.has_media) {
+        vehicleLastEntryViewLink.href = entry.media_url;
+        vehicleLastEntryViewLink.classList.remove('d-none');
+      } else {
+        vehicleLastEntryViewLink.classList.add('d-none');
+      }
+    }
+    if (vehicleLastEntryEditLink) {
+      if (entry.edit_url) {
+        vehicleLastEntryEditLink.href = entry.edit_url;
+        vehicleLastEntryEditLink.classList.remove('d-none');
+      } else {
+        vehicleLastEntryEditLink.classList.add('d-none');
+      }
+    }
+  }
+
+  function loadFuelEntryDetailById(entryId) {
+    if (!vehicleLastEntryBody || !entryId) return;
+    vehicleLastEntryBody.innerHTML = '<span class="text-muted">Loading...</span>';
+    fetch('/api/fuel-expense/detail/' + encodeURIComponent(entryId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          vehicleLastEntryBody.innerHTML = '<span class="text-muted">No entry found.</span>';
+          if (vehicleLastEntryViewLink) vehicleLastEntryViewLink.classList.add('d-none');
+          if (vehicleLastEntryEditLink) vehicleLastEntryEditLink.classList.add('d-none');
+          return;
+        }
+        renderFuelEntryDetail(entry);
+        scheduleVehicleLastEntryPanelPosition();
+      })
+      .catch(function() {
+        vehicleLastEntryBody.innerHTML = '<span class="text-danger">Could not load entry.</span>';
+      });
+  }
+
+  function _vehicleLastEntryFetchUrl() {
+    var vid = _selectedVehicleId();
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (!vid || vid === '0') return null;
+    var url = '/api/fuel-expense/last-entry?vehicle_id=' + encodeURIComponent(vid);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    return url;
+  }
+
+  function loadVehicleLastEntryDetail() {
+    var url = _vehicleLastEntryFetchUrl();
+    if (!url || !vehicleLastEntryBody) return;
+    vehicleLastEntryBody.innerHTML = '<span class="text-muted">Loading...</span>';
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          vehicleLastEntryBody.innerHTML = '<span class="text-muted">No entry found.</span>';
+          return;
+        }
+        _vehicleLastEntryCache = entry;
+        renderFuelEntryDetail(entry);
+        scheduleVehicleLastEntryPanelPosition();
+        if (vehicleLastEntryStrip) {
+          renderVehicleLastEntryStrip(formatVehicleLastEntryStrip(entry));
+        }
+      })
+      .catch(function() {
+        vehicleLastEntryBody.innerHTML = '<span class="text-danger">Could not load entry.</span>';
+      });
+  }
+
+  function fetchVehicleLastEntry() {
+    if (!vehicleLastEntryStrip) return;
+    var url = _vehicleLastEntryFetchUrl();
+    if (!url) {
+      _vehicleLastEntryCache = null;
+      hideVehicleLastEntryStrip();
+      return;
+    }
+    showVehicleLastEntryLoading();
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var entry = data && data.entry;
+        if (!entry) {
+          _vehicleLastEntryCache = null;
+          renderVehicleLastEntryStrip('<strong>Last Entry:</strong> <span class="text-muted">No previous fuel entry for this vehicle.</span>');
+          return;
+        }
+        _vehicleLastEntryCache = entry;
+        renderVehicleLastEntryStrip(formatVehicleLastEntryStrip(entry));
+      })
+      .catch(function() {
+        _vehicleLastEntryCache = null;
+        hideVehicleLastEntryStrip();
+      });
+  }
+
+  function fetchLastReading() {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var currReadingVal = currentReadingInput && currentReadingInput.value ? currentReadingInput.value : '';
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (!vid || vid === '0') {
+      if (previousReadingInput) previousReadingInput.value = '';
+      setFuelTypeAuto('');
+      computeKm();
+      return;
+    }
+    var url = '/api/fuel-expense/last-reading?vehicle_id=' + encodeURIComponent(vid);
+    if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    if (currReadingVal) url += '&current_reading=' + encodeURIComponent(currReadingVal);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.previous_reading != null && previousReadingInput) {
+          previousReadingInput.value = data.previous_reading;
+        }
+        if (data.fuel_type) {
+          setFuelTypeAuto(data.fuel_type);
+        } else if (fuelTypeSelect && fuelTypeSelect.value) {
+          setFuelTypeAuto(fuelTypeSelect.value);
+        }
+        fetchSuggestedPrice();
+        fetchPriceHistory();
+        fetchPsoRateForDate();
+        computeKm();
+        fetchMonthMpg();
+        updateOdometerGauge();
+      });
+  }
+
+  function fetchTaskReadings() {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var d = fuelingDateInput && fuelingDateInput.value;
+    if (!vid || vid === '0' || !d) {
+      setTaskKmField(kmOutTask, '');
+      setTaskKmField(kmInTask, '');
+      taskStartReading = null;
+      taskCloseReading = null;
+      updateMatchedState();
+      updateOdometerGauge();
+      return;
+    }
+    fetch('/api/fuel-expense/task-readings?vehicle_id=' + vid + '&fueling_date=' + encodeURIComponent(d))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        setTaskKmField(kmOutTask, data.km_out_task != null ? data.km_out_task : '');
+        setTaskKmField(kmInTask, data.km_in_task != null ? data.km_in_task : '');
+        taskStartReading = parseNum(data.km_out_task);
+        taskCloseReading = parseNum(data.km_in_task);
+        computeKm();
+        updateOdometerGauge();
+      });
+  }
+
+  function updateMatchedState() {
+        var curr = parseNum(currentReadingInput.value);
+        if (curr == null || taskStartReading == null || taskCloseReading == null) {
+      setMetricCard(matchedMetricCard, meterMatched, '—', 'is-neutral');
+      updateMeterAlertsPanel();
+          return;
+        }
+        var low = Math.min(taskStartReading, taskCloseReading);
+        var high = Math.max(taskStartReading, taskCloseReading);
+        var matched = curr >= low && curr <= high;
+    setMetricCard(matchedMetricCard, meterMatched, matched ? 'Yes' : 'No', matched ? 'is-ok' : 'is-bad');
+    if (matched) closeMeterMatchWarning();
+    updateMeterAlertsPanel();
+  }
+
+  function computeKm() {
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    var baseReading = prev != null ? prev : taskStartReading;
+    if (baseReading != null && curr != null) {
+      if (kmDisplay) kmDisplay.textContent = (curr - baseReading).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } else if (kmDisplay) {
+      kmDisplay.textContent = '—';
+    }
+    updateMatchedState();
+    updateOdometerGauge();
+    updateKmGapWarning();
+    computeMpgAndLiters();
+  }
+
+  function getSelectedVehicleTankCapacity() {
+    if (!vehicleSelect || !vehicleSelect.value || vehicleSelect.value === '0') return 0;
+    return parseFloat(_vehicleTankCapacityMap[String(vehicleSelect.value)] || 0) || 0;
+  }
+
+  function getTankCapacityWarningText() {
+    var cap = getSelectedVehicleTankCapacity();
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    if (cap <= 0 || liters == null || liters <= cap) return '';
+    return 'Calculated Liters (' + liters.toFixed(0) + 'L) exceed vehicle\'s max tank capacity (' + cap.toFixed(0) + 'L).';
+  }
+
+  function updateMpgMetricCard(km, lit) {
+    if (km != null && lit != null && lit > 0) {
+      var mpg = km / lit;
+      var label = mpg.toFixed(2);
+      setMetricCard(mpgMetricCard, mpgDisplay, label, mpg > 0 ? 'is-ok' : 'is-bad');
+      return;
+    }
+    setMetricCard(mpgMetricCard, mpgDisplay, '—', 'is-neutral');
+  }
+
+  function updateTankCapacityWarning() {
+    var msg = getTankCapacityWarningText();
+    if (!msg) {
+      if (litersInput) litersInput.classList.remove('field-invalid');
+    } else if (litersInput) {
+      litersInput.classList.add('field-invalid');
+    }
+    updateMeterAlertsPanel();
+  }
+
+  function updateOdometerGauge() {
+    if (!odometerGaugeWrap) return;
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    var taskIn = taskCloseReading;
+    var taskOut = taskStartReading;
+    if (taskIn == null) {
+      odometerGaugeWrap.classList.add('d-none');
+      return;
+    }
+    odometerGaugeWrap.classList.remove('d-none');
+    var trackMin = prev != null ? Math.min(prev, taskIn) : (taskOut != null ? Math.min(taskOut, taskIn) : taskIn - 50);
+    var trackMax = prev != null ? Math.max(prev, taskIn) : (taskOut != null ? Math.max(taskOut, taskIn) : taskIn + 50);
+    if (taskOut != null) {
+      trackMin = Math.min(trackMin, taskOut, taskIn);
+      trackMax = Math.max(trackMax, taskOut, taskIn);
+    }
+    if (curr != null) {
+      trackMin = Math.min(trackMin, curr);
+      trackMax = Math.max(trackMax, curr);
+    }
+    if (trackMax <= trackMin) trackMax = trackMin + 1;
+    if (gaugePrevLabel) gaugePrevLabel.textContent = prev != null ? prev.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+    if (gaugeTaskInLabel) gaugeTaskInLabel.textContent = taskIn.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (gaugeTaskOutLabel) {
+      if (taskOut != null) {
+        gaugeTaskOutLabel.classList.remove('d-none');
+        gaugeTaskOutLabel.innerHTML = 'Out: <strong>' + taskOut.toLocaleString(undefined, { maximumFractionDigits: 0 }) + '</strong>';
+      } else {
+        gaugeTaskOutLabel.classList.add('d-none');
+      }
+    }
+    function pctFor(val) {
+      return Math.max(0, Math.min(100, ((val - trackMin) / (trackMax - trackMin)) * 100));
+    }
+    if (gaugeTaskZone && taskOut != null) {
+      var zoneLow = Math.min(taskOut, taskIn);
+      var zoneHigh = Math.max(taskOut, taskIn);
+      gaugeTaskZone.classList.remove('d-none');
+      gaugeTaskZone.style.left = pctFor(zoneLow) + '%';
+      gaugeTaskZone.style.width = Math.max(0, pctFor(zoneHigh) - pctFor(zoneLow)) + '%';
+    } else if (gaugeTaskZone) {
+      gaugeTaskZone.classList.add('d-none');
+    }
+    if (gaugeTaskOutTick && taskOut != null) {
+      gaugeTaskOutTick.classList.remove('d-none');
+      gaugeTaskOutTick.style.left = pctFor(taskOut) + '%';
+    } else if (gaugeTaskOutTick) {
+      gaugeTaskOutTick.classList.add('d-none');
+    }
+    if (gaugeCurrentMarker) {
+      if (curr != null) {
+        gaugeCurrentMarker.classList.remove('d-none');
+        gaugeCurrentMarker.style.left = pctFor(curr) + '%';
+        var rangeLow = taskOut != null ? Math.min(taskOut, taskIn) : Math.min(prev != null ? prev : taskIn, taskIn);
+        var rangeHigh = taskOut != null ? Math.max(taskOut, taskIn) : Math.max(prev != null ? prev : taskIn, taskIn);
+        var inTaskRange = curr >= rangeLow && curr <= rangeHigh;
+        gaugeCurrentMarker.classList.toggle('in-range', inTaskRange);
+        gaugeCurrentMarker.classList.toggle('out-range', !inTaskRange);
+        if (gaugeStatusText) {
+          var currLabel = curr.toLocaleString(undefined, { maximumFractionDigits: 0 });
+          if (inTaskRange) {
+            gaugeStatusText.className = 'odometer-gauge-status is-ok';
+            gaugeStatusText.textContent = 'Reading ' + currLabel + ' is inside task range.';
+          } else {
+            var diff = curr < rangeLow ? (rangeLow - curr) : (curr - rangeHigh);
+            gaugeStatusText.className = 'odometer-gauge-status is-bad';
+            gaugeStatusText.textContent = 'Reading ' + currLabel + ' is outside task range by ' + diff.toFixed(0) + ' KM.';
+          }
+        }
+      } else {
+        gaugeCurrentMarker.classList.add('d-none');
+        if (gaugeStatusText) {
+          gaugeStatusText.className = 'odometer-gauge-status is-muted';
+          gaugeStatusText.textContent = 'Type current reading to update gauge.';
+        }
+      }
+    }
+  }
+
+  function fetchPsoRateForDate() {
+    if (!psoRateDatePanel) return;
+    var ft = (fuelTypeSelect && fuelTypeSelect.value) || '';
+    var dateVal = (fuelingDateInput && fuelingDateInput.value) || '';
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol') || !dateVal) {
+      psoRateDatePanel.style.display = 'none';
+      _lastPsoBenchmark = null;
+      checkFuelPriceTolerance();
+      refreshMeterInfoStrip();
+      return;
+    }
+    var label = (ft === 'Diesel') ? 'PSO Diesel Rate' : 'PSO Petrol Rate';
+    setPsoRateTileLoading(label);
+    fetch('/api/fuel-market-rate-for-date?date=' + encodeURIComponent(dateVal))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var key = (ft === 'Diesel') ? 'diesel' : 'petrol';
+        var rateLabel = (ft === 'Diesel') ? 'PSO Diesel Rate' : 'PSO Petrol Rate';
+        if (!data || !data.ok) {
+          var noDate = data && data.no_record_date ? data.no_record_date : dateVal;
+          _lastPsoBenchmark = null;
+          checkFuelPriceTolerance();
+          renderPsoRateTile(
+            rateLabel,
+            'No Record',
+            '<strong>Date:</strong> ' + noDate,
+            true
+          );
+          return;
+        }
+        var rate = data[key];
+        if (rate == null) {
+          _lastPsoBenchmark = null;
+          checkFuelPriceTolerance();
+          renderPsoRateTile(
+            rateLabel,
+            'No Record',
+            '<strong>Date:</strong> ' + dateVal,
+            true
+          );
+        } else {
+          var parsedRate = parseFloat(rate);
+          _lastPsoBenchmark = (isFinite(parsedRate) && parsedRate > 0) ? parsedRate : null;
+          checkFuelPriceTolerance();
+          var scanAt = data.scanned_at || data.scan_date || '—';
+          renderPsoRateTile(
+            rateLabel,
+            'Rs ' + parsedRate.toFixed(2) + '<span class="meter-info-tile__unit">/ Ltr</span>',
+            '<strong>Last Scan:</strong> ' + scanAt,
+            false
+          );
+        }
+      })
+      .catch(function() {
+        psoRateDatePanel.style.display = 'none';
+        _lastPsoBenchmark = null;
+        checkFuelPriceTolerance();
+        refreshMeterInfoStrip();
+      });
+  }
+
+  function renderFuelMarketStatus(data) {
+    if (!fuelMarketScanStatusBar) return;
+    if (!data || !data.sources) {
+      fuelMarketScanStatusBar.innerHTML = '<strong>Last Scan:</strong> <span class="text-muted">Not available</span>';
+      return;
+    }
+    var pso = data.sources.pso || {};
+    var parts = ['<strong>Last Scan:</strong> ' + (data.scanned_at || '-')];
+    if (pso.ok) {
+      parts.push('PSO: <span class="scan-ok">OK</span>');
+      if (pso.petrol != null) parts.push('Petrol: Rs ' + parseFloat(pso.petrol).toFixed(2));
+      if (pso.diesel != null) parts.push('Diesel: Rs ' + parseFloat(pso.diesel).toFixed(2));
+    } else {
+      parts.push('PSO: <span class="scan-bad">' + (pso.error || 'Scan failed') + '</span>');
+    }
+    fuelMarketScanStatusBar.innerHTML = parts.join(' | ');
+  }
+
+  function fetchFuelMarketScan() {
+    fetch('/api/fuel-market-rates')
+      .then(function(r) { return r.json(); })
+      .then(function(data) { renderFuelMarketStatus(data); })
+      .catch(function() { renderFuelMarketStatus(null); });
+  }
+
+  function runFuelPsoScanNow() {
+    var btn = document.getElementById('fuelPsoScanNowBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning...';
+    }
+    var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta && csrfMeta.getAttribute('content')) {
+      headers['X-CSRFToken'] = csrfMeta.getAttribute('content');
+    }
+    fetch('/api/fuel-market-scan-now', { method: 'POST', headers: headers, credentials: 'same-origin', body: '{}' })
+      .then(function(r) { return r.json().then(function(d) { return { okHttp: r.ok, data: d }; }); })
+      .then(function(res) {
+        var data = res.data || {};
+        if (!res.okHttp || data.ok === false) {
+          throw new Error(data.error || 'Scan failed');
+        }
+        renderFuelMarketStatus(data);
+        try { fetchPsoRateForDate(); } catch (e) {}
+      })
+      .catch(function(err) {
+        if (fuelMarketScanStatusBar) {
+          fuelMarketScanStatusBar.innerHTML =
+            '<strong>Last Scan:</strong> <span class="scan-bad">' +
+            (err && err.message ? err.message : 'Scan failed') +
+            '</span>';
+        }
+      })
+      .finally(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Scan Now';
+        }
+      });
+  }
+
+  function setExpenseByValueQuiet(value) {
+    if (!expenseBySelect) return;
+    var next = value == null ? '' : String(value);
+    expenseBySelect.value = next;
+    if (typeof fleetSetSelectValue === 'function') {
+      fleetSetSelectValue(expenseBySelect, next, true);
+      return;
+    }
+    var ts = expenseBySelect.tomselect;
+    if (!ts) return;
+    ts._wsSilentFill = true;
+    ts._suppressOpen = true;
+    try {
+      if (next) ts.setValue(next, true);
+      else ts.clear(true);
+      if (ts.isOpen) ts.close();
+    } finally {
+      window.setTimeout(function() {
+        if (ts.isOpen) ts.close();
+        ts._wsSilentFill = false;
+        ts._suppressOpen = false;
+      }, 80);
+    }
+  }
+
+  function handlePaymentTypeBehavior(forceReset) {
+    if (!paymentTypeSelect) return;
+    var paymentType = paymentTypeSelect.value || '';
+    var cardEnabled = paymentType === 'Tp/Card' || paymentType === 'Shl/Card';
+    var cardDisabled = !cardEnabled;
+    if (cardSwipeDateInput) {
+      cardSwipeDateInput.disabled = cardDisabled;
+      if (cardDisabled) {
+        cardSwipeDateInput.value = '';
+      }
+    }
+    if (!expenseBySelect) return;
+    var shouldForce = !!forceReset;
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    // Quiet value sync only — never focus/open Expense By from Payment Type.
+    if (paymentType === 'Cash') {
+      if (cashExpenseByValue && (shouldForce || !expenseBySelect.value)) {
+        setExpenseByValueQuiet(cashExpenseByValue);
+      }
+    } else if (paymentType === 'Credit') {
+      if (shouldForce) {
+        setExpenseByValueQuiet('');
+      }
+    }
+    if (expenseBySelect && expenseBySelect.tomselect) {
+      var ets = expenseBySelect.tomselect;
+      var onExpenseBy = !!(ets.control_input && document.activeElement === ets.control_input);
+      if (!onExpenseBy && ets.isOpen) {
+        try { ets.close(); } catch (errClose) {}
+      }
+    }
+    window.scrollTo(0, scrollY);
+    window.setTimeout(function() { window.scrollTo(0, scrollY); }, 0);
+    updateExpenseByBalanceHint();
+  }
+
+  function updateExpenseByBalanceHint() {
+    if (!expenseByBalanceHint || !expenseBySelect) return;
+    var opt = expenseBySelect.options[expenseBySelect.selectedIndex];
+    if (!opt || !opt.value) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = 'Balance: auto/default account will be used.';
+      scheduleFuelTomSelectReposition();
+      return;
+    }
+    var txt = (opt.textContent || '');
+    var m = txt.match(/\|\s*Bal:\s*([+-]?\d[\d,]*(?:\.\d{1,2})?\s*(?:Dr|Cr))/i);
+    if (!m) {
+      expenseByBalanceHint.className = 'small mt-1 text-muted';
+      expenseByBalanceHint.textContent = '';
+      scheduleFuelTomSelectReposition();
+      return;
+    }
+    var bal = m[1].trim();
+    var isCr = /\bCr\b/i.test(bal);
+    var hasAcct = /^acct-\d+$/.test(opt.value || '');
+    expenseByBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+    expenseByBalanceHint.textContent = 'Current Balance: ' + bal;
+    expenseByBalanceHint.style.cursor = hasAcct ? 'pointer' : 'default';
+    expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
+    scheduleFuelTomSelectReposition();
+  }
+
+  function updateLitersFieldState() {
+    if (!litersInput) return;
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
+    var autoCalc = amount != null && amount > 0 && price != null && price > 0;
+    litersInput.readOnly = autoCalc;
+    litersInput.disabled = autoCalc;
+    litersInput.classList.toggle('bg-light', autoCalc);
+    if (autoCalc) {
+      litersInput.title = 'Auto calculated from Amount ÷ Fuel Price';
+    } else {
+      litersInput.removeAttribute('title');
+    }
+  }
+
+  function computeMpgAndLiters() {
+    if (_calcFromLiters) return;
+    var km = parseMetricText(kmDisplay);
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
+    if (price != null && price > 0 && amount != null && amount > 0) {
+      if (litersInput) litersInput.value = (amount / price).toFixed(2);
+    } else if (!(litersInput && parseNum(litersInput.value) != null)) {
+      if (litersInput) litersInput.value = '';
+    }
+    updateLitersFieldState();
+    updateMpgFromValues(km);
+    updateTankCapacityWarning();
+  }
+
+  function computeFromLitersInput() {
+    if (litersInput && litersInput.disabled) return;
+    var liters = parseNum(litersInput ? litersInput.value : null);
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    var price = parseNum(fuelPriceInput ? fuelPriceInput.value : null);
+    if (!liters || liters <= 0) {
+      computeMpgAndLiters();
+      return;
+    }
+    _calcFromLiters = true;
+    if (amount != null && amount > 0) {
+      if (fuelPriceInput) {
+        fuelPriceInput.value = (amount / liters).toFixed(2);
+        fuelPriceInput.dataset.autoSuggested = '0';
+      }
+    } else if (price != null && price > 0) {
+      if (amountInput) amountInput.value = (price * liters).toFixed(2);
+    }
+    _calcFromLiters = false;
+    updateLitersFieldState();
+    updateMpgFromValues(parseMetricText(kmDisplay));
+    updateTankCapacityWarning();
+  }
+
+  function updateMpgFromValues(km) {
+    var lit = parseNum(litersInput ? litersInput.value : null);
+    updateMpgMetricCard(km, lit);
+  }
+
+  function fetchMonthMpg() {
+    if (!monthMpgNote) return;
+    var vid = vehicleSelect && vehicleSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (!vid || vid === '0' || !fDate) {
+      renderMonthMpgTile(null);
+      return;
+    }
+    var url = '/api/fuel-expense/month-mpg?vehicle_id=' + encodeURIComponent(vid) + '&fueling_date=' + encodeURIComponent(fDate);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.ok || data.mpg == null) {
+          renderMonthMpgTile(null);
+          return;
+        }
+        renderMonthMpgTile(data.mpg, data.from_date, data.to_date);
+      })
+      .catch(function() {
+        renderMonthMpgTile(null);
+      });
+  }
+
+  function clearFieldError(inputEl, errorEl) {
+    if (inputEl) inputEl.classList.remove('field-invalid');
+    if (errorEl) { errorEl.classList.add('d-none'); errorEl.textContent = ''; }
+  }
+
+  function setFieldError(inputEl, errorEl, message) {
+    if (inputEl) inputEl.classList.add('field-invalid');
+    if (errorEl) { errorEl.classList.remove('d-none'); errorEl.textContent = message; }
+  }
+
+  function resetFuelPageLoadBar() {
+    var bar = document.getElementById('topLoadBar');
+    if (!bar) return;
+    bar.classList.remove('tlb-loading', 'tlb-done', 'loading', 'done');
+    bar.style.width = '0%';
+  }
+
+  function clearAttachmentFieldError() {
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    closeAttachmentWarningPopup();
+  }
+
+  function dismissAttachmentWarningPopup() {
+    closeAttachmentWarningPopup();
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    focusFuelSaveAddNext();
+  }
+
+  function closeAttachmentWarningPopup() {
+    if (!fuelAttachmentWarningPanel) return;
+    fuelAttachmentWarningPanel.classList.add('d-none');
+    fuelAttachmentWarningPanel.setAttribute('aria-hidden', 'true');
+  }
+
+  function isAttachmentWarningOpen() {
+    return !!(fuelAttachmentWarningPanel && !fuelAttachmentWarningPanel.classList.contains('d-none'));
+  }
+
+  function focusAttachmentWarningOk() {
+    if (!fuelAttachmentWarningOkBtn || !isAttachmentWarningOpen()) return;
+    fuelAttachmentWarningOkBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isAttachmentWarningOpen() && document.activeElement !== fuelAttachmentWarningOkBtn) {
+        fuelAttachmentWarningOkBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function showAttachmentWarningPopup() {
+    if (!fuelAttachmentWarningPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    setFieldError(fuelAttachZone, fuelAttachmentError, 'Please attach at least one photo or video.');
+    mountFuelFloatPanelToBody(fuelAttachmentWarningPanel);
+    fuelAttachmentWarningPanel.classList.remove('d-none');
+    fuelAttachmentWarningPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelCancelBtn || fuelAttachZone || fuelAttachmentFiles, { placeAbove: true });
+    window.setTimeout(function() {
+      focusAttachmentWarningOk();
+    }, 30);
+  }
+
+  function isValidFuelAttachmentFile(f) {
+    if (!f) return false;
+    var ct = String(f.type || '').toLowerCase();
+    if (ct.indexOf('image/') === 0 || ct.indexOf('video/') === 0) return true;
+    var name = String(f.name || '').toLowerCase();
+    return /\.(jpe?g|png|gif|webp|bmp|heic|heif|mp4|mov|webm|avi|mkv|3gp|m4v)$/.test(name);
+  }
+
+  function countValidFuelAttachmentFiles() {
+    var count = 0;
+    if (!fuelAttachmentFiles || !fuelAttachmentFiles.files) return 0;
+    Array.prototype.forEach.call(fuelAttachmentFiles.files, function(f) {
+      if (isValidFuelAttachmentFile(f)) count += 1;
+    });
+    return count;
+  }
+
+  function getFuelAttachmentCount() {
+    return countValidFuelAttachmentFiles() + (_fuelExistingAttachmentCount || 0);
+  }
+
+  function hasFuelAttachments() {
+    return getFuelAttachmentCount() > 0;
+  }
+
+  function ensureFuelAttachmentsBeforeProceed() {
+    if (hasFuelAttachments()) return true;
+    showAttachmentWarningPopup();
+    return false;
+  }
+
+  function validateFuelFormClient() {
+    clearFieldError(currentReadingInput, currentReadingError);
+    clearFieldError(amountInput, amountInputError);
+    clearFieldError(litersInput, litersInputError);
+    clearFieldError(fuelAttachZone, fuelAttachmentError);
+    closeAttachmentWarningPopup();
+
+    var firstBad = null;
+    if (vehicleSelect && (!vehicleSelect.value || vehicleSelect.value === '0')) {
+      if (!firstBad) firstBad = vehicleSelect;
+    }
+    var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
+    var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
+    if (curr == null || curr <= 0) {
+      setFieldError(currentReadingInput, currentReadingError, 'Current reading is required.');
+      if (!firstBad) firstBad = currentReadingInput;
+    } else if (prev != null && curr <= prev) {
+      setFieldError(currentReadingInput, currentReadingError, 'Current reading must be greater than previous (' + prev + ').');
+      if (!firstBad) firstBad = currentReadingInput;
+    }
+    var amount = parseNum(amountInput ? amountInput.value : null);
+    if (amount == null || amount <= 0) {
+      setFieldError(amountInput, amountInputError, 'Amount cannot be 0.');
+      if (!firstBad) firstBad = amountInput;
+    }
+
+    if (firstBad) {
+      resetFuelPageLoadBar();
+      try { firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' }); firstBad.focus(); } catch (e) {}
+      return false;
+    }
+
+    if (!hasFuelAttachments()) {
+      showAttachmentWarningPopup();
+      return false;
+    }
+
+    return true;
+  }
+
+  function unlockFuelSubmit() {
+    fuelSubmitLocked = false;
+    if (fuelExpenseForm) {
+      fuelExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+      });
+    }
+  }
+
+  function setFuelSubmitLoading(submitter) {
+    if (!fuelExpenseForm) return;
+    var btns = submitter ? [submitter] : fuelExpenseForm.querySelectorAll('button[type="submit"], input[type="submit"]');
+    Array.prototype.forEach.call(btns, function(btn) {
+      if (!btn) return;
+      if (!btn.querySelector('.btn-spinner')) {
+        var sp = document.createElement('span');
+        sp.className = 'btn-spinner';
+        sp.setAttribute('aria-hidden', 'true');
+        btn.insertBefore(sp, btn.firstChild);
+      }
+      btn.classList.add('btn-loading');
+      btn.disabled = true;
+    });
+  }
+
+  var _allowNativeSubmit = false;
+
+  function submitFuelFormNative(submitter) {
+    submitFuelFormWithOffline(submitter);
+  }
+
+  function submitFuelFormWithOffline(submitter) {
+    if (!fuelExpenseForm) return;
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
+    fuelSubmitLocked = true;
+    setFuelSubmitLoading(submitter);
+    if (window.FuelExpenseOffline && typeof window.FuelExpenseOffline.submitWithOfflineFallback === 'function') {
+      window.FuelExpenseOffline.submitWithOfflineFallback(fuelExpenseForm, submitter)
+        .then(function() {
+          if (!window.navigator.onLine) unlockFuelSubmit();
+        })
+        .catch(function(err) {
+          unlockFuelSubmit();
+          alert(err && err.message ? err.message : 'Save failed. Please try again.');
+        });
+      return;
+    }
+    _allowNativeSubmit = true;
+    if (submitter && typeof fuelExpenseForm.requestSubmit === 'function') {
+      fuelExpenseForm.requestSubmit(submitter);
+    } else {
+      fuelExpenseForm.submit();
+    }
+  }
+
+  function getPriceBenchmarkPopupText() {
+    return getPriceBenchmarkAlertHtml();
+  }
+
+  function checkPriceBenchmarkThenSubmit(submitter) {
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
+    var msg = getPriceBenchmarkPopupText();
+    if (_priceBenchmarkBypass || !msg) {
+      checkKmGapThenSubmit(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    showFuelPriceBenchmarkPanel(msg);
+  }
+
+  function isFuelPriceBenchmarkPanelOpen() {
+    return !!(fuelPriceBenchmarkPanel && !fuelPriceBenchmarkPanel.classList.contains('d-none'));
+  }
+
+  function focusFuelPriceBenchmarkContinueBtn() {
+    if (!fuelPriceBenchmarkContinueBtn || !isFuelPriceBenchmarkPanelOpen()) return;
+    fuelPriceBenchmarkContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelPriceBenchmarkPanelOpen() && document.activeElement !== fuelPriceBenchmarkContinueBtn) {
+        fuelPriceBenchmarkContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelPriceBenchmarkPanel(keepPending) {
+    if (!fuelPriceBenchmarkPanel) return;
+    fuelPriceBenchmarkPanel.classList.add('d-none');
+    fuelPriceBenchmarkPanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelPriceBenchmarkPanel(msg) {
+    if (!fuelPriceBenchmarkPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    if (fuelPriceBenchmarkBody) {
+      fuelPriceBenchmarkBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-0">' + msg + '</p>';
+    }
+    mountFuelFloatPanelToBody(fuelPriceBenchmarkPanel);
+    fuelPriceBenchmarkPanel.classList.remove('d-none');
+    fuelPriceBenchmarkPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelPriceBenchmarkPanel, fuelCancelBtn || fuelPriceInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+    window.setTimeout(focusFuelPriceBenchmarkContinueBtn, 30);
+  }
+
+  function dismissFuelPriceBenchmarkPanel() {
+    _priceBenchmarkBypass = false;
+    closeFuelPriceBenchmarkPanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelPriceBenchmarkPanel() {
+    _priceBenchmarkBypass = true;
+    closeFuelPriceBenchmarkPanel(true);
+    checkKmGapThenSubmit(_pendingSubmitBtn);
+    _priceBenchmarkBypass = false;
+  }
+
+  function checkKmGapThenSubmit(submitter) {
+    if (!ensureFuelAttachmentsBeforeProceed()) return;
+    var gapHtml = getKmGapAlertHtml();
+    if (_kmGapBypass || !gapHtml) {
+      checkDuplicateThenSubmit(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    showFuelKmGapPanel(gapHtml);
+  }
+
+  function isFuelKmGapPanelOpen() {
+    return !!(fuelKmGapPanel && !fuelKmGapPanel.classList.contains('d-none'));
+  }
+
+  function focusFuelKmGapContinueBtn() {
+    if (!fuelKmGapContinueBtn || !isFuelKmGapPanelOpen()) return;
+    fuelKmGapContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelKmGapPanelOpen() && document.activeElement !== fuelKmGapContinueBtn) {
+        fuelKmGapContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelKmGapPanel(keepPending) {
+    if (!fuelKmGapPanel) return;
+    fuelKmGapPanel.classList.add('d-none');
+    fuelKmGapPanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelKmGapPanel(gapHtml) {
+    if (!fuelKmGapPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    if (fuelKmGapBody) {
+      fuelKmGapBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-0">' + gapHtml + '</p>';
+    }
+    mountFuelFloatPanelToBody(fuelKmGapPanel);
+    fuelKmGapPanel.classList.remove('d-none');
+    fuelKmGapPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelKmGapPanel, fuelCancelBtn || currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+    window.setTimeout(focusFuelKmGapContinueBtn, 30);
+  }
+
+  function dismissFuelKmGapPanel() {
+    _kmGapBypass = false;
+    closeFuelKmGapPanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelKmGapPanel() {
+    _kmGapBypass = true;
+    closeFuelKmGapPanel(true);
+    checkDuplicateThenSubmit(_pendingSubmitBtn);
+    _kmGapBypass = false;
+  }
+
+  function checkTankCapacityThenSubmit(submitter) {
+    var msg = getTankCapacityWarningText();
+    if (_tankCapacityBypass || !msg) {
+      submitFuelFormNative(submitter);
+      return;
+    }
+    _pendingSubmitBtn = submitter;
+    showFuelTankCapacityPanel(msg);
+  }
+
+  function isFuelTankCapacityPanelOpen() {
+    return !!(fuelTankCapacityPanel && !fuelTankCapacityPanel.classList.contains('d-none'));
+  }
+
+  function focusFuelTankCapacityContinueBtn() {
+    if (!fuelTankCapacityContinueBtn || !isFuelTankCapacityPanelOpen()) return;
+    fuelTankCapacityContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelTankCapacityPanelOpen() && document.activeElement !== fuelTankCapacityContinueBtn) {
+        fuelTankCapacityContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelTankCapacityPanel(keepPending) {
+    if (!fuelTankCapacityPanel) return;
+    fuelTankCapacityPanel.classList.add('d-none');
+    fuelTankCapacityPanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelTankCapacityPanel(msg) {
+    if (!fuelTankCapacityPanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    if (fuelTankCapacityBody) {
+      fuelTankCapacityBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-0">' + msg + '</p>';
+    }
+    mountFuelFloatPanelToBody(fuelTankCapacityPanel);
+    fuelTankCapacityPanel.classList.remove('d-none');
+    fuelTankCapacityPanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelTankCapacityPanel, fuelCancelBtn || litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+    window.setTimeout(focusFuelTankCapacityContinueBtn, 30);
+  }
+
+  function dismissFuelTankCapacityPanel() {
+    _tankCapacityBypass = false;
+    closeFuelTankCapacityPanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelTankCapacityPanel() {
+    _tankCapacityBypass = true;
+    closeFuelTankCapacityPanel(true);
+    submitFuelFormNative(_pendingSubmitBtn);
+    _tankCapacityBypass = false;
+  }
+
+  function isFuelDuplicatePanelOpen() {
+    return !!(fuelDuplicatePanel && !fuelDuplicatePanel.classList.contains('d-none'));
+  }
+
+  function focusFuelDuplicateContinueBtn() {
+    if (!fuelDuplicateContinueBtn || !isFuelDuplicatePanelOpen()) return;
+    fuelDuplicateContinueBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (isFuelDuplicatePanelOpen() && document.activeElement !== fuelDuplicateContinueBtn) {
+        fuelDuplicateContinueBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function closeFuelDuplicatePanel(keepPending) {
+    if (!fuelDuplicatePanel) return;
+    fuelDuplicatePanel.classList.add('d-none');
+    fuelDuplicatePanel.setAttribute('aria-hidden', 'true');
+    if (!keepPending) _pendingSubmitBtn = null;
+  }
+
+  function showFuelDuplicatePanel() {
+    if (!fuelDuplicatePanel) return;
+    unlockFuelSubmit();
+    resetFuelPageLoadBar();
+    mountFuelFloatPanelToBody(fuelDuplicatePanel);
+    fuelDuplicatePanel.classList.remove('d-none');
+    fuelDuplicatePanel.setAttribute('aria-hidden', 'false');
+    positionFuelInfoPanel(fuelDuplicatePanel, fuelCancelBtn || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+    window.setTimeout(focusFuelDuplicateContinueBtn, 30);
+  }
+
+  function dismissFuelDuplicatePanel() {
+    _duplicateBypass = false;
+    closeFuelDuplicatePanel(false);
+    unlockFuelSubmit();
+  }
+
+  function continueFuelDuplicatePanel() {
+    _duplicateBypass = true;
+    closeFuelDuplicatePanel(true);
+    checkTankCapacityThenSubmit(_pendingSubmitBtn);
+    _duplicateBypass = false;
+  }
+
+  function checkDuplicateThenSubmit(submitter) {
+    var vid = vehicleSelect && vehicleSelect.value;
+    var pumpId = fuelPumpSelect && fuelPumpSelect.value;
+    var fDate = fuelingDateInput && fuelingDateInput.value;
+    var curr = currentReadingInput && currentReadingInput.value;
+    var amount = amountInput && amountInput.value;
+    var recId = fuelExpenseForm ? (fuelExpenseForm.getAttribute('data-record-id') || '') : '';
+    if (_duplicateBypass || !vid || vid === '0' || !pumpId || pumpId === '0' || !fDate || !curr || !amount) {
+      checkTankCapacityThenSubmit(submitter);
+      return;
+    }
+    var url = '/api/fuel-expense/check-duplicate?vehicle_id=' + encodeURIComponent(vid) +
+      '&fuel_pump_id=' + encodeURIComponent(pumpId) +
+      '&fueling_date=' + encodeURIComponent(fDate) +
+      '&current_reading=' + encodeURIComponent(curr) +
+      '&amount=' + encodeURIComponent(amount);
+    if (recId) url += '&exclude_id=' + encodeURIComponent(recId);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || !data.duplicate) {
+          checkTankCapacityThenSubmit(submitter);
+          return;
+        }
+        _pendingSubmitBtn = submitter;
+        if (fuelDuplicateBody) {
+          fuelDuplicateBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-2">Same vehicle, pump, date, current reading and amount already saved:</p>' +
+            '<div class="fuel-warning-float-panel__detail"><strong>' + (data.summary || 'Duplicate') + '</strong></div>';
+        }
+        if (fuelDuplicatePanel) {
+          showFuelDuplicatePanel();
+        } else if (window.confirm((data.summary || 'Duplicate entry') + ' — continue anyway?')) {
+          checkTankCapacityThenSubmit(submitter);
+    } else {
+          unlockFuelSubmit();
+    }
+      })
+      .catch(function() { checkTankCapacityThenSubmit(submitter); });
+  }
+
+  if (districtSelect && projectSelect && typeof fleetBeginCascade === 'function') {
+    districtSelect.addEventListener('change', function() {
+      fleetBeginCascade(projectSelect);
+      if (vehicleSelect) fleetBeginCascade(vehicleSelect);
+    }, true);
+  }
+  if (projectSelect && vehicleSelect && typeof fleetBeginCascade === 'function') {
+    projectSelect.addEventListener('change', function() {
+      fleetBeginCascade(vehicleSelect);
+    }, true);
+  }
+
+  if (districtSelect && projectSelect) {
+    districtSelect.addEventListener('change', function() {
+      var did = this.value;
+      _smoothLoadingSelect(projectSelect);
+      _smoothLoadingSelect(vehicleSelect);
+      setFuelTypeAuto('');
+      fetchVehicleLastEntry();
+      if (did && did !== '0') {
+        var _cKey = 'proj_d' + did;
+        var coldP = projectsFromColdCache(did);
+        if (coldP !== null) {
+          _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; });
+        } else if (window._cascadeCache[_cKey]) {
+          _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
+        } else {
+          _smoothLoadingSelect(projectSelect);
+          fetch('/get_projects_by_district/' + did)
+            .then(function(r) { return r.json(); })
+            .then(function(arr) {
+              window._cascadeCache[_cKey] = arr;
+              _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; });
+            })
+            .catch(function() { _smoothFillSelect(projectSelect, [], function(p) { return p; }); });
+        }
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      } else {
+        _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      }
+    });
+  }
+
+  if (projectSelect && vehicleSelect) {
+    projectSelect.addEventListener('change', function() {
+      var pid = projectSelect.value;
+      var did = districtSelect ? districtSelect.value : '';
+      _smoothLoadingSelect(vehicleSelect);
+      setFuelTypeAuto('');
+      fetchVehicleLastEntry();
+      if (pid && pid !== '0') {
+        var _vKey = 'veh_p' + pid + '_d' + (did || '0');
+        var coldV = vehiclesFromColdCache(pid, did);
+        if (coldV !== null) {
+          coldV.forEach(_rememberVehicleMeta);
+          _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+        } else if (window._cascadeCache[_vKey]) {
+          window._cascadeCache[_vKey].forEach(_rememberVehicleMeta);
+          _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+        } else {
+          _smoothLoadingSelect(vehicleSelect);
+          var url = '/get_vehicles_by_project_district?project_id=' + pid;
+          if (did && did !== '0') url += '&district_id=' + did;
+          fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+            window._cascadeCache[_vKey] = arr;
+            arr.forEach(_rememberVehicleMeta);
+            _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+          }).catch(function() { _smoothFillSelect(vehicleSelect, [], function(v) { return v; }); });
+        }
+      } else {
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      }
+    });
+  }
+
+  if (vehicleSelect) {
+    vehicleSelect.addEventListener('change', function() {
+      var selectedFuel = _vehicleFuelTypeMap[vehicleSelect.value] || '';
+      if (!selectedFuel && fuelTypeSelect && fuelTypeSelect.value) {
+        selectedFuel = fuelTypeSelect.value;
+      }
+      setFuelTypeAuto(selectedFuel);
+      fetchSuggestedPrice();
+      fetchPriceHistory();
+      fetchPsoRateForDate();
+      fetchLastReading();
+      fetchTaskReadings();
+      fetchMonthMpg();
+      fetchVehicleLastEntry();
+      updateTankCapacityWarning();
+    });
+  }
+
+  if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() {
+    fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); fetchSuggestedPrice(); fetchMonthMpg();
+  });
+  if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
+  if (currentReadingInput) {
+    currentReadingInput.addEventListener('input', function() {
+      clearFieldError(currentReadingInput, currentReadingError);
+      updateOdometerGauge();
+      computeKm();
+    });
+    currentReadingInput.addEventListener('keyup', function() {
+      updateOdometerGauge();
+    });
+    currentReadingInput.addEventListener('change', function() {
+      updateOdometerGauge();
+      computeKm();
+      fetchLastReading();
+    });
+  }
+  if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', function() { handlePaymentTypeBehavior(true); });
+  if (expenseBySelect) {
+    expenseBySelect.addEventListener('change', function() {
+      updateExpenseByBalanceHint();
+      var val = expenseBySelect.value || '';
+      var hasAcct = /^acct-\d+$/.test(val);
+      if (expenseByBalanceHint) {
+        expenseByBalanceHint.style.cursor = hasAcct ? 'pointer' : 'default';
+        expenseByBalanceHint.title = hasAcct ? 'Click to open ledger' : '';
+      }
+    });
+    expenseByBalanceHint && expenseByBalanceHint.addEventListener('click', function() {
+      var val = expenseBySelect ? (expenseBySelect.value || '') : '';
+      var m = val.match(/^acct-(\d+)$/);
+      if (m) window.open('/workspace/ledger?account_id=' + m[1], '_blank');
+    });
+  }
+
+  function focusFuelSaveAddNext() {
+    if (isAttachmentWarningOpen()) {
+      focusAttachmentWarningOk();
+      return;
+    }
+    var saveTarget = (fuelSaveAddNextBtn && !fuelSaveAddNextBtn.disabled)
+      ? fuelSaveAddNextBtn
+      : (fuelExpenseForm && fuelExpenseForm.querySelector('button[name="_save_action"][value="save_list"]'));
+    if (saveTarget) saveTarget.focus();
+  }
+
+  function focusFuelAttachZone() {
+    if (!fuelAttachZone) return;
+    fuelAttachZone.focus();
+    if (typeof fuelAttachZone.scrollIntoView === 'function') {
+      fuelAttachZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function focusFuelExpenseBy() {
+    if (!expenseBySelect) return;
+    window.setTimeout(function() {
+      if (expenseBySelect.tomselect) {
+        expenseBySelect.tomselect.focus();
+      } else {
+        expenseBySelect.focus();
+      }
+    }, 30);
+  }
+
+  var _blockExpenseByEnterSubmitUntil = 0;
+
+  function wireExpenseByEnterToSave() {
+    if (!expenseBySelect || expenseBySelect.dataset.enterSaveWired === '1') return;
+    var ts = expenseBySelect.tomselect;
+    if (!ts || !ts.control_input) return;
+
+    ts.control_input.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey) return;
+
+      if (ts.isOpen) {
+        _blockExpenseByEnterSubmitUntil = Date.now() + 300;
+        return;
+      }
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      focusFuelSaveAddNext();
+    });
+
+    expenseBySelect.dataset.enterSaveWired = '1';
+  }
+
+  if (fuelExpenseForm) {
+    fuelExpenseForm.addEventListener('submit', function(e) {
+      if (_allowNativeSubmit) {
+        _allowNativeSubmit = false;
+        return;
+      }
+      if (Date.now() < _blockExpenseByEnterSubmitUntil) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        resetFuelPageLoadBar();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (fuelSubmitLocked) return;
+      if (isAttachmentWarningOpen()) {
+        unlockFuelSubmit();
+        resetFuelPageLoadBar();
+        focusAttachmentWarningOk();
+        return;
+      }
+      var submitter = e.submitter || fuelExpenseForm.querySelector('button[type="submit"]');
+      if (!validateFuelFormClient()) {
+        unlockFuelSubmit();
+        resetFuelPageLoadBar();
+        return;
+      }
+      checkPriceBenchmarkThenSubmit(submitter);
+    }, true);
+  }
+
+  var _expenseByEnterTries = 0;
+  (function retryExpenseByEnterWire() {
+    wireExpenseByEnterToSave();
+    if (expenseBySelect && expenseBySelect.dataset.enterSaveWired !== '1' && _expenseByEnterTries++ < 30) {
+      window.setTimeout(retryExpenseByEnterWire, 200);
+    }
+  })();
+
+  if (fuelPriceInput) {
+    window.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
+      if (e.target !== fuelPriceInput) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (litersInput && !litersInput.disabled) {
+        litersInput.focus();
+        try { litersInput.select(); } catch (err) {}
+        return;
+      }
+      focusFuelAttachZone();
+    }, true);
+  }
+  if (litersInput) {
+    window.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
+      if (e.target !== litersInput || litersInput.disabled) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      focusFuelAttachZone();
+    }, true);
+  }
+  if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
+  if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
+  if (litersInput) litersInput.addEventListener('input', function() { clearFieldError(litersInput, litersInputError); computeFromLitersInput(); });
+
+  function renderHistoryRows(targetEl, rows) {
+    if (!targetEl) return;
+    if (!rows || !rows.length) {
+      targetEl.className = 'price-history-empty';
+      targetEl.textContent = 'No data.';
+      return;
+    }
+    targetEl.className = '';
+    targetEl.innerHTML = rows.map(function(r) {
+      return '<div class="price-history-row">' +
+        '<span class="price-date-pill">' + (r.date || '-') + '</span> | ' +
+        (r.pump_name || '-') + ' | ' +
+        (r.vehicle_no || '-') + ' | ' +
+        '<span class="price-value-pill">Rs ' + (parseFloat(r.fuel_price || 0).toFixed(2)) + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function fetchPriceHistory() {
+    var ft = fuelTypeSelect && fuelTypeSelect.value;
+    var pumpId = document.getElementById('fuelPumpSelect') && document.getElementById('fuelPumpSelect').value;
+    var fDate = (fuelingDateInput && fuelingDateInput.value) || '';
+    renderHistoryRows(datePumpHistoryWrap, []);
+    renderHistoryRows(pumpOrDateHistoryWrap, []);
+    renderHistoryRows(allPumpHistoryWrap, []);
+    if (!ft || (ft !== 'Diesel' && ft !== 'Super' && ft !== 'Petrol')) return;
+    var url = '/api/fuel-expense/price-history?fuel_type=' + encodeURIComponent(ft);
+    if (pumpId && pumpId !== '0') url += '&fuel_pump_id=' + encodeURIComponent(pumpId);
+    if (fDate) url += '&fueling_date=' + encodeURIComponent(fDate);
+    fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+      renderHistoryRows(pumpOrDateHistoryWrap, data && data.pump_or_date ? data.pump_or_date : []);
+      renderHistoryRows(datePumpHistoryWrap, data && data.date_snapshot ? data.date_snapshot : []);
+      renderHistoryRows(allPumpHistoryWrap, data && data.all_pumps ? data.all_pumps : []);
+      positionFuelPriceInsightsPanel();
+    }).catch(function() {
+      renderHistoryRows(pumpOrDateHistoryWrap, []);
+      renderHistoryRows(datePumpHistoryWrap, []);
+      renderHistoryRows(allPumpHistoryWrap, []);
+      positionFuelPriceInsightsPanel();
+    });
+  }
+
+  if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
+    fetchSuggestedPrice();
+    fetchPriceHistory();
+    fetchPsoRateForDate();
+  });
+
+  var fuelPumpSel = document.getElementById('fuelPumpSelect');
+  if (fuelPumpSel) {
+    if (!fuelPumpSel.tomselect) initSearchableDropdowns(fuelPumpSel.parentNode);
+    fuelPumpSel.addEventListener('change', function() {
+      fetchPriceHistory();
+      fetchSuggestedPrice();
+    });
+  }
+
+  if (vehicleSelect) {
+    vehicleSelect.dispatchEvent(new Event('change'));
+  } else {
+    fetchLastReading();
+    fetchTaskReadings();
+  }
+  window.setTimeout(function() { fetchTaskReadings(); }, 250);
+  computeKm();
+  computeMpgAndLiters();
+  fetchMonthMpg();
+  handlePaymentTypeBehavior(false);
+  updateExpenseByBalanceHint();
+  fetchPriceHistory();
+  fetchPsoRateForDate();
+  fetchFuelMarketScan();
+  window.setTimeout(function() { fetchVehicleLastEntry(); }, 300);
+
+  function updateAttachmentHint(text) {
+    if (!fuelAttachmentPasteHint) return;
+    if (text) {
+      fuelAttachmentPasteHint.textContent = text;
+      scheduleFuelTomSelectReposition();
+      return;
+    }
+    var count = countValidFuelAttachmentFiles();
+    fuelAttachmentPasteHint.textContent = count ? (count + ' file(s) ready for upload.') : '';
+    scheduleFuelTomSelectReposition();
+  }
+
+  function canPasteIntoFuelForm() {
+    var formEl = document.getElementById('fuelExpenseForm');
+    if (!formEl) return false;
+    var active = document.activeElement;
+    return !active || formEl.contains(active);
+  }
+
+  function mergeAttachmentFiles(fileList) {
+    if (!fuelAttachmentFiles || !window.DataTransfer) return 0;
+    var current = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+    var dt = new DataTransfer();
+    current.forEach(function(f) { dt.items.add(f); });
+    var added = 0;
+    Array.prototype.slice.call(fileList || []).forEach(function(f) {
+      if (!isValidFuelAttachmentFile(f)) return;
+        dt.items.add(f);
+        added += 1;
+    });
+    if (added > 0) {
+      fuelAttachmentFiles.files = dt.files;
+      updateAttachmentHint(dt.files.length + ' file(s) ready for upload.');
+      clearAttachmentFieldError();
+    }
+    return added;
+  }
+
+  function appendPastedFiles(fileList) {
+    var added = mergeAttachmentFiles(fileList);
+    if (added > 0) {
+      updateAttachmentHint(added + ' file(s) pasted from clipboard.');
+      focusFuelExpenseBy();
+    }
+  }
+
+  if (fuelAttachZone && fuelAttachmentFiles) {
+    var _fuelAttachStash = [];
+    function openFuelAttachmentPicker() {
+      var nativeMedia = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())
+        || document.documentElement.classList.contains('capacitor-native');
+      _fuelAttachStash = nativeMedia ? [] : Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+      if (typeof window.fleetOpenNativeMediaPicker === 'function') {
+        window.fleetOpenNativeMediaPicker({
+          title: 'Fuel Photos / Videos',
+          accept: 'image/*,video/*',
+          cameraDirection: 'REAR',
+          multiple: true,
+          fileInput: fuelAttachmentFiles,
+          onFiles: function(files) {
+            _fuelAttachStash = [];
+            mergeAttachmentFiles(files);
+          },
+          onFile: function(file) {
+            _fuelAttachStash = [];
+            mergeAttachmentFiles([file]);
+          }
+        });
+      } else {
+        fuelAttachmentFiles.click();
+      }
+    }
+    fuelAttachZone.addEventListener('click', openFuelAttachmentPicker);
+    fuelAttachmentFiles.addEventListener('change', function() {
+      var picked = Array.prototype.slice.call(this.files || []);
+      if (_fuelAttachStash.length) {
+        var dt = new DataTransfer();
+        _fuelAttachStash.forEach(function(f) { dt.items.add(f); });
+        picked.forEach(function(f) {
+          if (isValidFuelAttachmentFile(f)) dt.items.add(f);
+        });
+        fuelAttachmentFiles.files = dt.files;
+        picked = Array.prototype.slice.call(fuelAttachmentFiles.files || []);
+        _fuelAttachStash = [];
+      }
+      if (picked.length) {
+        updateAttachmentHint(picked.length + ' file(s) ready for upload.');
+        clearAttachmentFieldError();
+      } else updateAttachmentHint('');
+    });
+    fuelAttachZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      fuelAttachZone.classList.add('drag-over');
+    });
+    fuelAttachZone.addEventListener('dragleave', function() {
+      fuelAttachZone.classList.remove('drag-over');
+    });
+    fuelAttachZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      fuelAttachZone.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        mergeAttachmentFiles(e.dataTransfer.files);
+      }
+    });
+    fuelAttachZone.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openFuelAttachmentPicker();
+      }
+    });
+  }
+
+  var fuelScanDetailPanel = document.getElementById('fuelScanDetailPanel');
+
+  function closeFuelEntryDetailPanel() {
+    closeFuelInfoPanel(vehicleLastEntryPanel, vehicleLastEntryStrip);
+    if (fuelLastSavedBar) fuelLastSavedBar.classList.remove('is-open');
+  }
+
+  function openFuelEntryDetailPanel(anchorEl, loadFn) {
+    if (!vehicleLastEntryPanel) return;
+    var isOpen = !vehicleLastEntryPanel.classList.contains('d-none');
+    if (isOpen && anchorEl && anchorEl.classList.contains('is-open')) {
+      closeFuelEntryDetailPanel();
+      return;
+    }
+    closeAllFuelInfoPanels();
+    if (typeof loadFn === 'function') loadFn();
+    vehicleLastEntryPanel.classList.remove('d-none');
+    vehicleLastEntryPanel.setAttribute('aria-hidden', 'false');
+    if (anchorEl) anchorEl.classList.add('is-open');
+    scheduleVehicleLastEntryPanelPosition();
+  }
+
+  function isFuelMobilePreviewPage() {
+    return document.body.classList.contains('fuel-mobile-preview-page');
+  }
+
+  function positionFuelPanelInsidePhone(panel, anchor, opts) {
+    var inner = document.querySelector('.fuel-phone-inner');
+    var ir = inner ? inner.getBoundingClientRect() : null;
+    if (!panel || !inner || !ir || ir.width < 40 || ir.height < 40) return false;
+    if (panel.parentElement !== inner) {
+      inner.appendChild(panel);
+    }
+    opts = opts || {};
+    var inset = 8;
+    var width = Math.max(240, Math.round(ir.width - inset * 2));
+    var left = inset;
+    var top = inset;
+    if (anchor) {
+      var ar = anchor.getBoundingClientRect();
+      var below = Math.round(ar.bottom - ir.top + 6);
+      if (below > 36 && below < ir.height - 120) {
+        top = below;
+      }
+    }
+    var maxH = Math.max(160, Math.round(ir.height - inset - top));
+    panel.style.position = 'absolute';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.width = width + 'px';
+    panel.style.maxWidth = width + 'px';
+    if (opts.fill) {
+      panel.style.height = maxH + 'px';
+      panel.style.maxHeight = maxH + 'px';
+    } else {
+      panel.style.maxHeight = maxH + 'px';
+      var naturalH = panel.scrollHeight || panel.offsetHeight || 240;
+      if (naturalH > maxH) {
+        panel.style.height = maxH + 'px';
+      } else {
+        panel.style.height = '';
+      }
+    }
+    var bodyEl = panel.querySelector('.fuel-info-float-body');
+    if (bodyEl) {
+      bodyEl.style.overflow = 'auto';
+      bodyEl.style.flex = '1 1 auto';
+      bodyEl.style.minHeight = '0';
+    }
+    panel.style.visibility = '';
+    return true;
+  }
+
+  function positionFuelInfoPanel(panel, anchor, opts) {
+    if (!panel || !anchor) return;
+    if (panel.dataset.userPositioned === '1') return;
+    opts = opts || {};
+    panel.classList.remove('d-none');
+    panel.style.visibility = 'hidden';
+    panel.style.left = '0';
+    panel.style.top = '0';
+    if (isFuelMobilePreviewPage() && positionFuelPanelInsidePhone(panel, anchor, { fill: false })) {
+      return;
+    }
+    var rect = anchor.getBoundingClientRect();
+    var panelW = panel.offsetWidth || 360;
+    var panelH = panel.offsetHeight || 240;
+    var left = Math.min(rect.left, window.innerWidth - panelW - 12);
+    left = Math.max(12, left);
+    var top;
+    if (opts.placeAbove) {
+      top = rect.top - panelH - 8;
+      if (top < 12) {
+        top = Math.min(rect.bottom + 8, window.innerHeight - panelH - 12);
+        top = Math.max(12, top);
+      }
+    } else {
+      top = rect.bottom + 8;
+      if (top + panelH > window.innerHeight - 12) {
+        top = Math.max(12, rect.top - panelH - 8);
+      }
+    }
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.visibility = '';
+  }
+
+  function mountFuelFloatPanelToBody(panel) {
+    if (panel && panel.parentElement !== document.body) {
+      document.body.appendChild(panel);
+    }
+  }
+
+  function getFuelEntryPanelTop() {
+    var nav = document.querySelector('nav.navbar.fixed-top, nav.navbar');
+    if (nav) {
+      var navRect = nav.getBoundingClientRect();
+      if (navRect.height > 0) {
+        return Math.round(navRect.bottom);
+      }
+    }
+    return 60;
+  }
+
+  function getFuelPageHeaderBottom() {
+    var header = document.querySelector('.fuel-form-wrap .page-header');
+    if (header) {
+      var rect = header.getBoundingClientRect();
+      if (rect.height > 0) return Math.round(rect.bottom) + 8;
+    }
+    return getFuelEntryPanelTop() + 8;
+  }
+
+  function getFuelEntryPanelLeft(panelW) {
+    var anchor = document.getElementById('fuelLocationSection');
+    var mainEl = document.getElementById('mainContent');
+    var left = 12;
+    if (anchor) {
+      left = anchor.getBoundingClientRect().left;
+    } else if (mainEl) {
+      left = mainEl.getBoundingClientRect().left + 12;
+    }
+    return Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+  }
+
+  function fitVehicleLastEntryPanelHeight(panel) {
+    if (!panel || panel.classList.contains('is-user-resized')) return;
+    var header = panel.querySelector('.fuel-info-float-header');
+    var body = panel.querySelector('.fuel-info-float-body');
+    var footer = panel.querySelector('.fuel-info-float-footer');
+    if (!body) return;
+    panel.style.height = 'auto';
+    panel.style.maxHeight = 'none';
+    body.style.overflow = 'visible';
+    var totalH = (header ? header.offsetHeight : 0) + body.scrollHeight + (footer ? footer.offsetHeight : 0);
+    panel.style.height = totalH + 'px';
+  }
+
+  function positionVehicleLastEntryPanel(panel) {
+    if (!panel) return;
+    mountFuelFloatPanelToBody(panel);
+    panel.classList.remove('d-none');
+    panel.style.visibility = 'hidden';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.left = '0';
+    panel.style.top = '0';
+    if (isFuelMobilePreviewPage()) {
+      var mobileAnchor = document.querySelector('.fuel-info-click.is-open') || fuelLastSavedBar || vehicleLastEntryStrip;
+      if (positionFuelPanelInsidePhone(panel, mobileAnchor, { fill: true })) {
+        return;
+      }
+    }
+    if (!panel.classList.contains('is-user-resized')) {
+      panel.style.width = Math.min(520, window.innerWidth - 24) + 'px';
+      panel.style.height = 'auto';
+      panel.style.maxHeight = 'none';
+    }
+    fitVehicleLastEntryPanelHeight(panel);
+    var panelW = panel.offsetWidth || 520;
+    panel.style.left = getFuelEntryPanelLeft(panelW) + 'px';
+    panel.style.top = getFuelEntryPanelTop() + 'px';
+    panel.style.visibility = '';
+  }
+
+  function scheduleVehicleLastEntryPanelPosition() {
+    if (!vehicleLastEntryPanel || vehicleLastEntryPanel.classList.contains('d-none')) return;
+    positionVehicleLastEntryPanel(vehicleLastEntryPanel);
+    requestAnimationFrame(function() {
+      positionVehicleLastEntryPanel(vehicleLastEntryPanel);
+    });
+  }
+
+  function initResizableVehicleEntryPanel(panel) {
+    if (!panel || panel.dataset.resizeInit === '1') return;
+    panel.dataset.resizeInit = '1';
+    var resizeHandle = panel.querySelector('.fuel-info-float-resize-handle');
+    if (!resizeHandle) return;
+    var resizing = false;
+    var startX = 0;
+    var startY = 0;
+    var startW = 0;
+    var startH = 0;
+
+    function onMouseMove(e) {
+      if (!resizing) return;
+      var w = Math.max(280, startW + e.clientX - startX);
+      var h = Math.max(220, startH + e.clientY - startY);
+      w = Math.min(w, window.innerWidth - 8);
+      h = Math.min(h, window.innerHeight - 8);
+      panel.style.width = w + 'px';
+      panel.style.height = h + 'px';
+      panel.style.maxHeight = 'none';
+      panel.classList.add('is-user-resized');
+    }
+
+    function onMouseUp() {
+      resizing = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+
+    resizeHandle.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      var rect = panel.getBoundingClientRect();
+      resizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = rect.width;
+      startH = rect.height;
+      panel.style.width = startW + 'px';
+      panel.style.height = startH + 'px';
+      panel.style.maxHeight = 'none';
+      panel.classList.add('is-user-resized');
+      e.preventDefault();
+      e.stopPropagation();
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  }
+
+  function closeFuelInfoPanel(panel, anchor) {
+    if (!panel) return;
+    panel.classList.add('d-none');
+    panel.setAttribute('aria-hidden', 'true');
+    if (anchor) anchor.classList.remove('is-open');
+    if (panel === vehicleLastEntryPanel || panel === fuelPriceInsightsPanel) {
+      panel.classList.remove('is-user-resized');
+      panel.style.width = '';
+      panel.style.maxWidth = '';
+      panel.style.height = '';
+      panel.style.maxHeight = '';
+      panel.style.position = '';
+    }
+  }
+
+  function closeAllFuelInfoPanels() {
+    closeFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+    closeFuelEntryDetailPanel();
+    if (fuelPriceInsightsPanel) closeFuelInfoPanel(fuelPriceInsightsPanel, fuelPriceInsightsBtn);
+  }
+
+  function toggleFuelInfoPanel(panel, anchor, onOpen) {
+    if (!panel || !anchor) return;
+    var isOpen = !panel.classList.contains('d-none');
+    if (isOpen) {
+      closeFuelInfoPanel(panel, anchor);
+      return;
+    }
+    closeAllFuelInfoPanels();
+    if (typeof onOpen === 'function') onOpen();
+    panel.classList.remove('d-none');
+    panel.setAttribute('aria-hidden', 'false');
+    anchor.classList.add('is-open');
+    if (panel === vehicleLastEntryPanel) {
+      scheduleVehicleLastEntryPanelPosition();
+    } else {
+      positionFuelInfoPanel(panel, anchor);
+    }
+  }
+
+  if (fuelScanDetailPanel || vehicleLastEntryPanel || fuelAttachmentWarningPanel || fuelDuplicatePanel || fuelKmGapPanel || fuelTankCapacityPanel || fuelPriceBenchmarkPanel) {
+    document.querySelectorAll('.fuel-info-float-close').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var panel = btn.closest('.fuel-info-float-panel');
+        if (panel === fuelScanDetailPanel) closeFuelInfoPanel(panel, fuelMarketScanStatusBar);
+        else if (panel === vehicleLastEntryPanel) closeFuelEntryDetailPanel();
+        else if (panel === fuelAttachmentWarningPanel) closeAttachmentWarningPopup();
+        else if (panel === fuelDuplicatePanel) dismissFuelDuplicatePanel();
+        else if (panel === fuelKmGapPanel) dismissFuelKmGapPanel();
+        else if (panel === fuelTankCapacityPanel) dismissFuelTankCapacityPanel();
+        else if (panel === fuelPriceBenchmarkPanel) dismissFuelPriceBenchmarkPanel();
+        else if (panel === fuelPriceInsightsPanel) closeFuelInfoPanel(panel, fuelPriceInsightsBtn);
+        else closeFuelInfoPanel(panel, null);
+      });
+    });
+
+    window.addEventListener('resize', function() {
+      if (fuelScanDetailPanel && !fuelScanDetailPanel.classList.contains('d-none') && fuelMarketScanStatusBar) {
+        positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+      }
+      if (vehicleLastEntryPanel && !vehicleLastEntryPanel.classList.contains('d-none')) {
+        scheduleVehicleLastEntryPanelPosition();
+      }
+      if (fuelMeterMatchPanel && !fuelMeterMatchPanel.classList.contains('d-none')) {
+        positionMeterMatchWarningPanel();
+      }
+      if (fuelAttachmentWarningPanel && !fuelAttachmentWarningPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelAttachmentWarningPanel, fuelCancelBtn || fuelAttachZone || fuelAttachmentFiles, { placeAbove: true });
+      }
+      if (fuelDuplicatePanel && !fuelDuplicatePanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelDuplicatePanel, fuelCancelBtn || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+      }
+      if (fuelKmGapPanel && !fuelKmGapPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelKmGapPanel, fuelCancelBtn || currentReadingInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+      }
+      if (fuelTankCapacityPanel && !fuelTankCapacityPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelTankCapacityPanel, fuelCancelBtn || litersInput || amountInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+      }
+      if (fuelPriceBenchmarkPanel && !fuelPriceBenchmarkPanel.classList.contains('d-none')) {
+        positionFuelInfoPanel(fuelPriceBenchmarkPanel, fuelCancelBtn || fuelPriceInput || fuelSaveAddNextBtn || fuelExpenseForm, { placeAbove: true });
+      }
+      if (fuelPriceInsightsPanel && !fuelPriceInsightsPanel.classList.contains('d-none')) {
+        if (isFuelMobilePreviewPage()) {
+          positionFuelPanelInsidePhone(fuelPriceInsightsPanel, fuelPriceInput || fuelPriceInsightsBtn, { fill: true });
+        } else if (fuelPriceInsightsBtn) {
+          positionFuelInfoPanel(fuelPriceInsightsPanel, fuelPriceInsightsBtn);
+        }
+      }
+    });
+  }
+
+  if (fuelTankCapacityPanel) {
+    mountFuelFloatPanelToBody(fuelTankCapacityPanel);
+  }
+
+  if (fuelKmGapPanel) {
+    mountFuelFloatPanelToBody(fuelKmGapPanel);
+  }
+
+  if (fuelPriceBenchmarkPanel) {
+    mountFuelFloatPanelToBody(fuelPriceBenchmarkPanel);
+  }
+
+  if (fuelDuplicatePanel) {
+    mountFuelFloatPanelToBody(fuelDuplicatePanel);
+  }
+
+  if (fuelAttachmentWarningPanel) {
+    mountFuelFloatPanelToBody(fuelAttachmentWarningPanel);
+    if (fuelAttachmentWarningOkBtn) {
+      fuelAttachmentWarningOkBtn.addEventListener('click', function() {
+        dismissAttachmentWarningPopup();
+      });
+      fuelAttachmentWarningOkBtn.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          dismissAttachmentWarningPopup();
+        }
+      });
+    }
+  }
+
+  if (fuelMeterMatchPanel) {
+    mountFuelFloatPanelToBody(fuelMeterMatchPanel);
+  }
+  if (fuelMeterMatchBackdrop) {
+    mountFuelFloatPanelToBody(fuelMeterMatchBackdrop);
+  }
+
+  if (fuelScanDetailPanel) {
+    mountFuelFloatPanelToBody(fuelScanDetailPanel);
+  }
+
+  if (vehicleLastEntryPanel) {
+    mountFuelFloatPanelToBody(vehicleLastEntryPanel);
+    initResizableVehicleEntryPanel(vehicleLastEntryPanel);
+  }
+
+  if (vehicleLastEntryStrip && vehicleLastEntryPanel) {
+    vehicleLastEntryStrip.addEventListener('click', function() {
+      var vid = _selectedVehicleId();
+      if (!vid || vid === '0') return;
+      openFuelEntryDetailPanel(vehicleLastEntryStrip, loadVehicleLastEntryDetail);
+    });
+    vehicleLastEntryStrip.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        vehicleLastEntryStrip.click();
+      }
+    });
+  }
+
+  if (fuelMarketScanStatusBar) {
+    fuelMarketScanStatusBar.addEventListener('click', function() {
+      var body = document.getElementById('fuelScanDetailBody');
+      if (!body || !fuelScanDetailPanel) return;
+      toggleFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar, function() {
+        body.textContent = 'Loading...';
+        fetch('/api/fuel-market-scan-trend')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var rows = (data && data.trend) ? data.trend : [];
+            if (!rows.length) {
+              body.innerHTML = '<span class="text-muted">No scan history available.</span>';
+              positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+              return;
+            }
+            body.innerHTML = '<div class="mb-2"><strong>Source:</strong> ' + (data.source || 'PSO') + '</div>' +
+              rows.map(function(row) {
+                var line = '<div class="border-bottom py-1"><strong>' + (row.date || '-') + '</strong>';
+                if (row.ok) {
+                  line += '<br>Petrol: Rs ' + parseFloat(row.petrol || 0).toFixed(2) +
+                    ' | Diesel: Rs ' + parseFloat(row.diesel || 0).toFixed(2);
+                } else {
+                  line += '<br><span class="text-danger">' + (row.error || 'Scan failed') + '</span>';
+                }
+                if (row.scanned_at) line += '<br><span class="text-muted">' + row.scanned_at + '</span>';
+                return line + '</div>';
+              }).join('');
+            positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+          })
+          .catch(function() {
+            body.textContent = 'Unable to load scan trend.';
+            positionFuelInfoPanel(fuelScanDetailPanel, fuelMarketScanStatusBar);
+          });
+      });
+    });
+    fuelMarketScanStatusBar.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fuelMarketScanStatusBar.click(); }
+    });
+  }
+
+  function positionFuelPriceInsightsPanel() {
+    if (!fuelPriceInsightsPanel || fuelPriceInsightsPanel.classList.contains('d-none')) return;
+    if (isFuelMobilePreviewPage()) {
+      positionFuelPanelInsidePhone(fuelPriceInsightsPanel, fuelPriceInput || fuelPriceInsightsBtn, { fill: true });
+      return;
+    }
+    if (fuelPriceInsightsBtn) positionFuelInfoPanel(fuelPriceInsightsPanel, fuelPriceInsightsBtn);
+  }
+
+  if (fuelPriceInsightsBtn && fuelPriceInsightsPanel) {
+    fuelPriceInsightsBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var isOpen = !fuelPriceInsightsPanel.classList.contains('d-none');
+      if (isOpen) {
+        closeFuelInfoPanel(fuelPriceInsightsPanel, fuelPriceInsightsBtn);
+        return;
+      }
+      closeAllFuelInfoPanels();
+      fetchPriceHistory();
+      fuelPriceInsightsPanel.classList.remove('d-none');
+      fuelPriceInsightsPanel.setAttribute('aria-hidden', 'false');
+      fuelPriceInsightsBtn.classList.add('is-open');
+      positionFuelPriceInsightsPanel();
+    });
+  }
+
+  var fuelPsoScanNowBtn = document.getElementById('fuelPsoScanNowBtn');
+  if (fuelPsoScanNowBtn) {
+    fuelPsoScanNowBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      runFuelPsoScanNow();
+    });
+  }
+
+  if (fuelLastSavedBar) {
+    fuelLastSavedBar.addEventListener('click', function(e) {
+      if (e.target.closest('a')) return;
+      var preview = null;
+      try {
+        var el = document.getElementById('lastSavedPreviewData');
+        if (el && el.textContent) preview = JSON.parse(el.textContent);
+      } catch (err) { preview = null; }
+      if (!preview || !preview.id) {
+        openFuelEntryDetailPanel(fuelLastSavedBar, function() {
+          if (vehicleLastEntryBody) {
+            vehicleLastEntryBody.innerHTML = '<span class="text-muted">No fuel expense saved yet.</span>';
+          }
+          if (vehicleLastEntryViewLink) vehicleLastEntryViewLink.classList.add('d-none');
+          if (vehicleLastEntryEditLink) vehicleLastEntryEditLink.classList.add('d-none');
+        });
+        return;
+      }
+      openFuelEntryDetailPanel(fuelLastSavedBar, function() {
+        loadFuelEntryDetailById(preview.id);
+      });
+    });
+    fuelLastSavedBar.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fuelLastSavedBar.click(); }
+    });
+  }
+
+  if (fuelAttachmentFiles) {
+    document.addEventListener('paste', function(e) {
+      if (!canPasteIntoFuelForm()) return;
+      var items = (e.clipboardData && e.clipboardData.items) ? Array.prototype.slice.call(e.clipboardData.items) : [];
+      var files = [];
+      items.forEach(function(it) {
+        if (it && it.kind === 'file') {
+          var f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      });
+      if (!files.length) return;
+      appendPastedFiles(files);
+      e.preventDefault();
+    });
+  }
+
+  if (fuelDuplicateContinueBtn) {
+    fuelDuplicateContinueBtn.addEventListener('click', continueFuelDuplicatePanel);
+    fuelDuplicateContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelDuplicatePanel();
+      }
+    });
+  }
+  if (fuelDuplicateCancelBtn) {
+    fuelDuplicateCancelBtn.addEventListener('click', dismissFuelDuplicatePanel);
+  }
+  if (fuelTankCapacityContinueBtn) {
+    fuelTankCapacityContinueBtn.addEventListener('click', continueFuelTankCapacityPanel);
+    fuelTankCapacityContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelTankCapacityPanel();
+      }
+    });
+  }
+  if (fuelTankCapacityCancelBtn) {
+    fuelTankCapacityCancelBtn.addEventListener('click', dismissFuelTankCapacityPanel);
+  }
+  if (fuelKmGapContinueBtn) {
+    fuelKmGapContinueBtn.addEventListener('click', continueFuelKmGapPanel);
+    fuelKmGapContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelKmGapPanel();
+      }
+    });
+  }
+  if (fuelKmGapCancelBtn) {
+    fuelKmGapCancelBtn.addEventListener('click', dismissFuelKmGapPanel);
+  }
+  if (fuelPriceBenchmarkContinueBtn) {
+    fuelPriceBenchmarkContinueBtn.addEventListener('click', continueFuelPriceBenchmarkPanel);
+    fuelPriceBenchmarkContinueBtn.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        continueFuelPriceBenchmarkPanel();
+      }
+    });
+  }
+  if (fuelPriceBenchmarkCancelBtn) {
+    fuelPriceBenchmarkCancelBtn.addEventListener('click', dismissFuelPriceBenchmarkPanel);
+  }
+  if (fuelPriceInput) {
+    fuelPriceInput.addEventListener('input', function() {
+      fuelPriceInput.dataset.autoSuggested = '0';
+      checkFuelPriceTolerance();
+      computeMpgAndLiters();
+    });
+  }
+
+  // ── Fuel Pump balance hint ────────────────────────────────────────────────
+  var pumpBalanceHint = document.getElementById('pumpBalanceHint');
+  function _fetchPumpBalance(partyId) {
+    if (!pumpBalanceHint) return;
+    if (!partyId || partyId === '0') {
+      pumpBalanceHint.className = 'small mt-1 d-none';
+      pumpBalanceHint.textContent = ''; pumpBalanceHint.removeAttribute('data-ledger-url');
+      return;
+    }
+    fetch('/api/workspace-account-balance?party_id=' + encodeURIComponent(partyId))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (!d || d.balance_str === null || d.balance_str === undefined) {
+          pumpBalanceHint.className = 'small mt-1 text-muted'; pumpBalanceHint.classList.remove('d-none');
+          pumpBalanceHint.textContent = 'Fuel Pump Name Balance: No account';
+          pumpBalanceHint.removeAttribute('data-ledger-url');
+          return;
+        }
+        var isCr = /\bCr\b/i.test(d.balance_str);
+        pumpBalanceHint.className = 'small mt-1 ' + (isCr ? 'text-danger' : 'text-success');
+        pumpBalanceHint.classList.remove('d-none');
+        pumpBalanceHint.textContent = 'Fuel Pump Name Balance: ' + d.balance_str;
+        pumpBalanceHint.style.cursor = d.ledger_url ? 'pointer' : 'default';
+        pumpBalanceHint.title = d.ledger_url ? 'Click to open ledger' : '';
+        if (d.ledger_url) pumpBalanceHint.setAttribute('data-ledger-url', d.ledger_url);
+        else pumpBalanceHint.removeAttribute('data-ledger-url');
+      })
+      .catch(function() { pumpBalanceHint.className = 'small mt-1 d-none'; });
+  }
+  if (pumpBalanceHint) {
+    pumpBalanceHint.addEventListener('click', function() {
+      var url = this.getAttribute('data-ledger-url');
+      if (url) window.open(url, '_blank');
+    });
+  }
+  if (fuelPumpSelect) {
+    fuelPumpSelect.addEventListener('change', function() { _fetchPumpBalance(this.value); });
+    if (fuelPumpSelect.value && fuelPumpSelect.value !== '0') _fetchPumpBalance(fuelPumpSelect.value);
+  }
+
+  // ── Amount focus: warn if meter reading mismatch ───────────────────────
+  var _matchedAlertShown = false;
+  function _resetMatchedAlert() { _matchedAlertShown = false; }
+
+  function focusCurrentReadingField() {
+    if (!currentReadingInput) return;
+    currentReadingInput.focus();
+    if (typeof currentReadingInput.select === 'function') currentReadingInput.select();
+  }
+
+  function isMeterMatchWarningOpen() {
+    return !!(fuelMeterMatchPanel && !fuelMeterMatchPanel.classList.contains('d-none'));
+  }
+
+  function focusMeterMatchOkButton() {
+    if (amountInput && document.activeElement === amountInput) {
+      amountInput.blur();
+    }
+    if (!fuelMeterMatchOkBtn) return;
+    fuelMeterMatchOkBtn.focus({ preventScroll: true });
+    requestAnimationFrame(function() {
+      if (!isMeterMatchWarningOpen()) return;
+      if (document.activeElement !== fuelMeterMatchOkBtn) {
+        fuelMeterMatchOkBtn.focus({ preventScroll: true });
+      }
+    });
+  }
+
+  function enableMeterMatchFocusTrap() {
+    if (!_meterMatchTrapHandler) {
+      _meterMatchTrapHandler = function(e) {
+        if (!isMeterMatchWarningOpen()) return;
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          focusMeterMatchOkButton();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          dismissMeterMatchWarning();
+        }
+      };
+      document.addEventListener('keydown', _meterMatchTrapHandler, true);
+    }
+    if (!_meterMatchFocusGuard) {
+      _meterMatchFocusGuard = function(e) {
+        if (!isMeterMatchWarningOpen()) return;
+        if (e.target === fuelMeterMatchOkBtn) return;
+        if (fuelMeterMatchPanel && fuelMeterMatchPanel.contains(e.target)) return;
+        if (e.target && typeof e.target.blur === 'function') {
+          e.target.blur();
+        }
+        focusMeterMatchOkButton();
+      };
+      document.addEventListener('focusin', _meterMatchFocusGuard, true);
+    }
+  }
+
+  function disableMeterMatchFocusTrap() {
+    if (_meterMatchTrapHandler) {
+      document.removeEventListener('keydown', _meterMatchTrapHandler, true);
+      _meterMatchTrapHandler = null;
+    }
+    if (_meterMatchFocusGuard) {
+      document.removeEventListener('focusin', _meterMatchFocusGuard, true);
+      _meterMatchFocusGuard = null;
+    }
+  }
+
+  function closeMeterMatchWarning() {
+    if (fuelMeterMatchBackdrop) {
+      fuelMeterMatchBackdrop.classList.remove('is-open');
+      fuelMeterMatchBackdrop.setAttribute('aria-hidden', 'true');
+    }
+    if (fuelMeterMatchPanel) {
+      fuelMeterMatchPanel.classList.add('d-none');
+      fuelMeterMatchPanel.setAttribute('aria-hidden', 'true');
+    }
+    disableMeterMatchFocusTrap();
+  }
+
+  function dismissMeterMatchWarning() {
+    closeMeterMatchWarning();
+    window.setTimeout(focusCurrentReadingField, 50);
+  }
+
+  function positionMeterMatchWarningPanel() {
+    if (!fuelMeterMatchPanel) return;
+    mountFuelFloatPanelToBody(fuelMeterMatchPanel);
+    if (fuelMeterMatchBackdrop) mountFuelFloatPanelToBody(fuelMeterMatchBackdrop);
+
+    if (fuelMeterMatchBackdrop) {
+      fuelMeterMatchBackdrop.classList.add('is-open');
+      fuelMeterMatchBackdrop.setAttribute('aria-hidden', 'false');
+    }
+
+    fuelMeterMatchPanel.classList.remove('d-none');
+    fuelMeterMatchPanel.setAttribute('aria-hidden', 'false');
+    fuelMeterMatchPanel.style.visibility = 'hidden';
+
+    var panelW = Math.min(480, window.innerWidth - 24);
+    fuelMeterMatchPanel.style.width = panelW + 'px';
+    var wrap = document.querySelector('.fuel-form-wrap');
+    var left = 12;
+    if (wrap) {
+      left = wrap.getBoundingClientRect().left + 12;
+    } else {
+      left = getFuelEntryPanelLeft(panelW);
+    }
+    left = Math.max(12, Math.min(left, window.innerWidth - panelW - 12));
+    fuelMeterMatchPanel.style.left = left + 'px';
+    fuelMeterMatchPanel.style.top = getFuelPageHeaderBottom() + 'px';
+    fuelMeterMatchPanel.style.visibility = '';
+
+    enableMeterMatchFocusTrap();
+    focusMeterMatchOkButton();
+  }
+
+  function showMeterMatchWarning() {
+    var detailHtml = getRangeAlignmentAlertHtml();
+    if (fuelMeterMatchDetail) {
+      if (detailHtml) {
+        fuelMeterMatchDetail.innerHTML = detailHtml;
+        fuelMeterMatchDetail.classList.remove('d-none');
+      } else {
+        fuelMeterMatchDetail.innerHTML = '';
+        fuelMeterMatchDetail.classList.add('d-none');
+      }
+    }
+    positionMeterMatchWarningPanel();
+  }
+
+  if (fuelMeterMatchOkBtn) {
+    fuelMeterMatchOkBtn.addEventListener('click', dismissMeterMatchWarning);
+  }
+  if (fuelMeterMatchBackdrop) {
+    fuelMeterMatchBackdrop.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+
+  if (amountInput) {
+    amountInput.addEventListener('mousedown', function(e) {
+      var matched = meterMatched ? (meterMatched.textContent || '').trim() : '';
+      if (matched === 'No' && !_matchedAlertShown) {
+        e.preventDefault();
+        _matchedAlertShown = true;
+        showMeterMatchWarning();
+      }
+    });
+    amountInput.addEventListener('focus', function() {
+      var matched = meterMatched ? (meterMatched.textContent || '').trim() : '';
+      if (matched !== 'No') return;
+      if (!_matchedAlertShown) {
+        _matchedAlertShown = true;
+        amountInput.blur();
+        showMeterMatchWarning();
+        return;
+      }
+      if (isMeterMatchWarningOpen()) {
+        amountInput.blur();
+        focusMeterMatchOkButton();
+      }
+    });
+  }
+  [vehicleSelect, currentReadingInput, fuelingDateInput].forEach(function(el) {
+    if (el) el.addEventListener('change', _resetMatchedAlert);
+  });
+  if (currentReadingInput) currentReadingInput.addEventListener('input', _resetMatchedAlert);
+
+  // ── Ctrl+S / Cmd+S to save ─────────────────────────────────────────────
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      var btn = fuelExpenseForm ? (fuelExpenseForm.querySelector('button[name="_save_action"][value="save_add"]') || fuelExpenseForm.querySelector('[type="submit"]')) : null;
+      if (btn && !btn.disabled) btn.click();
+    }
+  });
+
+  // ── Auto-focus ─────────────────────────────────────────────────────────
+  var _isFromSave = {{ 'true' if (from_save is defined and from_save) else 'false' }};
+  window.setTimeout(function() {
+    if (_isFromSave) {
+      if (fuelPumpSelect && fuelPumpSelect.tomselect) { fuelPumpSelect.tomselect.focus(); }
+      else if (fuelPumpSelect) { fuelPumpSelect.focus(); }
+    } else {
+      if (districtSelect && districtSelect.tomselect) {
+        districtSelect.tomselect.focus();
+      } else if (districtSelect) {
+        districtSelect.focus();
+      }
+    }
+  }, 150);
+
+  function revealFuelMobileForm(force) {
+    var inner = document.querySelector('.fuel-phone-inner');
+    if (!inner || !inner.classList.contains('fuel-booting')) return;
+    if (!force) {
+      var selects = inner.querySelectorAll('.fuel-row select.search-select');
+      for (var i = 0; i < selects.length; i++) {
+        if (!selects[i].tomselect) return;
+      }
+    }
+    inner.classList.remove('fuel-booting');
+  }
+  if (isFuelMobilePreviewPage()) {
+    window.setTimeout(function() { revealFuelMobileForm(false); }, 0);
+    window.setTimeout(function() { revealFuelMobileForm(false); }, 50);
+    window.setTimeout(function() { revealFuelMobileForm(true); }, 250);
+  }
+});
+</script>

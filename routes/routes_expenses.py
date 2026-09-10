@@ -2340,6 +2340,36 @@ def _workspace_post_credit_settlement_journal(employee_id, reference_type, refer
     )
 
 
+def _fuel_request_is_native_app():
+    try:
+        ua = request.headers.get('User-Agent') or ''
+        return (
+            request.cookies.get('fleet_native_app') == '1'
+            or 'Capacitor' in ua
+        )
+    except Exception:
+        return False
+
+
+def _fuel_add_design():
+    return (request.values.get('design') or '').strip().lower()
+
+
+def _fuel_add_uses_mobile_form():
+    design = _fuel_add_design()
+    if design == 'desktop':
+        return False
+    if design == 'mobile':
+        return True
+    return _fuel_request_is_native_app()
+
+
+def _fuel_add_form_template():
+    if _fuel_add_uses_mobile_form():
+        return 'fuel_expense_form_mobile.html'
+    return 'fuel_expense_form.html'
+
+
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
     _guard = _require_workspace_employee_for_expense_management()
@@ -2381,6 +2411,8 @@ def fuel_expense_add():
                 form.fuel_type.data = _prev_veh.fuel_type
         if selected_payment_type:
             form.payment_type.data = selected_payment_type
+        elif _fuel_add_uses_mobile_form():
+            form.payment_type.data = 'Credit'
         if not form.fueling_date.data:
             form.fueling_date.data = pk_date()
     if request.method == 'POST' and form.validate_on_submit():
@@ -2388,7 +2420,7 @@ def fuel_expense_add():
         if vehicle_id == 0:
             flash('Please select a vehicle.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
                 **add_ctx,
@@ -2407,7 +2439,7 @@ def fuel_expense_add():
         if payment_type not in allowed_payment_types:
             flash('Please select a valid payment type.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
                 **add_ctx,
@@ -2422,7 +2454,7 @@ def fuel_expense_add():
         if not workspace_pump_id:
             flash('Please select a fuel pump name.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
                 **add_ctx,
@@ -2549,16 +2581,20 @@ def fuel_expense_add():
         flash('Fuel expense saved.', 'success')
         if request.form.get('_save_action') == 'save_list':
             return redirect(url_for('fuel_expense_list'))
-        return redirect(url_for('fuel_expense_add',
-            district_id=rec.district_id or 0,
-            project_id=rec.project_id or 0,
-            vehicle_id=rec.vehicle_id,
-            payment_type=payment_type,
-            last_id=rec.id))
+        next_args = {
+            'district_id': rec.district_id or 0,
+            'project_id': rec.project_id or 0,
+            'vehicle_id': rec.vehicle_id,
+            'payment_type': payment_type,
+            'last_id': rec.id,
+        }
+        if _fuel_add_design() == 'mobile':
+            next_args['design'] = 'mobile'
+        return redirect(url_for('fuel_expense_add', **next_args))
     elif request.method == 'POST' and form.errors:
         flash('Fuel form save nahi hua. Required fields aur selected options check karein.', 'danger')
     return render_template(
-        'fuel_expense_form.html',
+        _fuel_add_form_template(),
         form=form,
         rec=None,
         title='Add Fuel Expense',
