@@ -470,7 +470,12 @@ def inject_workspace_context():
 # emergency_task_record without account_id/synced_at (blank dashboard cards).
 # SKIP_STARTUP_TASKS lets a diagnostic script import the app to reproduce a
 # request without the schema bootstrap and schedulers touching the database.
-_run_startup_tasks = os.environ.get('SKIP_STARTUP_TASKS', '0') != '1'
+# LOCAL_FAST_BOOT is set by run-local.bat so a 2GB SQLite file does not spend
+# a minute on create_all / Alembic / CREATE INDEX / PortalXS schedulers.
+_local_fast_boot = (os.environ.get('LOCAL_FAST_BOOT', '0') or '0').strip() in ('1', 'true', 'yes')
+_run_startup_tasks = os.environ.get('SKIP_STARTUP_TASKS', '0') != '1' and not _local_fast_boot
+if _local_fast_boot:
+    print("Local fast boot: skipped schema scan, indexes, and background schedulers.")
 if _run_startup_tasks:
     with app.app_context():
         print("Creating tables if needed...")

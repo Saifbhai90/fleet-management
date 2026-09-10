@@ -36,14 +36,14 @@ if not exist ".env.local" (
 ::  STEP 1: USER MODE SELECTION
 :: ================================================================
 echo  ------------------------------------------------------------
-echo   SELECT STARTUP MODE:
+echo   ONLINE DB SCAN (Render production se latest data)?
 echo  ------------------------------------------------------------
 echo.
-echo    1) FAST RUN   - Skip sync, use existing local DB instantly
-echo    2) FULL SYNC  - Pull latest data from Render, then start
+echo    1) NAHI  - Fast Run: existing local DB, software turant open
+echo    2) HAAN  - Online DB scan: Render se sync, phir start
 echo.
 
-choice /C 12 /N /M "  Enter choice (1 or 2): "
+choice /C 12 /N /M "  Online DB scan? (1=Nahi, 2=Haan): "
 set USER_MODE=%ERRORLEVEL%
 
 :: Read LOCAL_PORT from .env.local (default 5050)
@@ -67,6 +67,7 @@ set DATABASE_URL=sqlite:///db/local.db
 set FLASK_DEBUG=1
 set SESSION_COOKIE_SECURE=false
 set LOCAL_DB_GUARANTEED=1
+set LOCAL_FAST_BOOT=1
 
 :: ── Detect rogue DB files (warn user) ──
 set ROGUE_FOUND=0
@@ -168,6 +169,7 @@ echo  ============================================================
 echo   DB PATH  : %~dp0db\local.db
 echo   LAST SYNC: %LAST_SYNC%
 echo   MODE     : %RUN_MODE%
+echo   FAST BOOT: ON  (schema/index/scheduler skip -- local only)
 echo   PORT     : %LOCAL_PORT%
 echo  ============================================================
 echo.
@@ -175,8 +177,8 @@ echo  Server: http://127.0.0.1:%LOCAL_PORT%
 echo  Press Ctrl+C to stop
 echo.
 
-:: Open browser after short delay
-start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:%LOCAL_PORT%"
+:: Open browser only after Flask actually answers (not a blind 3s wait)
+start "" powershell -NoProfile -Command "for($i=0;$i -lt 90;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 ('http://127.0.0.1:%LOCAL_PORT%/') -ErrorAction Stop; if($r.StatusCode -ge 200){ Start-Process ('http://127.0.0.1:%LOCAL_PORT%/'); break } } catch {} Start-Sleep -Seconds 1 }"
 
 :: Start Flask (fresh process ensures no stale DB connections)
 python -c "from app import app; app.run(debug=True, host='127.0.0.1', port=%LOCAL_PORT%, use_reloader=False, threaded=True)"
