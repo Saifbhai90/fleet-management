@@ -3942,13 +3942,30 @@ def _oil_change_alert_rows(project_id=0, district_id=0, vehicle_family='',
 
 # ── Driver Seat Available Report ───────────────────────────────────────────
 def _parse_activity_datetime(raw):
-    if not raw:
+    """Parse activity timestamps. PortalXS stores ISO with T; Excel used a space."""
+    if raw is None:
         return None
+    if isinstance(raw, datetime):
+        return raw.replace(tzinfo=None) if raw.tzinfo else raw
     s = str(raw).strip()
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M'):
+    if not s:
+        return None
+    iso = s.replace('Z', '+00:00')
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    except ValueError:
+        pass
+    for fmt in (
+        '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M',
+        '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M',
+        '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M',
+    ):
         try:
             return datetime.strptime(s, fmt)
-        except Exception:
+        except ValueError:
             continue
     return None
 
