@@ -2229,22 +2229,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!expenseBySelect) return;
     var next = value == null ? '' : String(value);
     expenseBySelect.value = next;
+    if (typeof fleetSetSelectValue === 'function') {
+      fleetSetSelectValue(expenseBySelect, next, true);
+      return;
+    }
     var ts = expenseBySelect.tomselect;
     if (!ts) return;
-    // Credit clear() can transiently focus this control; keep silent long
-    // enough to block the global TomSelect focus/open handlers, then blur.
     ts._wsSilentFill = true;
+    ts._suppressOpen = true;
     try {
       if (next) ts.setValue(next, true);
       else ts.clear(true);
       if (ts.isOpen) ts.close();
-      try { ts.blur(); } catch (err) {}
     } finally {
       window.setTimeout(function() {
         if (ts.isOpen) ts.close();
-        try { ts.blur(); } catch (err2) {}
         ts._wsSilentFill = false;
-      }, 50);
+        ts._suppressOpen = false;
+      }, 80);
     }
   }
 
@@ -2270,6 +2272,13 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (paymentType === 'Credit') {
       if (shouldForce) {
         setExpenseByValueQuiet('');
+      }
+    }
+    if (expenseBySelect && expenseBySelect.tomselect) {
+      var ets = expenseBySelect.tomselect;
+      var onExpenseBy = !!(ets.control_input && document.activeElement === ets.control_input);
+      if (!onExpenseBy && ets.isOpen) {
+        try { ets.close(); } catch (errClose) {}
       }
     }
     window.scrollTo(0, scrollY);
@@ -2842,11 +2851,23 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function() { checkTankCapacityThenSubmit(submitter); });
   }
 
+  if (districtSelect && projectSelect && typeof fleetBeginCascade === 'function') {
+    districtSelect.addEventListener('change', function() {
+      fleetBeginCascade(projectSelect);
+      if (vehicleSelect) fleetBeginCascade(vehicleSelect);
+    }, true);
+  }
+  if (projectSelect && vehicleSelect && typeof fleetBeginCascade === 'function') {
+    projectSelect.addEventListener('change', function() {
+      fleetBeginCascade(vehicleSelect);
+    }, true);
+  }
+
   if (districtSelect && projectSelect) {
     districtSelect.addEventListener('change', function() {
       var did = this.value;
-      _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
-      _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      _smoothLoadingSelect(projectSelect);
+      _smoothLoadingSelect(vehicleSelect);
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       fetchVehicleLastEntry();
@@ -2867,6 +2888,10 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(function() { _smoothFillSelect(projectSelect, [], function(p) { return p; }); });
         }
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      } else {
+        _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       }
     });
   }
@@ -2875,7 +2900,7 @@ document.addEventListener('DOMContentLoaded', function() {
     projectSelect.addEventListener('change', function() {
       var pid = projectSelect.value;
       var did = districtSelect ? districtSelect.value : '';
-      _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
+      _smoothLoadingSelect(vehicleSelect);
       if (fuelTypeSelect) fuelTypeSelect.value = '';
       if (fuelTypeDisplay) fuelTypeDisplay.value = '';
       fetchVehicleLastEntry();
@@ -2898,6 +2923,8 @@ document.addEventListener('DOMContentLoaded', function() {
             _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
           }).catch(function() { _smoothFillSelect(vehicleSelect, [], function(v) { return v; }); });
         }
+      } else {
+        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
       }
     });
   }
@@ -3049,19 +3076,6 @@ document.addEventListener('DOMContentLoaded', function() {
       window.setTimeout(retryExpenseByEnterWire, 200);
     }
   })();
-
-  if (vehicleSelect && fuelPumpSelect) {
-    window.addEventListener('keydown', function(e) {
-      if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (!fuelExpenseForm || !fuelExpenseForm.contains(e.target)) return;
-      var vts = vehicleSelect.tomselect;
-      if (!vts || e.target !== vts.control_input || vts.isOpen) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (fuelPumpSelect.tomselect) fuelPumpSelect.tomselect.focus();
-      else fuelPumpSelect.focus();
-    }, true);
-  }
 
   if (fuelPriceInput) {
     window.addEventListener('keydown', function(e) {

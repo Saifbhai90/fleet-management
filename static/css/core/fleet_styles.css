@@ -47,6 +47,13 @@ html.capacitor-native #dashAppStatusLine {
             z-index: 1060 !important;
             position: fixed !important;
             margin: 0 !important;
+            overflow: hidden;
+        }
+        body > .ts-dropdown.ts-dropdown-up {
+            box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.16);
+        }
+        .ts-wrapper.ts-cascade-pending .ts-control {
+            background: #f8fafc;
         }
         /* Native app: bottom nav z-index 1065 — TS dropdown must clear it */
         html.capacitor-native body > .ts-dropdown { z-index: 12050 !important; }

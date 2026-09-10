@@ -2633,8 +2633,9 @@
 
     // Live Clock — Pakistan Server Time (PKT)
     var _pktOffset = (function(){
-        var serverISO = window.FleetConfig.serverPkNow;
-        var serverMs = new Date(serverISO).getTime();
+        var serverISO = window.FleetConfig && window.FleetConfig.serverPkNow;
+        var serverMs = serverISO ? new Date(serverISO).getTime() : Date.now();
+        if (isNaN(serverMs)) serverMs = Date.now();
         var browserMs = Date.now();
         return serverMs - browserMs;
     })();
@@ -3957,44 +3958,90 @@
     // Defined at global script scope (NOT inside jQuery ready) so the function
     // is available immediately — the content block fields are already in
     // the DOM here because the content block renders above the scripts.
-    function _tsIsCascadeLoading(sel) {
-        if (!sel || !sel.tomselect) return false;
-        var ts = sel.tomselect;
-        if (!ts.isDisabled) return false;
+    var _tsFocusReservation = null;
+    var _tsWaitToken = 0;
+
+    function _tsOptionCount(ts) {
         try {
-            return Object.keys(ts.options || {}).length === 0;
+            return Object.keys((ts && ts.options) || {}).length;
         } catch (e) {
-            return true;
+            return 0;
         }
     }
+
+    function _tsIsCascadeLoading(sel) {
+        if (!sel) return false;
+        if (sel.getAttribute && sel.getAttribute('data-fleet-cascade-pending') === '1') return true;
+        return !!(sel.tomselect && sel.tomselect._cascadePending);
+    }
+
+    window.fleetBeginCascade = function(sel) {
+        if (!sel) return;
+        sel.setAttribute('data-fleet-cascade-pending', '1');
+        if (!sel.tomselect) return;
+        var ts = sel.tomselect;
+        ts._cascadePending = true;
+        ts._suppressOpen = true;
+        if (ts.wrapper) ts.wrapper.classList.add('ts-cascade-pending');
+        try { ts.close(); } catch (e) {}
+    };
+
+    window.fleetEndCascade = function(sel) {
+        if (!sel) return;
+        sel.removeAttribute('data-fleet-cascade-pending');
+        if (!sel.tomselect) return;
+        var ts = sel.tomselect;
+        ts._cascadePending = false;
+        ts._suppressOpen = false;
+        if (ts.wrapper) ts.wrapper.classList.remove('ts-cascade-pending');
+    };
 
     function _tsFocusAndOpen(sel) {
         if (!sel || !sel.tomselect) return;
         var ts = sel.tomselect;
-        if (ts.isDisabled) return;
+        if (ts.isDisabled || ts._wsSilentFill || ts._suppressOpen || ts._cascadePending) return;
+        if (!_tsOptionCount(ts)) return;
         ts._justSelected = false;
+        if (ts.wrapper && typeof ts.wrapper.scrollIntoView === 'function') {
+            try { ts.wrapper.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e0) {}
+        }
         ts.focus();
-        setTimeout(function() {
-            if (ts.isDisabled || ts._wsSilentFill) return;
-            if (!ts.isOpen) {
-                try { ts.open(); } catch (e) {}
-            }
-        }, 0);
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                if (ts.isDisabled || ts._wsSilentFill || ts._suppressOpen || ts._cascadePending) return;
+                if (!ts.isOpen) {
+                    try { ts.open(); } catch (e1) {}
+                }
+                if (typeof window.fleetPositionTomSelectDropdown === 'function') {
+                    window.fleetPositionTomSelectDropdown(ts);
+                }
+            });
+        });
+    }
+
+    function _tsCancelFocusWait() {
+        _tsWaitToken += 1;
+        _tsFocusReservation = null;
     }
 
     function _tsWaitEnableThenFocus(sel) {
+        var token = ++_tsWaitToken;
+        _tsFocusReservation = sel;
         var tries = 0;
         (function tick() {
-            tries += 1;
-            if (sel && sel.tomselect && !sel.tomselect.isDisabled) {
-                _tsFocusAndOpen(sel);
-                return;
+            if (token !== _tsWaitToken) return;
+            if (sel && sel.tomselect && !_tsIsCascadeLoading(sel) && !sel.tomselect.isDisabled) {
+                if (_tsOptionCount(sel.tomselect)) {
+                    if (_tsFocusReservation === sel) _tsFocusReservation = null;
+                    _tsFocusAndOpen(sel);
+                    return;
+                }
             }
-            if (tries < 40) {
+            if (tries++ < 60) {
                 setTimeout(tick, 50);
                 return;
             }
-            if (sel) _tsMoveFocus(sel);
+            // Do not skip ahead to Fuel Pump / later fields. Parent keeps focus.
         })();
     }
 
@@ -4007,9 +4054,8 @@
             'textarea:not([disabled]):not([readonly]), ' +
             'button[type="submit"]'
         ));
-        // TS-managed selects stay in the walk even while cascade-loading
-        // (disabled + empty) so Enter from Project can wait for Vehicle.
         var focusable = all.filter(function(f) {
+            if (_fleetEnterTabSkip(f)) return false;
             if (f.tagName === 'SELECT' && f.tomselect) {
                 if (f.tomselect.isDisabled && !_tsIsCascadeLoading(f)) return false;
                 return true;
@@ -4036,6 +4082,15 @@
         }
     }
 
+    document.addEventListener('pointerdown', function(e) {
+        if (!_tsFocusReservation) return;
+        var reserved = _tsFocusReservation;
+        var t = e.target;
+        if (reserved.contains && reserved.contains(t)) return;
+        if (reserved.tomselect && reserved.tomselect.wrapper && reserved.tomselect.wrapper.contains(t)) return;
+        _tsCancelFocusWait();
+    }, true);
+
     function _emptyStateHTML(labelHTML) {
         return '<div class="ts-empty-state">' +
             '<span class="ts-empty-icon"><i class="bi bi-info-circle"></i></span>' +
@@ -4043,6 +4098,20 @@
             '<span class="ts-empty-hint">Try a different filter or check your selection</span>' +
             '</div>';
     }
+
+    /** Popper-style flip: below when it fits, otherwise above. */
+    window.fleetTomSelectFlipSide = function(spaceBelow, spaceAbove, want, minComfort) {
+        var comfort = minComfort == null ? 120 : minComfort;
+        var need = Math.min(want || 240, comfort);
+        var canBelow = spaceBelow >= need;
+        var canAbove = spaceAbove >= need;
+        if (canBelow && !canAbove) return 'below';
+        if (canAbove && !canBelow) return 'above';
+        if (canBelow && canAbove) {
+            return (spaceBelow >= (want || 240) || spaceBelow >= spaceAbove) ? 'below' : 'above';
+        }
+        return spaceBelow >= spaceAbove ? 'below' : 'above';
+    };
 
     /** Viewport-fixed Tom Select placement (works when #mainContent scrolls, not window). */
     window.fleetPositionTomSelectDropdown = function(ts) {
@@ -4060,45 +4129,49 @@
         var vpWidth = (vv && vv.width) || window.innerWidth;
         var gap = 4;
         var edge = 8;
-        var prefMax = 240;
+        var prefMax = Math.min(320, Math.max(160, Math.floor(vpHeight * 0.45)));
 
-        var width = Math.max(rect.width, 160);
+        var width = Math.min(Math.max(rect.width, 160), vpWidth - edge * 2);
         var left = rect.left;
         if (left + width > vpLeft + vpWidth - edge) {
             left = Math.max(vpLeft + edge, vpLeft + vpWidth - width - edge);
         }
         if (left < vpLeft + edge) left = vpLeft + edge;
 
-        var spaceBelow = vpTop + vpHeight - rect.bottom - edge;
+        var spaceBelow = (vpTop + vpHeight) - rect.bottom - edge;
         var spaceAbove = rect.top - vpTop - edge;
-        var openBelow = spaceBelow >= 100 || spaceBelow >= spaceAbove;
+        var natural = prefMax;
+        if (content) {
+            var prevMax = content.style.maxHeight;
+            content.style.maxHeight = 'none';
+            natural = content.scrollHeight || prefMax;
+            content.style.maxHeight = prevMax;
+        }
+        var want = Math.min(prefMax, Math.max(72, natural));
+        var openBelow = window.fleetTomSelectFlipSide(spaceBelow, spaceAbove, want, 120) === 'below';
 
+        dropdown.classList.toggle('ts-dropdown-up', !openBelow);
         dropdown.style.position = 'fixed';
         dropdown.style.left = left + 'px';
         dropdown.style.width = width + 'px';
         dropdown.style.margin = '0';
         dropdown.style.right = 'auto';
-        dropdown.style.bottom = 'auto';
+        dropdown.style.maxWidth = (vpWidth - edge * 2) + 'px';
+        dropdown.style.visibility = '';
+        dropdown.style.display = 'block';
 
         if (openBelow) {
-            var maxBelow = Math.min(prefMax, Math.max(72, spaceBelow - gap));
+            var maxBelow = Math.max(72, Math.min(prefMax, spaceBelow - gap));
             if (content) content.style.maxHeight = maxBelow + 'px';
             dropdown.style.top = (rect.bottom + gap) + 'px';
+            dropdown.style.bottom = 'auto';
             return;
         }
 
-        var maxAbove = Math.min(prefMax, Math.max(72, spaceAbove - gap));
+        var maxAbove = Math.max(72, Math.min(prefMax, spaceAbove - gap));
         if (content) content.style.maxHeight = maxAbove + 'px';
-        dropdown.style.visibility = 'hidden';
-        dropdown.style.display = 'block';
-        var dropdownHeight = dropdown.offsetHeight || maxAbove;
-        var top = rect.top - gap - dropdownHeight;
-        if (top < vpTop + edge) top = vpTop + edge;
-        if (top + dropdownHeight > rect.top - gap) {
-            top = Math.max(vpTop + edge, rect.top - gap - dropdownHeight);
-        }
-        dropdown.style.top = top + 'px';
-        dropdown.style.visibility = '';
+        dropdown.style.top = 'auto';
+        dropdown.style.bottom = (window.innerHeight - rect.top + gap) + 'px';
     };
 
     window.initSearchableDropdowns = function(scope) {
@@ -4182,10 +4255,8 @@
                         }
                     },
                     onBeforeOpen: function() {
-                        // Silent shield: strictly prevent dropdown from even trying to open
-                        if (window._isShieldActive) {
-                            return false;
-                        }
+                        if (window._isShieldActive) return false;
+                        if (this._wsSilentFill || this._suppressOpen || this._cascadePending) return false;
                     },
                     render: {
                         /* Triggered by TomSelect when a text search finds nothing */
@@ -4278,7 +4349,7 @@
                 }
 
                 ts.on('focus', function() {
-                    if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                    if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
                     if (window._isReturningFromCamera || window._isShieldActive) return;
                     if (ts.isDisabled) return;
                     // _justSelected guards against re-opening immediately after
@@ -4332,9 +4403,9 @@
                     // Programmatic clear/setValue (Payment Type Cash/Credit COA sync)
                     // can transiently focus this control. Only reopen when the user
                     // is still actively typing in this input after the remove.
-                    if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                    if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
                     window.setTimeout(function() {
-                        if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                        if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
                         if (document.activeElement !== ts.control_input) return;
                         if (!ts.isOpen) ts.open();
                     }, 0);
@@ -4434,18 +4505,38 @@
         if (!sel) return;
         var v = (val == null || val === '') ? '' : String(val);
         if (sel.tomselect) {
+            var ts = sel.tomselect;
+            var prev = document.activeElement;
             if (silent !== false) {
-                sel.tomselect._wsSilentFill = true;
-                sel.tomselect._justSelected = true;
+                ts._wsSilentFill = true;
+                ts._suppressOpen = true;
+                ts._justSelected = true;
             }
             if (!v || v === '0') {
-                try { sel.tomselect.clear(true); } catch (e) {}
-                try { sel.tomselect.wrapper.classList.remove('has-items'); } catch (e2) {}
+                try { ts.clear(true); } catch (e) {}
+                try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
             } else {
-                try { sel.tomselect.setValue(v, true); } catch (e3) {}
+                try { ts.setValue(v, true); } catch (e3) {}
             }
-            if (silent !== false) sel.tomselect._wsSilentFill = false;
-            try { sel.tomselect.close(); } catch (e4) {}
+            try { ts.close(); } catch (e4) {}
+            if (silent !== false) {
+                var stole = document.activeElement === ts.control_input
+                    || (ts.wrapper && ts.wrapper.contains(document.activeElement));
+                if (stole && prev && prev !== ts.control_input && typeof prev.focus === 'function') {
+                    try { prev.focus({ preventScroll: true }); } catch (e5) {
+                        try { prev.focus(); } catch (e6) {}
+                    }
+                }
+                window.setTimeout(function() {
+                    try { ts.close(); } catch (e7) {}
+                    var stillHere = document.activeElement === ts.control_input;
+                    if (stillHere && prev && prev !== ts.control_input && typeof prev.focus === 'function') {
+                        try { prev.focus({ preventScroll: true }); } catch (e8) {}
+                    }
+                    ts._wsSilentFill = false;
+                    ts._suppressOpen = false;
+                }, 80);
+            }
             return;
         }
         sel.value = v || '0';
@@ -4475,6 +4566,7 @@
             _fleetSyncOptionAttrs(sel, items);
             try { ts.enable(); } catch (e1) {}
             ts._wsSilentFill = false;
+            window.fleetEndCascade(sel);
             // Do not latch _justSelected here — that blocked auto-open on the
             // next real focus (Project after District, Vehicle after Project).
             ts._justSelected = false;
@@ -4483,11 +4575,13 @@
             } else {
                 try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
             }
+            var reserved = _tsFocusReservation === sel;
+            if (reserved) _tsFocusReservation = null;
             var focused = ts.isFocused
                 || (ts.wrapper && ts.wrapper.classList.contains('focus'))
                 || document.activeElement === ts.control_input;
-            if (focused && !ts.isDisabled && items.length) {
-                try { ts.open(); } catch (e3) {}
+            if ((reserved || focused) && !ts.isDisabled && items.length && !ts._suppressOpen) {
+                _tsFocusAndOpen(sel);
             }
             return;
         }
@@ -4549,12 +4643,15 @@
 
     window.fleetSetSelectLoading = function(sel) {
         if (!sel) return;
+        window.fleetBeginCascade(sel);
         if (sel.tomselect) {
             var ts = sel.tomselect;
             ts._wsSilentFill = true;
+            try { ts.close(); } catch (e0) {}
             ts.clear(true);
             ts.clearOptions();
-            try { ts.disable(); } catch (e) {}
+            // Keep enabled. Native disable() moves browser focus to the next
+            // field (Project → Fuel Pump) when a fast typist is already there.
             try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
             ts._wsSilentFill = false;
             return;
