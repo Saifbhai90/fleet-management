@@ -27,6 +27,7 @@ from auth_utils import user_can_access, get_user_context
 from utils import (
     pk_now, pk_date, parse_date, format_date_ddmmyyyy,
     emg_amb_reg_matches_vehicle, strip_ufone_reg_tag,
+    normalize_vehicle_reg_key,
 )
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
 import re
@@ -196,45 +197,39 @@ def _task_report_list_rows(tasks):
                 break
         return prev
 
-    # Count by stripped base so tagged Portal/Ufone regs match without O(tasks×regs).
+    # Count every Green/Yellow (or uncategorized) EMG row. Do not unique-by-reg:
+    # one vehicle can have many tasks on the same day (prod: 6+). Exact IN on
+    # candidate strings also missed hyphen/space/tag variants, so match on the
+    # alphanumeric key used elsewhere (GBF-25-579 COW == GBF25579).
+    wanted_emg_keys = set()
+    for no in vehicle_nos:
+        key = normalize_vehicle_reg_key(no)
+        if key:
+            wanted_emg_keys.add(key)
     emg_count_by_date_base = defaultdict(int)
-    if task_dates and reg_cands:
+    if task_dates and wanted_emg_keys:
         emg_cat = or_(
             EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
             EmergencyTaskRecord.category.is_(None),
             EmergencyTaskRecord.category == '',
         )
-        seen_emg = set()
-        for i in range(0, len(reg_cands), 400):
-            chunk = reg_cands[i:i + 400]
-            for reg, d in (
-                EmergencyTaskRecord.query.filter(
-                    EmergencyTaskRecord.task_date.in_(task_dates),
-                    EmergencyTaskRecord.amb_reg_no.in_(chunk),
-                    emg_cat,
-                )
-                .with_entities(EmergencyTaskRecord.amb_reg_no, EmergencyTaskRecord.task_date)
-                .all()
-            ):
-                raw = (str(reg).strip() if reg else '')
-                if not raw:
-                    continue
-                key = (d, raw)
-                if key in seen_emg:
-                    continue
-                seen_emg.add(key)
-                base = (strip_ufone_reg_tag(raw) or raw).strip().lower()
-                if base:
-                    emg_count_by_date_base[(d, base)] += 1
+        for reg, d in (
+            EmergencyTaskRecord.query.filter(
+                EmergencyTaskRecord.task_date.in_(task_dates),
+                emg_cat,
+            )
+            .with_entities(EmergencyTaskRecord.amb_reg_no, EmergencyTaskRecord.task_date)
+            .all()
+        ):
+            key = normalize_vehicle_reg_key(reg)
+            if key and key in wanted_emg_keys:
+                emg_count_by_date_base[(d, key)] += 1
 
     def _emg_count(vehicle_no, task_d):
-        raw = (vehicle_no or '').strip()
-        if not raw:
+        key = normalize_vehicle_reg_key(vehicle_no)
+        if not key:
             return 0
-        base = (strip_ufone_reg_tag(raw) or raw).strip().lower()
-        if not base:
-            return 0
-        return int(emg_count_by_date_base.get((task_d, base), 0))
+        return int(emg_count_by_date_base.get((task_d, key), 0))
 
     mil_by_date = defaultdict(dict)
     if task_dates and reg_cands and wanted_mil_keys:
