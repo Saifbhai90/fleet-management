@@ -4002,7 +4002,9 @@
         if (ts.isDisabled || ts._wsSilentFill || ts._suppressOpen || ts._cascadePending) return;
         if (!_tsOptionCount(ts)) return;
         ts._justSelected = false;
-        if (ts.wrapper && typeof ts.wrapper.scrollIntoView === 'function') {
+        if (_isFuelWebTomSelect(ts)) {
+            ts._fuelNeedBelowFit = true;
+        } else if (ts.wrapper && typeof ts.wrapper.scrollIntoView === 'function') {
             try { ts.wrapper.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e0) {}
         }
         ts.focus();
@@ -4099,6 +4101,98 @@
             '</div>';
     }
 
+    function _isFuelWebTomSelect(ts) {
+        if (!ts || !ts.input || !ts.input.closest) return false;
+        if (document.body.classList.contains('fuel-mobile-preview-page')) return false;
+        if (document.documentElement.classList.contains('capacitor-native')) return false;
+        return !!ts.input.closest('.fuel-form-wrap');
+    }
+
+    function _fleetScrollParent(el) {
+        var node = el;
+        while (node && node !== document.body && node !== document.documentElement) {
+            var style = window.getComputedStyle(node);
+            var overflowY = style.overflowY;
+            if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 4) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    function _fuelWebDropdownWant(ts, vpHeight) {
+        var prefMax = Math.min(320, Math.max(160, Math.floor(vpHeight * 0.45)));
+        var content = ts.dropdown_content;
+        var natural = prefMax;
+        if (content) {
+            var prevMax = content.style.maxHeight;
+            content.style.maxHeight = 'none';
+            natural = content.scrollHeight || prefMax;
+            content.style.maxHeight = prevMax;
+        }
+        return Math.min(prefMax, Math.max(72, natural));
+    }
+
+    function _fleetApplyScrollDelta(scrollEl, dy) {
+        if (Math.abs(dy) < 2) return false;
+        if (scrollEl === document.scrollingElement || scrollEl === document.documentElement || scrollEl === document.body) {
+            window.scrollBy(0, dy);
+        } else {
+            scrollEl.scrollTop += dy;
+        }
+        return true;
+    }
+
+    function _fleetVisiblePort(scrollEl) {
+        var vv = window.visualViewport;
+        var winTop = (vv && vv.offsetTop) || 0;
+        var winBottom = winTop + ((vv && vv.height) || window.innerHeight);
+        var vpTop = winTop;
+        var vpBottom = winBottom;
+        var isWindowScroll = (
+            scrollEl === document.scrollingElement
+            || scrollEl === document.documentElement
+            || scrollEl === document.body
+        );
+        if (!isWindowScroll && scrollEl && scrollEl.getBoundingClientRect) {
+            var box = scrollEl.getBoundingClientRect();
+            vpTop = Math.max(winTop, box.top);
+            vpBottom = Math.min(winBottom, box.bottom);
+        }
+        var nav = document.querySelector('.navbar');
+        if (nav) {
+            var navBottom = nav.getBoundingClientRect().bottom;
+            if (navBottom > vpTop) vpTop = navBottom;
+        }
+        return { top: vpTop, bottom: vpBottom, height: Math.max(80, vpBottom - vpTop) };
+    }
+
+    function _fleetScrollFuelDropdownIntoBelow(ts) {
+        if (!_isFuelWebTomSelect(ts) || !ts.control) return;
+        var control = ts.control;
+        var scrollEl = _fleetScrollParent(control);
+        var port = _fleetVisiblePort(scrollEl);
+        var gap = 4;
+        var edge = 8;
+        var topSafe = port.top + 8;
+        var want = _fuelWebDropdownWant(ts, port.height);
+        var needed = want + gap + edge;
+        var rect = control.getBoundingClientRect();
+        var spaceBelow = port.bottom - rect.bottom - edge;
+        var shortfall = needed - spaceBelow;
+        var scrollTop = scrollEl.scrollTop || window.pageYOffset || 0;
+        var roomToRaise = rect.top - topSafe;
+        if (shortfall > 8) {
+            _fleetApplyScrollDelta(scrollEl, Math.min(shortfall, Math.max(0, roomToRaise)));
+            return;
+        }
+        if (shortfall >= -8 || scrollTop <= 2) return;
+        if ((rect.top - port.top) > port.height * 0.28) return;
+        var excess = -shortfall;
+        _fleetApplyScrollDelta(scrollEl, -Math.min(want, excess, Math.max(0, roomToRaise), scrollTop));
+    }
+
     /** Popper-style flip: below when it fits, otherwise above. */
     window.fleetTomSelectFlipSide = function(spaceBelow, spaceAbove, want, minComfort) {
         var comfort = minComfort == null ? 120 : minComfort;
@@ -4116,6 +4210,10 @@
     /** Viewport-fixed Tom Select placement (works when #mainContent scrolls, not window). */
     window.fleetPositionTomSelectDropdown = function(ts) {
         if (!ts || !ts.control || !ts.dropdown) return;
+        if (_isFuelWebTomSelect(ts) && ts._fuelNeedBelowFit) {
+            _fleetScrollFuelDropdownIntoBelow(ts);
+            ts._fuelNeedBelowFit = false;
+        }
         var control = ts.control;
         var dropdown = ts.dropdown;
         var content = ts.dropdown_content;
@@ -4149,6 +4247,7 @@
         }
         var want = Math.min(prefMax, Math.max(72, natural));
         var openBelow = window.fleetTomSelectFlipSide(spaceBelow, spaceAbove, want, 120) === 'below';
+        if (_isFuelWebTomSelect(ts)) openBelow = true;
 
         dropdown.classList.toggle('ts-dropdown-up', !openBelow);
         dropdown.style.position = 'fixed';
@@ -4359,6 +4458,7 @@
                         _setOverwriteReady(false);
                         return;
                     }
+                    if (_isFuelWebTomSelect(ts)) ts._fuelNeedBelowFit = true;
                     if (!ts.isOpen) ts.open();
                     // Apply the blue highlight slightly deferred so TS's own
                     // focus routine has settled — fixes Shift+Tab first-attempt miss.
