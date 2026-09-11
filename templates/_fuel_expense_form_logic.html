@@ -114,6 +114,8 @@ document.addEventListener('DOMContentLoaded', function() {
   var litersInputError = document.getElementById('litersInputError');
   var currentReadingError = document.getElementById('currentReadingError');
   var amountInputError = document.getElementById('amountInputError');
+  var vehicleSelectError = document.getElementById('vehicleSelectError');
+  var fuelingDateError = document.getElementById('fuelingDateError');
   var meterMatchedDetail = null;
   var monthMpgNote = document.getElementById('monthMpgInfo');
   var monthMpgValue = document.getElementById('monthMpgValue');
@@ -257,6 +259,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (val === '' || val === null || val === undefined) return null;
     var n = parseFloat(String(val).replace(/,/g, ''));
     return isNaN(n) ? null : n;
+  }
+  function escHtml(val) {
+    return String(val == null ? '' : val)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
   function setTaskKmField(el, val) {
     if (!el) return;
@@ -554,7 +561,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function formatVehicleLastEntryStrip(entry) {
     var parts = ['<strong>Last Entry:</strong>'];
-    parts.push('<span>' + (entry.fueling_date || '—') + '</span>');
+    parts.push('<span>' + escHtml(entry.fueling_date || '—') + '</span>');
     parts.push('<span class="text-muted">|</span>');
     parts.push('<span>' + (entry.current_reading != null ? _fmtEntryNum(entry.current_reading, 0) : '—') + '</span>');
     parts.push('<span class="text-muted">|</span>');
@@ -574,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!vehicleLastEntryBody || !entry) return;
     function displayVal(val) {
       if (val === null || val === undefined || val === '') return '—';
-      return String(val);
+      return escHtml(val);
     }
     function item(label, val) {
       return '<div class="fuel-entry-detail-item"><div class="lbl">' + label + '</div><div class="val">' + displayVal(val) + '</div></div>';
@@ -734,7 +741,7 @@ document.addEventListener('DOMContentLoaded', function() {
         computeKm();
         fetchMonthMpg();
         updateOdometerGauge();
-      });
+      }).catch(function() { /* offline — keep current values */ });
   }
 
   function fetchTaskReadings() {
@@ -758,7 +765,7 @@ document.addEventListener('DOMContentLoaded', function() {
         taskCloseReading = parseNum(data.km_in_task);
         computeKm();
         updateOdometerGauge();
-      });
+      }).catch(function() { /* offline — keep last known task readings */ });
   }
 
   function updateMatchedState() {
@@ -991,6 +998,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function runFuelPsoScanNow() {
     var btn = document.getElementById('fuelPsoScanNowBtn');
+    var originalLabel = btn ? (btn.textContent || 'Scan').trim() : 'Scan Now';
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning...';
@@ -1021,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', function() {
       .finally(function() {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Scan Now';
+          btn.textContent = originalLabel || 'Scan';
         }
       });
   }
@@ -1295,12 +1303,19 @@ document.addEventListener('DOMContentLoaded', function() {
     clearFieldError(currentReadingInput, currentReadingError);
     clearFieldError(amountInput, amountInputError);
     clearFieldError(litersInput, litersInputError);
+    clearFieldError(vehicleSelect, vehicleSelectError);
+    clearFieldError(fuelingDateInput, fuelingDateError);
     clearFieldError(fuelAttachZone, fuelAttachmentError);
     closeAttachmentWarningPopup();
 
     var firstBad = null;
     if (vehicleSelect && (!vehicleSelect.value || vehicleSelect.value === '0')) {
+      setFieldError(vehicleSelect, vehicleSelectError, 'Please select a vehicle.');
       if (!firstBad) firstBad = vehicleSelect;
+    }
+    if (fuelingDateInput && !(fuelingDateInput.value || '').trim()) {
+      setFieldError(fuelingDateInput, fuelingDateError, 'Fueling date is required.');
+      if (!firstBad) firstBad = fuelingDateInput;
     }
     var prev = parseNum(previousReadingInput ? previousReadingInput.value : null);
     var curr = parseNum(currentReadingInput ? currentReadingInput.value : null);
@@ -1366,9 +1381,12 @@ document.addEventListener('DOMContentLoaded', function() {
   function submitFuelFormWithOffline(submitter) {
     if (!fuelExpenseForm) return;
     if (!ensureFuelAttachmentsBeforeProceed()) return;
-    fuelSubmitLocked = true;
-    setFuelSubmitLoading(submitter);
-    if (window.FuelExpenseOffline && typeof window.FuelExpenseOffline.submitWithOfflineFallback === 'function') {
+    // Offline: queue the entry (online saves go through the native path below,
+    // where the server redirect renders the flash + next form, and a validation
+    // failure re-renders the form with the user's values intact).
+    if (window.FuelExpenseOffline && typeof window.FuelExpenseOffline.submitWithOfflineFallback === 'function' && !window.navigator.onLine) {
+      fuelSubmitLocked = true;
+      setFuelSubmitLoading(submitter);
       window.FuelExpenseOffline.submitWithOfflineFallback(fuelExpenseForm, submitter)
         .then(function() {
           if (!window.navigator.onLine) unlockFuelSubmit();
@@ -1639,7 +1657,7 @@ document.addEventListener('DOMContentLoaded', function() {
         _pendingSubmitBtn = submitter;
         if (fuelDuplicateBody) {
           fuelDuplicateBody.innerHTML = '<p class="fuel-warning-float-panel__lead mb-2">Same vehicle, pump, date, current reading and amount already saved:</p>' +
-            '<div class="fuel-warning-float-panel__detail"><strong>' + (data.summary || 'Duplicate') + '</strong></div>';
+            '<div class="fuel-warning-float-panel__detail"><strong>' + escHtml(data.summary || 'Duplicate') + '</strong></div>';
         }
         if (fuelDuplicatePanel) {
           showFuelDuplicatePanel();
@@ -1730,6 +1748,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', function() {
+      clearFieldError(vehicleSelect, vehicleSelectError);
       var selectedFuel = _vehicleFuelTypeMap[vehicleSelect.value] || '';
       if (!selectedFuel && fuelTypeSelect && fuelTypeSelect.value) {
         selectedFuel = fuelTypeSelect.value;
@@ -1747,6 +1766,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (fuelingDateInput) fuelingDateInput.addEventListener('change', function() {
+    clearFieldError(fuelingDateInput, fuelingDateError);
     fetchLastReading(); fetchTaskReadings(); fetchPsoRateForDate(); fetchSuggestedPrice(); fetchMonthMpg();
   });
   if (previousReadingInput) previousReadingInput.addEventListener('input', function() { computeKm(); fetchTaskReadings(); });
@@ -1902,7 +1922,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }, true);
   }
   if (amountInput) amountInput.addEventListener('input', function() { clearFieldError(amountInput, amountInputError); computeMpgAndLiters(); });
-  if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; computeMpgAndLiters(); });
+  if (fuelPriceInput) fuelPriceInput.addEventListener('input', function() { fuelPriceInput.dataset.autoSuggested = '0'; checkFuelPriceTolerance(); computeMpgAndLiters(); });
   if (litersInput) litersInput.addEventListener('input', function() { clearFieldError(litersInput, litersInputError); computeFromLitersInput(); });
 
   function renderHistoryRows(targetEl, rows) {
@@ -1915,9 +1935,9 @@ document.addEventListener('DOMContentLoaded', function() {
     targetEl.className = '';
     targetEl.innerHTML = rows.map(function(r) {
       return '<div class="price-history-row">' +
-        '<span class="price-date-pill">' + (r.date || '-') + '</span> | ' +
-        (r.pump_name || '-') + ' | ' +
-        (r.vehicle_no || '-') + ' | ' +
+        '<span class="price-date-pill">' + escHtml(r.date || '-') + '</span> | ' +
+        escHtml(r.pump_name || '-') + ' | ' +
+        escHtml(r.vehicle_no || '-') + ' | ' +
         '<span class="price-value-pill">Rs ' + (parseFloat(r.fuel_price || 0).toFixed(2)) + '</span>' +
       '</div>';
     }).join('');
@@ -1967,6 +1987,27 @@ document.addEventListener('DOMContentLoaded', function() {
   } else {
     fetchLastReading();
     fetchTaskReadings();
+  }
+  // Mobile app boots with server-rendered district/project/vehicle options and
+  // no cascade payload — fetch vehicle meta (tank capacity, family, fuel type)
+  // once so tank-capacity and km-gap warnings also work in the save_add flow.
+  if (isFuelMobilePreviewPage() && vehicleSelect && vehicleSelect.value && vehicleSelect.value !== '0' && !_vehicleTankCapacityMap[String(vehicleSelect.value)]) {
+    var _bootPid = projectSelect ? (projectSelect.value || '') : '';
+    var _bootDid = districtSelect ? (districtSelect.value || '') : '';
+    if (_bootPid && _bootPid !== '0') {
+      var _bootUrl = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(_bootPid);
+      if (_bootDid && _bootDid !== '0') _bootUrl += '&district_id=' + encodeURIComponent(_bootDid);
+      fetch(_bootUrl)
+        .then(function(r) { return r.json(); })
+        .then(function(arr) {
+          (arr || []).forEach(_rememberVehicleMeta);
+          setFuelTypeAuto(_vehicleFuelTypeMap[String(vehicleSelect.value)] || (fuelTypeSelect && fuelTypeSelect.value) || '');
+          computeKm();
+          updateTankCapacityWarning();
+          updateMeterAlertsPanel();
+        })
+        .catch(function() { /* warnings simply stay disabled */ });
+    }
   }
   window.setTimeout(function() { fetchTaskReadings(); }, 250);
   computeKm();
@@ -2655,13 +2696,6 @@ document.addEventListener('DOMContentLoaded', function() {
   if (fuelPriceBenchmarkCancelBtn) {
     fuelPriceBenchmarkCancelBtn.addEventListener('click', dismissFuelPriceBenchmarkPanel);
   }
-  if (fuelPriceInput) {
-    fuelPriceInput.addEventListener('input', function() {
-      fuelPriceInput.dataset.autoSuggested = '0';
-      checkFuelPriceTolerance();
-      computeMpgAndLiters();
-    });
-  }
 
   // ── Fuel Pump balance hint ────────────────────────────────────────────────
   var pumpBalanceHint = document.getElementById('pumpBalanceHint');
@@ -2803,6 +2837,15 @@ document.addEventListener('DOMContentLoaded', function() {
     fuelMeterMatchPanel.setAttribute('aria-hidden', 'false');
     fuelMeterMatchPanel.style.visibility = 'hidden';
 
+    // Mobile app: anchor the panel inside the phone shell (viewport math puts
+    // it outside/behind the app bar there).
+    if (isFuelMobilePreviewPage() && positionFuelPanelInsidePhone(fuelMeterMatchPanel, amountInput || currentReadingInput || fuelExpenseForm, { fill: false })) {
+      fuelMeterMatchPanel.style.visibility = '';
+      enableMeterMatchFocusTrap();
+      focusMeterMatchOkButton();
+      return;
+    }
+
     var panelW = Math.min(480, window.innerWidth - 24);
     fuelMeterMatchPanel.style.width = panelW + 'px';
     var wrap = document.querySelector('.fuel-form-wrap');
@@ -2886,6 +2929,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Auto-focus ─────────────────────────────────────────────────────────
   var _isFromSave = {{ 'true' if (from_save is defined and from_save) else 'false' }};
   window.setTimeout(function() {
+    // Mobile app: no auto-focus — the fleet-wide TomSelect focus hook force-opens
+    // the dropdown, which would bury the form under the district list on load.
+    if (typeof isFuelMobilePreviewPage === 'function' && isFuelMobilePreviewPage()) return;
     if (_isFromSave) {
       if (fuelPumpSelect && fuelPumpSelect.tomselect) { fuelPumpSelect.tomselect.focus(); }
       else if (fuelPumpSelect) { fuelPumpSelect.focus(); }

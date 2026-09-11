@@ -31,6 +31,13 @@
   body.fuel-mobile-preview-page .ts-dropdown {
     max-width: min(340px, calc(100vw - 24px));
   }
+  /* The add-form shell is fixed-positioned for the navbar layout; pull it to
+     the real top so no dead navbar band is left above the app bar. */
+  body.fuel-mobile-preview-page #mainContent { top: 0 !important; }
+  /* Navbar is hidden on this page — its standalone hamburger would float dead. */
+  body.fuel-mobile-preview-page #mobileMenuBtn { display: none !important; }
+  /* Keep long dropdown lists inside the shell (keyboard shrinks the viewport). */
+  body.fuel-mobile-preview-page .ts-dropdown { max-height: 42vh; overflow-y: auto; }
   .fuel-device {
     width: 100%;
     margin: 0;
@@ -114,6 +121,12 @@
     gap: 4px 6px;
   }
   .fuel-saved-bar .badge { font-size: 9px; }
+  .fuel-pending-bar {
+    background: #fff7ed;
+    border-bottom-color: #fed7aa;
+    color: #9a3412;
+    gap: 6px;
+  }
   .fuel-saved-edit {
     flex-shrink: 0;
     color: #1246b5;
@@ -417,7 +430,7 @@
         <div class="fuel-appbar-row">
           <a class="fuel-icon-btn" href="{{ back_url if back_url is defined else url_for('fuel_expense_list') }}" aria-label="Back">‹</a>
           <div class="fuel-appbar-title">
-            <h1>Add Fuel Expense</h1>
+            <h1>{{ title if title is defined else 'Add Fuel Expense' }}</h1>
             <p class="sub" id="fuelMobileContext">
               {% if workspace_selected_employee %}{{ workspace_selected_employee.name }}{% else %}Workspace{% endif %}
             </p>
@@ -460,8 +473,12 @@
         {% endif %}
       </div>
       {% endif %}
+      <div id="fuelPendingSyncBar" class="fuel-ticker fuel-pending-bar d-none" role="status">
+        <strong id="fuelPendingSyncText"></strong>
+        <button type="button" class="fuel-scan-btn" id="fuelPendingSyncBtn">Sync</button>
+      </div>
 
-      <form method="POST" action="{{ url_for('fuel_expense_add') }}" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" data-no-spinner="1" enctype="multipart/form-data" style="display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;">
+      <form method="POST" action="{{ form_action if form_action is defined else url_for('fuel_expense_add') }}" id="fuelExpenseForm" data-record-id="{{ rec.id if rec else '' }}" data-no-spinner="1" enctype="multipart/form-data" novalidate style="display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;">
         <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
         <script type="application/json" id="fuelExpenseSettingsData">{{ fuel_expense_settings|default({'price_tolerance_rs': 5, 'km_gap_default_max_km': 500, 'km_gap_rules': []})|tojson }}</script>
         {{ form.hidden_tag() }}
@@ -473,17 +490,17 @@
           <section class="fuel-card" id="fuelLocationSection">
             <div class="fuel-grid-2">
               <div>
-                <label>District</label>
+                <label for="districtSelect">District</label>
                 {{ form.district_id(class="form-select search-select", id="districtSelect") }}
               </div>
               <div>
-                <label>Project</label>
+                <label for="projectSelect">Project</label>
                 {{ form.project_id(class="form-select search-select", id="projectSelect") }}
               </div>
             </div>
             <div style="margin-top:8px">
               <div class="fuel-label-row">
-                <label>Vehicle No *</label>
+                <label for="vehicleSelect">Vehicle No *</label>
                 {{ form.fuel_type(class="d-none", id="fuelTypeSelect") }}
                 <span class="fuel-type-chip{% if not form.fuel_type.data %} is-empty{% endif %}" id="fuelTypeDisplay">{% if form.fuel_type.data %}{{ form.fuel_type.data }}{% else %}Auto{% endif %}</span>
               </div>
@@ -491,10 +508,11 @@
                 {{ form.vehicle_id(class="form-select search-select", id="vehicleSelect") }}
                 <a class="fuel-side" href="{{ url_for('vehicle_reading_setup_form') }}">Set Reading</a>
               </div>
+              <div id="vehicleSelectError" class="field-error-msg d-none"></div>
               <div id="vehicleLastEntryStrip" class="last-entry fuel-info-click fleet-enter-skip d-none" role="button" tabindex="0" title="Click for last entry details"></div>
             </div>
             <div style="margin-top:8px">
-              <label>Fuel Pump Name</label>
+              <label for="fuelPumpSelect">Fuel Pump Name</label>
               <div class="fuel-row">
                 {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
                 <a class="fuel-side dash" id="fuelAddPumpBtn" href="{{ url_for('workspace_party_new', type='Pump', next=request.url) }}">+ Pump</a>
@@ -503,12 +521,13 @@
             </div>
             <div class="fuel-grid-2" style="margin-top:8px">
               <div>
-                <label>Fueling Date *</label>
+                <label for="fuelingDate">Fueling Date *</label>
                 {{ form.fueling_date(class="form-control datepicker", id="fuelingDate", type="text", inputmode="numeric", autocomplete="off") }}
+                <div id="fuelingDateError" class="field-error-msg d-none"></div>
               </div>
               <div>
-                <label>Slip No</label>
-                {{ form.slip_no(class="form-control", placeholder="Optional") }}
+                <label for="fuelSlipNo">Slip No</label>
+                {{ form.slip_no(class="form-control", id="fuelSlipNo", maxlength=50, placeholder="Optional") }}
               </div>
             </div>
             <div style="margin-top:8px">
@@ -557,7 +576,7 @@
             <div id="currentReadingError" class="field-error-msg d-none"></div>
             <div class="fuel-money" style="margin-top:8px">
               <div>
-                <label>Amount</label>
+                <label for="amountInput">Amount</label>
                 {{ form.amount(class="form-control", id="amountInput", step="0.01", placeholder="0") }}
                 <div id="amountInputError" class="field-error-msg d-none"></div>
               </div>
@@ -569,7 +588,7 @@
                 </div>
               </div>
               <div>
-                <label>Ltr</label>
+                <label for="litersInput">Ltr</label>
                 <input type="number" id="litersInput" class="form-control" step="0.01" min="0" placeholder="0">
                 <div id="litersInputError" class="field-error-msg d-none"></div>
               </div>
@@ -609,7 +628,7 @@
             <div class="small text-success mt-1" id="fuelAttachmentPasteHint"></div>
             <div id="fuelAttachmentError" class="field-error-msg d-none mt-2"></div>
             <div style="margin-top:10px">
-              <label>Expense By (Workspace COA)</label>
+              <label for="expenseBySelect">Expense By (Workspace COA)</label>
               {{ form.expense_by(class="form-select search-select", id="expenseBySelect") }}
               <div id="expenseByBalanceHint" class="small mt-1 text-muted"></div>
             </div>
@@ -680,6 +699,47 @@
       if (!(sel.value || '').trim()) setPay('Credit');
       else syncChips();
     }, 250);
+  })();
+
+  // ── Mobile shell helpers ────────────────────────────────────────────────
+  (function() {
+    // The dropdown lives on <body> while the form scrolls in its own pane.
+    // When a scroll moves the anchor field out of view, close the dropdown so
+    // it never floats detached over unrelated cards. Scrolls that merely bring
+    // the focused field into view keep the dropdown open.
+    var pane = document.getElementById('paneForm');
+    if (pane) {
+      var _paneScrollTicking = false;
+      pane.addEventListener('scroll', function() {
+        if (_paneScrollTicking) return;
+        _paneScrollTicking = true;
+        requestAnimationFrame(function() {
+          _paneScrollTicking = false;
+          var paneRect = pane.getBoundingClientRect();
+          document.querySelectorAll('select.search-select').forEach(function(s) {
+            var ts = s.tomselect;
+            if (!ts || !ts.isOpen) return;
+            var ctlEl = ts.wrapper && ts.wrapper.querySelector('.ts-control');
+            if (!ctlEl) return;
+            var cr = ctlEl.getBoundingClientRect();
+            var inView = cr.bottom > paneRect.top + 4 && cr.top < paneRect.bottom - 4;
+            if (!inView) {
+              try { ts.close(); } catch (e) {}
+            }
+          });
+        });
+      }, { passive: true });
+    }
+    // Drop the stale last_id param after load so a refresh starts clean
+    // (Last Saved bar + pump auto-focus should not replay on every reload).
+    window.setTimeout(function() {
+      try {
+        if (!/[?&]last_id=/.test(window.location.search)) return;
+        var u = new URL(window.location.href);
+        u.searchParams.delete('last_id');
+        window.history.replaceState(null, '', u.toString());
+      } catch (e) {}
+    }, 1200);
   })();
 </script>
 

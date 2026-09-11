@@ -124,6 +124,7 @@
       });
     }).then(function () {
       toast('No internet — fuel entry saved offline. It will sync automatically when you are back online.');
+      refreshPendingBar();
       if (global.navigator && global.navigator.serviceWorker && global.navigator.serviceWorker.ready) {
         global.navigator.serviceWorker.ready.then(function (reg) {
           if (reg.sync && typeof reg.sync.register === 'function') {
@@ -145,6 +146,42 @@
     });
   }
 
+  function updatePendingEntry(entry) {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(entry);
+        tx.oncomplete = function () { db.close(); resolve(); };
+        tx.onerror = function () { db.close(); reject(tx.error); };
+      });
+    });
+  }
+
+  function refreshPendingBar() {
+    listPending().then(function (rows) {
+      var bar = document.getElementById('fuelPendingSyncBar');
+      if (!bar) return;
+      var count = rows.length;
+      bar.classList.toggle('d-none', count === 0);
+      var txt = document.getElementById('fuelPendingSyncText');
+      if (txt) {
+        txt.textContent = count === 1
+          ? '1 fuel entry saved offline — waiting to sync.'
+          : count + ' fuel entries saved offline — waiting to sync.';
+      }
+    }).catch(function () { });
+  }
+
+  function sessionAlive() {
+    return fetch('/expenses/fuel/add', {
+      method: 'GET',
+      credentials: 'same-origin',
+      redirect: 'follow',
+    }).then(function (resp) {
+      return !(resp.redirected && /\/login\b/.test(resp.url || ''));
+    }).catch(function () { return false; });
+  }
+
   function deletePending(id) {
     return openDb().then(function (db) {
       return new Promise(function (resolve, reject) {
@@ -156,27 +193,56 @@
     });
   }
 
+  // Replays one queued POST without following redirects so we can tell apart:
+  //  - 'ok':       server redirected (302) and the session is still alive → saved.
+  //  - 'auth':     server redirected to login → session expired, keep the entry.
+  //  - 'rejected': server answered 200 with the form re-rendered → entry refused.
+  //  - 'retry':    anything else (network/server error) → try again later.
   function syncOne(entry) {
     return rebuildFormData(entry.payload).then(function (fd) {
       return fetch(entry.url, {
         method: 'POST',
         body: fd,
         credentials: 'same-origin',
-        redirect: 'follow',
+        redirect: 'manual',
       });
+    }).then(function (resp) {
+      if (resp.type === 'opaqueredirect' || resp.status === 0) {
+        return sessionAlive().then(function (alive) { return alive ? 'ok' : 'auth'; });
+      }
+      if (resp.ok) { return 'rejected'; }
+      return 'retry';
     });
   }
+
+  var MAX_ENTRY_ATTEMPTS = 5;
 
   function syncPending() {
     if (!global.navigator.onLine) return Promise.resolve(0);
     return listPending().then(function (rows) {
       if (!rows.length) return 0;
+      var stoppedForAuth = false;
+      var rejected = 0;
       var chain = Promise.resolve(0);
       rows.forEach(function (entry) {
         chain = chain.then(function (synced) {
-          return syncOne(entry).then(function (resp) {
-            if (resp && resp.ok) {
+          if (stoppedForAuth) return synced;
+          return syncOne(entry).then(function (outcome) {
+            if (outcome === 'ok') {
               return deletePending(entry.id).then(function () { return synced + 1; });
+            }
+            if (outcome === 'auth') {
+              stoppedForAuth = true;
+              toast('Login required — pending fuel entries are kept and will sync after you log in again.');
+              return synced;
+            }
+            if (outcome === 'rejected') {
+              entry.attempts = (entry.attempts || 0) + 1;
+              if (entry.attempts >= MAX_ENTRY_ATTEMPTS) {
+                rejected += 1;
+                return deletePending(entry.id).then(function () { return synced; });
+              }
+              return updatePendingEntry(entry).then(function () { return synced; });
             }
             return synced;
           }).catch(function () { return synced; });
@@ -189,6 +255,12 @@
             : (count + ' pending fuel entries synced to live server successfully.');
           toast(msg);
         }
+        if (rejected > 0) {
+          toast(rejected === 1
+            ? '1 offline fuel entry was rejected by the server after several tries and removed from the queue.'
+            : (rejected + ' offline fuel entries were rejected by the server after several tries and removed from the queue.'));
+        }
+        refreshPendingBar();
         return count;
       });
     });
@@ -204,23 +276,26 @@
     if (!global.navigator.onLine) {
       return savePending(formEl, submitter);
     }
+    // Manual redirect: the 302's flash stays in the session and is rendered by
+    // the page we navigate to below — never consumed silently by fetch.
     return fetch(url, {
       method: 'POST',
       body: fd,
       credentials: 'same-origin',
-      redirect: 'follow',
+      redirect: 'manual',
     }).then(function (resp) {
-      if (resp.redirected && resp.url) {
-        global.location.href = resp.url;
+      if (resp.type === 'opaqueredirect' || resp.status === 0) {
+        global.location.assign(url);
         return;
       }
       if (resp.ok) {
+        // Server re-rendered the form (validation/business error). Keep the
+        // user's data by letting the caller decide — default to a reload so
+        // the server-rendered form (with bound values + flash) shows.
         global.location.reload();
         return;
       }
-      return resp.text().then(function () {
-        throw new Error('Save failed (' + resp.status + ')');
-      });
+      throw new Error('Save failed (' + resp.status + ')');
     }).catch(function (err) {
       var offline = !global.navigator.onLine
         || (err && err.message && /failed to fetch|network|load/i.test(err.message));
@@ -235,6 +310,8 @@
     savePending: savePending,
     syncPending: syncPending,
     submitWithOfflineFallback: submitWithOfflineFallback,
+    listPending: listPending,
+    refreshPendingBar: refreshPendingBar,
     toast: toast,
   };
 
@@ -244,10 +321,12 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      refreshPendingBar();
       if (global.navigator.onLine) syncPending();
     });
-  } else if (global.navigator.onLine) {
-    syncPending();
+  } else {
+    refreshPendingBar();
+    if (global.navigator.onLine) syncPending();
   }
 
   if (global.navigator.serviceWorker) {

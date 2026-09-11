@@ -2370,6 +2370,21 @@ def _fuel_add_form_template():
     return 'fuel_expense_form.html'
 
 
+def _fuel_edit_uses_mobile_form():
+    design = _fuel_add_design()
+    if design == 'desktop':
+        return False
+    if design == 'mobile':
+        return True
+    return _fuel_request_is_native_app()
+
+
+def _fuel_edit_form_template():
+    if _fuel_edit_uses_mobile_form():
+        return 'fuel_expense_form_mobile.html'
+    return 'fuel_expense_form.html'
+
+
 @app.route('/expenses/fuel/add', methods=['GET', 'POST'])
 def fuel_expense_add():
     _guard = _require_workspace_employee_for_expense_management()
@@ -2388,8 +2403,10 @@ def fuel_expense_add():
     selected_project_id = request.args.get('project_id', type=int) if request.method == 'GET' else request.form.get('project_id', type=int)
     selected_vehicle_id = request.args.get('vehicle_id', type=int) if request.method == 'GET' else None
     selected_payment_type = request.args.get('payment_type', '') if request.method == 'GET' else ''
+    selected_expense_by = request.args.get('expense_by', '') if request.method == 'GET' else ''
     last_id = request.args.get('last_id', type=int) if request.method == 'GET' else None
     add_ctx = _fuel_expense_add_form_ctx(workspace_employee_id, last_id)
+    back_url = _safe_internal_path(request.args.get('return_to') or '', url_for('fuel_expense_list'))
     if request.method == 'GET' and not selected_district_id and default_district_id:
         selected_district_id = default_district_id
     if selected_district_id:
@@ -2413,6 +2430,8 @@ def fuel_expense_add():
             form.payment_type.data = selected_payment_type
         elif _fuel_add_uses_mobile_form():
             form.payment_type.data = 'Credit'
+        if selected_expense_by and _fuel_add_uses_mobile_form():
+            form.expense_by.data = selected_expense_by
         if not form.fueling_date.data:
             form.fueling_date.data = pk_date()
     if request.method == 'POST' and form.validate_on_submit():
@@ -2423,6 +2442,7 @@ def fuel_expense_add():
                 _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
+                back_url=back_url,
                 **add_ctx,
             )
         vehicle = Vehicle.query.get_or_404(vehicle_id)
@@ -2442,6 +2462,7 @@ def fuel_expense_add():
                 _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
+                back_url=back_url,
                 **add_ctx,
             )
         if payment_type in ('Cash', 'Credit'):
@@ -2457,6 +2478,7 @@ def fuel_expense_add():
                 _fuel_add_form_template(),
                 form=form,
                 title='Add Fuel Expense',
+                back_url=back_url,
                 **add_ctx,
             )
         previous_reading = form.previous_reading.data
@@ -2473,6 +2495,36 @@ def fuel_expense_add():
         km = curr_f - prev_f
         amount = form.amount.data
         fuel_price = form.fuel_price.data
+        if _fuel_add_uses_mobile_form():
+            # Mobile-only guards: the client validates these too, but offline
+            # queue replays and stale posts must not create bad records.
+            if current_reading is not None and float(current_reading) <= prev_f:
+                flash('Current reading must be greater than the previous reading.', 'danger')
+                return render_template(
+                    _fuel_add_form_template(),
+                    form=form,
+                    title='Add Fuel Expense',
+                    back_url=back_url,
+                    **add_ctx,
+                )
+            if not amount or float(amount) <= 0:
+                flash('Amount must be greater than 0.', 'danger')
+                return render_template(
+                    _fuel_add_form_template(),
+                    form=form,
+                    title='Add Fuel Expense',
+                    back_url=back_url,
+                    **add_ctx,
+                )
+            if not fuel_price or float(fuel_price) <= 0:
+                flash('Fuel price is required so liters and MPG can be calculated.', 'danger')
+                return render_template(
+                    _fuel_add_form_template(),
+                    form=form,
+                    title='Add Fuel Expense',
+                    back_url=back_url,
+                    **add_ctx,
+                )
         amount_f = float(amount) if amount else 0
         fuel_price_f = float(fuel_price) if fuel_price else 0
         liters = round(amount_f / fuel_price_f, 2) if fuel_price_f else None
@@ -2588,6 +2640,8 @@ def fuel_expense_add():
             'payment_type': payment_type,
             'last_id': rec.id,
         }
+        if expense_by_val:
+            next_args['expense_by'] = expense_by_val
         if _fuel_add_design() == 'mobile':
             next_args['design'] = 'mobile'
         return redirect(url_for('fuel_expense_add', **next_args))
@@ -2598,6 +2652,7 @@ def fuel_expense_add():
         form=form,
         rec=None,
         title='Add Fuel Expense',
+        back_url=back_url,
         **add_ctx,
     )
 
@@ -2651,10 +2706,11 @@ def fuel_expense_edit(pk):
         if vehicle_id == 0:
             flash('Please select a vehicle.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_edit_form_template(),
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
+                form_action=url_for('fuel_expense_edit', pk=rec.id),
                 location_cascade=None,
             )
         district_id = form.district_id.data or None
@@ -2670,10 +2726,11 @@ def fuel_expense_edit(pk):
         if payment_type not in allowed_payment_types:
             flash('Please select a valid payment type.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_edit_form_template(),
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
+                form_action=url_for('fuel_expense_edit', pk=rec.id),
                 location_cascade=None,
             )
         if payment_type in ('Cash', 'Credit'):
@@ -2687,10 +2744,11 @@ def fuel_expense_edit(pk):
         if not workspace_pump_id:
             flash('Please select a fuel pump name.', 'danger')
             return render_template(
-                'fuel_expense_form.html',
+                _fuel_edit_form_template(),
                 form=form,
                 title='Edit Fuel Expense',
                 rec=rec,
+                form_action=url_for('fuel_expense_edit', pk=rec.id),
                 location_cascade=None,
             )
         previous_reading = form.previous_reading.data
@@ -2830,10 +2888,11 @@ def fuel_expense_edit(pk):
             raise
     from fuel_expense_settings import fuel_expense_settings_payload
     return render_template(
-        'fuel_expense_form.html',
+        _fuel_edit_form_template(),
         form=form,
         title='Edit Fuel Expense',
         rec=rec,
+        form_action=url_for('fuel_expense_edit', pk=rec.id),
         back_url=back_url,
         return_to_path=request.full_path,
         fuel_market_scan=_read_fuel_market_scan() or None,

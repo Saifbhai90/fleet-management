@@ -4953,7 +4953,10 @@
                 var fp = flatpickr(el, {
                     dateFormat: "d-m-Y",
                     allowInput: true,
-                    clickOpens: true
+                    clickOpens: true,
+                    // Native type=date swap breaks the mobile Add Fuel Expense form's
+                    // dd-mm-yyyy contract — keep the flatpickr calendar there.
+                    disableMobile: !!(document.body && document.body.classList.contains('fuel-mobile-preview-page'))
                 });
                 if (existingVal && fp) {
                     fp.setDate(existingVal, false);
@@ -6783,6 +6786,7 @@
         var _cap = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
         if (window.innerWidth > 768 && !_cap) return;
         document.querySelectorAll('input[type="text"]').forEach(function(el) {
+            if (el.classList && el.classList.contains('datepicker')) return;
             var name = (el.name || el.id || '').toLowerCase();
             if (/phone|mobile|contact|cell/.test(name)) {
                 el.setAttribute('inputmode', 'tel');
