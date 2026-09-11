@@ -944,8 +944,8 @@ body {
 
         /* ─── Capacitor Native App Overrides ─── */
         .capacitor-native {
-            --safe-top: env(safe-area-inset-top, 28px);
-            --nav-h: 56px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --nav-h: 0px; /* top navbar is hidden — do not reserve a blank bar */
         }
         /* Prevent the html/body from scrolling — only .main-content (fixed scroll container) should scroll */
         html.capacitor-native,
@@ -1009,7 +1009,7 @@ body {
         /* ── Native App Shell: single fixed container; nav is a flex child — never scrolls ── */
         #appNativeShell {
             position: fixed !important;
-            top: calc(var(--safe-top, 28px) + var(--nav-h, 56px)) !important;
+            top: var(--safe-top, 0px) !important;
             left: 0 !important; right: 0 !important; bottom: 0 !important;
             display: flex !important;
             flex-direction: column !important;
@@ -1049,7 +1049,7 @@ body {
             overflow-anchor: none !important;
             scroll-behavior: auto !important;
             animation: none !important;
-            padding: 16px 14px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+            padding: 8px 14px calc(24px + env(safe-area-inset-bottom, 0px)) !important;
             background: #f1f5f9 !important;
             margin: 0 !important;
         }
@@ -1085,7 +1085,7 @@ body {
         /* ── Fallback: FIXED scroll container for Capacitor before shell JS runs ── */
         .capacitor-native .main-content {
             position: fixed !important;
-            top: calc(var(--safe-top) + var(--nav-h)) !important;
+            top: var(--safe-top, 0px) !important;
             left: 0 !important; right: 0 !important;
             bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
             margin: 0 !important;
@@ -1250,7 +1250,7 @@ body {
         .capacitor-native .flash-message {
             left: 12px !important;
             right: 12px !important;
-            top: calc(var(--safe-top) + var(--nav-h) + 8px) !important;
+            top: calc(var(--safe-top, 0px) + 8px) !important;
             border-radius: 14px !important;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
         }
@@ -1270,27 +1270,80 @@ body {
 
         /* ═══ NATIVE MOBILE: hide top navbar ═══ */
         .capacitor-native .navbar { display: none !important; }
-        .capacitor-native .main-content { margin-top: 0 !important; padding-top: max(env(safe-area-inset-top, 0px), 14px) !important; }
+        .capacitor-native .main-content { margin-top: 0 !important; padding-top: 8px !important; }
 
-        /* ── Floating Hamburger (sidebar access on mobile, native app only) ── */
+        /* ── Sidebar menu button (in-flow, not fixed — Gmail / Slack style) ── */
+        .mobile-menu-slot {
+            display: none;
+        }
+        html.capacitor-native .mobile-menu-slot {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex: 0 0 auto;
+            margin: -6px 0 2px -8px;
+            padding: 0;
+            min-height: 0;
+        }
         .mobile-menu-btn {
-            display: none; position: fixed;
-            top: max(env(safe-area-inset-top, 10px), 10px); left: 14px;
-            width: 42px; height: 42px;
-            background: rgba(15,23,42,0.92);
-            backdrop-filter: none; -webkit-backdrop-filter: none;
-            border: none; border-radius: 12px; color: #e2e8f0;
-            align-items: center; justify-content: center;
-            z-index: 1055; box-shadow: 0 2px 12px rgba(0,0,0,0.3); cursor: pointer;
+            display: none;
+            position: relative;
+            top: auto;
+            left: auto;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border: none;
+            border-radius: 50%;
+            color: #0f172a;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            box-shadow: none;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .mobile-menu-btn:hover,
+        .mobile-menu-btn:focus-visible {
+            background: rgba(15, 23, 42, 0.07);
+            outline: none;
+        }
+        .mobile-menu-btn:active {
+            background: rgba(15, 23, 42, 0.12);
+            transform: scale(0.94);
         }
         .mobile-menu-btn svg,
         .mobile-menu-btn .chrome-ico {
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             display: block;
             flex-shrink: 0;
         }
         .capacitor-native .mobile-menu-btn { display: flex; }
+        body.dark-mode .mobile-menu-btn {
+            color: #f8fafc;
+        }
+        body.dark-mode .mobile-menu-btn:hover,
+        body.dark-mode .mobile-menu-btn:focus-visible {
+            background: rgba(248, 250, 252, 0.1);
+        }
+        body.dark-mode .mobile-menu-btn:active {
+            background: rgba(248, 250, 252, 0.16);
+        }
+        html.capacitor-native body.fuel-hide-mobile-menu .mobile-menu-slot,
+        html.capacitor-native body.mpg-hide-mobile-menu .mobile-menu-slot,
+        html.capacitor-native body.page-module-hub .mobile-menu-slot,
+        html.capacitor-native body.page-report-centre .mobile-menu-slot,
+        html.capacitor-native body.fuel-mobile-preview-page .mobile-menu-slot,
+        html.tk-fullmap .mobile-menu-slot,
+        html.driver-profile-public-view .mobile-menu-slot,
+        html.capacitor-native:has([data-fleet-nav-back], .fm-page-back, .btn-nav-back-rounded, .mpg-report-back-btn, .mpg-hero-btn--back, .fuel-report-back-btn) .mobile-menu-slot {
+            display: none !important;
+        }
 
         /* ── FAB (Floating Action Button) ── */
         /* More drawer open: hide dashboard FAB (+) — only while More menu is visible */

@@ -44,6 +44,69 @@ body.fm-aurora-theme .hub-page .rc-aurora-bg.fm-aurora-bg {
 html.capacitor-native .hub-page .hub-glass-panel {
   margin-top: 0;
   min-height: 100%;
+  padding-top: 8px;
+}
+
+/* Phone / native: same content width as Dashboard — no extra side gutters. */
+@media (max-width: 767.98px) {
+  .hub-page.container-fluid,
+  .hub-page.rc-page {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: none;
+  }
+  .hub-page .hub-glass-panel {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding-left: 0;
+    padding-right: 0;
+    box-shadow: none;
+  }
+}
+
+html.capacitor-native .hub-page.container-fluid,
+html.capacitor-native .hub-page.rc-page {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  max-width: none;
+  width: 100%;
+}
+html.capacitor-native .hub-page .hub-glass-panel {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+}
+
+/* Hub landing: ☰ sits in the old ← Dashboard slot, same row as the title. */
+html.capacitor-native .hub-page-header {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 22px;
+}
+html.capacitor-native .hub-page-header .hub-back {
+  display: none !important;
+}
+html.capacitor-native .hub-page-header .mobile-menu-btn {
+  display: flex;
+  flex-shrink: 0;
+  margin: 0 0 0 -8px;
+}
+html.capacitor-native .hub-page-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.28rem;
+  gap: 8px;
 }
 
 .hub-page-header {

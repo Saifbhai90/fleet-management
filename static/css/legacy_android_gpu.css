@@ -42,7 +42,9 @@ html.legacy-android-gpu .mobile-bottom-nav {
 }
 
 html.legacy-android-gpu .mobile-menu-btn {
-  background: #1e293b !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
 }
 
 html.legacy-android-gpu .sidebar,

@@ -18,6 +18,16 @@
       <a href="{{ url_for('dashboard') }}" class="hub-back"><i class="bi bi-arrow-left"></i> Dashboard</a>
       <h1 class="hub-page-title"><i class="bi {{ hub_page.header_icon }}"></i> {{ hub_page.title }} Hub</h1>
     </header>
+    <script>
+    (function () {
+      if (!document.documentElement.classList.contains('capacitor-native')) return;
+      var header = document.querySelector('.hub-page-header');
+      var btn = document.getElementById('mobileMenuBtn');
+      if (header && btn && !header.contains(btn)) {
+        header.insertBefore(btn, header.firstChild);
+      }
+    })();
+    </script>
 
     {% if not sections %}
     <div class="hub-empty">

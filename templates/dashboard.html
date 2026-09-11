@@ -241,6 +241,92 @@
 .qa-amber  { background: #d97706; color: #fff; border-color: #d97706; }
 .qa-amber:hover  { background: #b45309; color: #fff; }
 
+.dash-heading-block { width: 100%; }
+.dash-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+.dash-page-title {
+    font-size: 1.55rem;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+}
+.dash-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    color: #334155;
+    background: transparent;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.dash-refresh-btn i { font-size: 1.15rem; }
+.dash-refresh-btn:hover {
+    color: #1d4ed8;
+    background: rgba(29, 78, 216, 0.08);
+    text-decoration: none;
+}
+.dash-refresh-btn:active {
+    transform: scale(0.94);
+    background: rgba(15, 23, 42, 0.08);
+}
+@media (min-width: 576px) {
+    html:not(.capacitor-native) .dash-heading-block { width: auto; flex: 1 1 auto; min-width: 0; }
+    html:not(.capacitor-native) .dash-title-row { justify-content: flex-start; width: auto; }
+}
+
+.dash-header-datetime {
+    font-size: 0.82rem;
+    color: #64748b;
+}
+.dash-dt-ico { font-size: 0.8rem; }
+.dash-live-sep { color: #cbd5e1; }
+.dash-live-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+html.capacitor-native body.page-dashboard .mobile-menu-slot {
+    width: calc(100% + 8px);
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin: -4px 0 6px -8px;
+}
+html.capacitor-native body.page-dashboard .mobile-menu-slot .dash-header-datetime {
+    margin: 0;
+    margin-left: auto;
+    padding: 0;
+    background: none;
+    gap: 6px;
+    max-width: calc(100% - 52px);
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+html.capacitor-native body.page-dashboard .mobile-menu-slot .dash-live-date {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: #64748b;
+}
+html.capacitor-native body.page-dashboard .mobile-menu-slot .dash-live-sep {
+    color: #cbd5e1;
+}
+html.capacitor-native body.page-dashboard .mobile-menu-slot .dash-live-time {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+}
+
 /* ── Notification badge row ── */
 .notif-dot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
 .notif-dot-warning { background:#f59e0b; }
@@ -289,24 +375,41 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     /* Live clock — Asia/Karachi, same server skew as header (see base.html _pktOffset) */
+    var isNativeDash = document.documentElement.classList.contains('capacitor-native');
+    var menuSlot = document.getElementById('mobileMenuSlot');
+    var dateTimeRow = document.getElementById('dashHeaderDatetime');
+    if (isNativeDash && menuSlot && dateTimeRow && !menuSlot.contains(dateTimeRow)) {
+        menuSlot.appendChild(dateTimeRow);
+    }
     function updateClock() {
-        var el = document.getElementById('dashClock');
-        if (!el) return;
+        var timeEl = document.getElementById('dashClock');
+        var dateEl = document.getElementById('dashDate');
         var skew = (typeof _pktOffset === 'number') ? _pktOffset : 0;
         var now = new Date(Date.now() + skew);
-        var parts = new Intl.DateTimeFormat('en-GB', {
-            timeZone: 'Asia/Karachi',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).formatToParts(now);
-        var map = {};
-        for (var i = 0; i < parts.length; i++) {
-            var p = parts[i];
-            if (p.type !== 'literal') map[p.type] = p.value;
+        if (timeEl) {
+            var parts = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Karachi',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).formatToParts(now);
+            var map = {};
+            for (var i = 0; i < parts.length; i++) {
+                var p = parts[i];
+                if (p.type !== 'literal') map[p.type] = p.value;
+            }
+            timeEl.textContent = map.hour + ':' + map.minute + ':' + map.second;
         }
-        el.textContent = map.hour + ':' + map.minute + ':' + map.second;
+        if (dateEl) {
+            dateEl.textContent = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Karachi',
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            }).format(now);
+        }
     }
     updateClock();
     setInterval(updateClock, 1000);
@@ -587,6 +690,7 @@ function _dbgToast(msg) {
         return [
             document.querySelector('nav.navbar'),
             document.getElementById('mobileBottomNav'),
+            document.getElementById('mobileMenuSlot'),
             document.getElementById('mobileMenuBtn'),
             document.getElementById('sidebar'),
             document.getElementById('sidebarOverlay'),
@@ -1171,8 +1275,13 @@ function _dbgToast(msg) {
 
 <!-- ── Page Header ── -->
 <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
-    <div>
-        <h2 class="fw-bold mb-0" style="font-size:1.55rem;letter-spacing:-0.02em;color:#0f172a;">Dashboard</h2>
+    <div class="dash-heading-block">
+        <div class="dash-title-row">
+            <h2 class="fw-bold mb-0 dash-page-title">Dashboard</h2>
+            <a href="{{ url_for('dashboard') }}" class="dash-refresh-btn" title="Refresh" aria-label="Refresh dashboard">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+            </a>
+        </div>
         <div id="dashAppStatusLine" style="display:none; margin:12px 0; align-items:center; gap:10px; flex-wrap:wrap;">
            <!-- Version Badge -->
            <div style="background:#2563eb; color:white; padding:4px 10px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 4px rgba(37,99,235,0.2); display:flex; align-items:center; gap:5px;">
@@ -1190,12 +1299,12 @@ function _dbgToast(msg) {
                <span id="navNewVersion" style="background:#f59e0b; color:white; padding:4px 10px; border-radius:50px; font-size:11px; font-weight:800; box-shadow:0 2px 4px rgba(245,158,11,0.2);">v0.0.0</span>
            </div>
         </div>
-        <div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.82rem;color:#64748b;">
-            <i class="bi bi-calendar3" style="font-size:0.8rem;"></i>
-            <span>{{ now_dt.strftime('%A, %d %B %Y') if now_dt is defined else '' }}</span>
-            <span class="mx-1" style="color:#cbd5e1;">|</span>
-            <i class="bi bi-clock" style="font-size:0.8rem;"></i>
-            <span id="dashClock" style="font-variant-numeric:tabular-nums;font-weight:600;">{{ dashboard_time or '' }}</span>
+        <div class="dash-header-datetime d-flex align-items-center gap-2 mt-1" id="dashHeaderDatetime">
+            <i class="bi bi-calendar3 dash-dt-ico" aria-hidden="true"></i>
+            <span class="dash-live-date" id="dashDate">{{ now_dt.strftime('%A, %d %B %Y') if now_dt is defined else '' }}</span>
+            <span class="dash-live-sep" aria-hidden="true">|</span>
+            <i class="bi bi-clock dash-dt-ico" aria-hidden="true"></i>
+            <span class="dash-live-time" id="dashClock">{{ dashboard_time or '' }}</span>
         </div>
     </div>
     <!-- Quick Actions in header -->
@@ -1230,9 +1339,6 @@ function _dbgToast(msg) {
             <i class="bi bi-bar-chart-fill" style="font-size:0.95rem;"></i> Reports
         </a>
         {% endif %}
-        <a href="{{ url_for('dashboard') }}" class="qa-btn qa-secondary" title="Refresh">
-            <i class="bi bi-arrow-clockwise" style="font-size:0.95rem;"></i>
-        </a>
     </div>
 </div>
 

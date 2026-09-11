@@ -59,15 +59,15 @@ window.FleetConfig = {
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select/tom-select.bootstrap5.min.css') }}?v=1001">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8008">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8006">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8014">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8010">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8005">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
 
     <!-- Mobile-specific CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_perfect.css') }}?v=8006">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_responsive_audit.css') }}?v=8005">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_aurora_theme.css') }}?v=8005">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_aurora_theme.css') }}?v=8006">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile_native_sidebar.css') }}?v=8005">
 
     <!-- Legacy Android detection (inline — runs ASAP to add HTML class) -->
@@ -90,7 +90,7 @@ window.FleetConfig = {
     <script>
     (function(){try{if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){document.documentElement.classList.add('capacitor-native');}}catch(e){}})();
     </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/legacy_android_gpu.css') }}?v=1001">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/legacy_android_gpu.css') }}?v=1002">
 
     <!-- ═══════════════════════════════════════════════════════════
          CORE LIBRARIES (jQuery, Bootstrap JS, etc.)
@@ -153,8 +153,29 @@ window.FleetConfig = {
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8009" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% elif request.endpoint in ['fuel_expense_view', 'fuel_expense_media'] %} class="fm-aurora-theme fuel-hide-mobile-menu"{% elif request.endpoint == 'fuel_expense_add' and (request.values.get('design') or '')|trim|lower != 'desktop' and (is_native_app or (request.values.get('design') or '')|trim|lower == 'mobile') %} class="fm-aurora-theme fuel-mobile-preview-page"{% elif request.endpoint == 'workspace_mpg_report' and (request.args.get('nav_from') or '')|trim == 'reports' %} class="fm-aurora-theme mpg-hide-mobile-menu"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
+<body{% if request.endpoint == 'dashboard' %} class="page-dashboard fm-aurora-theme" data-fleet-page="dashboard"{% elif request.endpoint == 'report_driver_profile_public' %} class="driver-profile-public-view"{% elif request.endpoint in ['fuel_expense_view', 'fuel_expense_media'] %} class="fm-aurora-theme fuel-hide-mobile-menu"{% elif request.endpoint == 'fuel_expense_add' and (request.values.get('design') or '')|trim|lower != 'desktop' and (is_native_app or (request.values.get('design') or '')|trim|lower == 'mobile') %} class="fm-aurora-theme fuel-mobile-preview-page"{% elif request.endpoint == 'workspace_mpg_report' and (request.args.get('nav_from') or '')|trim == 'reports' %} class="fm-aurora-theme mpg-hide-mobile-menu"{% elif request.endpoint == 'module_hub' %} class="fm-aurora-theme page-module-hub"{% elif request.endpoint == 'reports_index' %} class="fm-aurora-theme page-report-centre"{% else %} class="fm-aurora-theme"{% endif %}{% if request.endpoint %} data-fleet-endpoint="{{ request.endpoint }}"{% endif %}{% if fleet_mobile_dev %} data-fleet-mobile-dev="1"{% endif %}>
 <script>if(localStorage.getItem('fleetDarkMode')==='on'){document.body.classList.remove('fm-aurora-theme');document.body.classList.add('dark-mode');}</script>
+{# Chrome icons are inline SVG so hamburger + bottom-nav paint with HTML.
+   Lucide is deferred; waiting on it made these buttons empty then snap. #}
+{% macro chrome_ico(name) -%}
+<svg class="chrome-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'menu' -%}
+<line x1="5" x2="19" y1="7" y2="7"/><line x1="5" x2="19" y1="12" y2="12"/><line x1="5" x2="19" y1="17" y2="17"/>
+{%- elif name == 'home' -%}
+<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+{%- elif name == 'truck' -%}
+<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
+{%- elif name == 'search' -%}
+<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+{%- elif name == 'calendar-check' -%}
+<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>
+{%- elif name == 'grid' -%}
+<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
+{%- elif name == 'plus' -%}
+<path d="M5 12h14"/><path d="M12 5v14"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
 <div id="topLoadBar"></div>
 
 <div class="fm-aurora-bg" aria-hidden="true">
@@ -525,6 +546,11 @@ window.FleetConfig = {
 
 <!-- MAIN CONTENT -->
 <div class="main-content {% if workspace_open and request.endpoint != 'workspace_dashboard' %}ws-mini-open{% endif %}{% if workspace_open or (request.endpoint != 'dashboard' and request.cookies.get('workspace_sidebar_open') != '1') %} expanded{% endif %}" id="mainContent">
+    <div class="mobile-menu-slot" id="mobileMenuSlot">
+        <button type="button" class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
+            {{ chrome_ico('menu') }}
+        </button>
+    </div>
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             <div class="flash-message">
@@ -616,33 +642,6 @@ window.FleetConfig = {
     <div class="ptr-spinner"></div>
     <span id="ptrText">Pull down to refresh</span>
 </div>
-
-{# Chrome icons are inline SVG so hamburger + bottom-nav paint with HTML.
-   Lucide is deferred; waiting on it made these buttons empty then snap. #}
-{% macro chrome_ico(name) -%}
-<svg class="chrome-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-{%- if name == 'menu' -%}
-<line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/>
-{%- elif name == 'home' -%}
-<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-{%- elif name == 'truck' -%}
-<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>
-{%- elif name == 'search' -%}
-<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-{%- elif name == 'calendar-check' -%}
-<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>
-{%- elif name == 'grid' -%}
-<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
-{%- elif name == 'plus' -%}
-<path d="M5 12h14"/><path d="M12 5v14"/>
-{%- endif -%}
-</svg>
-{%- endmacro %}
-
-<!-- Mobile Hamburger (fixed, sidebar access without navbar) -->
-<button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
-    {{ chrome_ico('menu') }}
-</button>
 
 <!-- Fixed Bottom Navigation Bar (Mobile only, < 768px) -->
 <nav class="mobile-bottom-nav" aria-label="Mobile navigation" id="mobileBottomNav">
