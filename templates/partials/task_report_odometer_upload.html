@@ -177,6 +177,7 @@
     var clr = cell.querySelector('.odom-clear-btn');
     var btn = cell.querySelector('.odom-photo-btn');
     var inline = btn && btn.querySelector('.odom-inline-thumb');
+    wrap.classList.toggle('has-photo', !!url);
     if (url) {
       if (ph) ph.classList.add('d-none');
       if (link) {
@@ -206,6 +207,10 @@
         inline.classList.add('border-success');
         btn.classList.add('border-success');
       }
+      if (btn) {
+        var onTxt = btn.querySelector('.odom-btn-text');
+        if (onTxt) onTxt.textContent = 'Change';
+      }
     } else {
       if (ph) ph.classList.remove('d-none');
       if (link) link.remove();
@@ -215,6 +220,10 @@
         inline.classList.add('d-none');
         inline.classList.remove('border-success');
         btn.classList.remove('border-success');
+      }
+      if (btn) {
+        var offTxt = btn.querySelector('.odom-btn-text');
+        if (offTxt) offTxt.textContent = 'Attach';
       }
     }
   }

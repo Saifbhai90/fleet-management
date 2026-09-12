@@ -1,0 +1,106 @@
+{% set lock_district = auto_district_id %}
+{% set lock_project = auto_project_id %}
+{% set lock_vehicle = auto_vehicle_id %}
+{% set lock_shift = auto_shift %}
+{% set lock_driver = auto_driver_id %}
+{% set all_scope_locked = lock_district and lock_project and lock_vehicle and lock_shift and lock_driver %}
+{% set ns = namespace(district=none, project=none, vehicle=none, driver=none, parking=none, parts=[]) %}
+{% if lock_district %}
+  {% for d in districts %}{% if d.id == auto_district_id %}{% set ns.district = d.name %}{% endif %}{% endfor %}
+{% endif %}
+{% if lock_project %}
+  {% for p in pre_projects %}{% if p.id == auto_project_id %}{% set ns.project = p.name %}{% endif %}{% endfor %}
+{% endif %}
+{% if lock_vehicle %}
+  {% for v in pre_vehicles_data %}{% if v.id == auto_vehicle_id %}{% set ns.vehicle = v.vehicle_no %}{% if v.parking_name %}{% set ns.parking = v.parking_name %}{% endif %}{% endif %}{% endfor %}
+{% endif %}
+{% if lock_driver %}
+  {% for d in pre_drivers %}{% if d.id == auto_driver_id %}{% set ns.driver = d.name %}{% endif %}{% endfor %}
+{% endif %}
+{% if ns.district %}{% set _ = ns.parts.append(ns.district) %}{% endif %}
+{% if ns.project %}{% set _ = ns.parts.append(ns.project) %}{% endif %}
+{% if ns.vehicle %}{% set _ = ns.parts.append(ns.vehicle) %}{% endif %}
+{% if lock_shift and auto_shift %}{% set _ = ns.parts.append(auto_shift) %}{% endif %}
+{% if ns.driver %}{% set _ = ns.parts.append(ns.driver) %}{% endif %}
+{% set locked_narration = ns.parts|join(' · ') %}
+<div class="container-fluid task-batch-page gps-attendance-page px-md-3">
+  <div class="d-flex justify-content-between align-items-center mb-md-4 flex-wrap gap-2 task-batch-page-header task-batch-topset">
+    <div class="task-batch-title-row">
+      {% from 'partials/nav_back_button.html' import nav_back_button with context %}
+      {{ nav_back_button() }}
+      <h2 class="mb-0 task-batch-page-title"><i class="bi {{ gps_title_icon }} me-2 {{ gps_title_tone }}"></i><span class="task-batch-title-text">{{ gps_page_title }}</span></h2>
+    </div>
+    {% if locked_narration %}
+    <p class="task-batch-scope-narration mb-0">{{ locked_narration }}</p>
+    {% endif %}
+    <p class="task-batch-scope-narration gps-parking-narration mb-0{% if not ns.parking %} d-none{% endif %}" id="gpsParkingNarration">{% if ns.parking %}{{ ns.parking }}{% endif %}</p>
+  </div>
+
+  <p class="text-muted hint task-batch-hint d-none d-md-block">{% if gps_page_mode == 'checkout' %}District → Project → Vehicle (parking auto) → Shift → Driver. {% if geofence_enabled %}Pehle distance ({{ geofence_radius | default(150) }} m), phir time check.{% else %}Distance check OFF — kisi bhi jagah se attendance.{% endif %} Dono OK hon par <strong>Mark Check-out</strong> → selfie.{% else %}District → Project → Vehicle (parking auto) → Shift → Driver. {% if geofence_enabled %}Pehle distance ({{ geofence_radius | default(150) }} m), phir time check.{% else %}Distance check OFF — kisi bhi jagah se attendance.{% endif %} Dono OK hon par Mark Attendance → selfie.{% endif %}</p>
+
+  <div class="card shadow border-0 task-batch-filter-card fm-no-card-press{% if all_scope_locked %} d-none{% endif %}" id="gpsFilterCard">
+    <div class="card-body">
+      <div class="row g-3 align-items-end mx-0">
+        <div class="col-6 col-md-4 field-row{% if lock_district %} d-none{% endif %}">
+          <label class="form-label" for="districtSelect">District</label>
+          <select id="districtSelect" class="form-select search-select" {% if auto_district_id %}disabled{% endif %} data-placeholder="Search district...">
+            <option value="">-- Select District --</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {% if d.id == auto_district_id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 field-row{% if lock_project %} d-none{% endif %}">
+          <label class="form-label" for="projectSelect">Project</label>
+          <select id="projectSelect" class="form-select search-select" {% if not auto_district_id %}disabled{% endif %} {% if auto_project_id %}disabled{% endif %} data-placeholder="Search project...">
+            <option value="">-- Select Project --</option>
+            {% for p in pre_projects %}
+            <option value="{{ p.id }}" {% if p.id == auto_project_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 field-row{% if lock_vehicle %} d-none{% endif %}">
+          <label class="form-label" for="vehicleSelect">Vehicle</label>
+          <select id="vehicleSelect" class="form-select search-select" {% if not auto_project_id %}disabled{% endif %} {% if auto_vehicle_id %}disabled{% endif %} data-placeholder="Search vehicle...">
+            <option value="">-- Select Vehicle --</option>
+            {% for v in pre_vehicles_data %}
+            <option value="{{ v.id }}" {% if v.id == auto_vehicle_id %}selected{% endif %} data-index="{{ loop.index0 }}">{{ v.vehicle_no }}{% if v.vehicle_type %} ({{ v.vehicle_type }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 field-row{% if lock_shift %} d-none{% endif %}">
+          <label class="form-label" for="shiftSelect">Shift</label>
+          <select id="shiftSelect" class="form-select search-select" {% if not auto_vehicle_id %}disabled{% endif %} {% if auto_shift %}disabled{% endif %} data-placeholder="Search shift...">
+            <option value="">-- Select Shift --</option>
+            {% if scope_shifts_list %}
+              {% for s in scope_shifts_list %}
+              <option value="{{ s }}" {% if s == auto_shift %}selected{% endif %}>{{ s }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="Morning" {% if auto_shift == 'Morning' %}selected{% endif %}>Morning</option>
+              <option value="Night" {% if auto_shift == 'Night' %}selected{% endif %}>Night</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-6 col-md-4 field-row{% if lock_driver %} d-none{% endif %}">
+          <label class="form-label" for="driverSelect">Driver</label>
+          <select id="driverSelect" class="form-select search-select" {% if not auto_driver_id %}disabled{% endif %} required data-placeholder="Search driver...">
+            <option value="">-- Select Driver --</option>
+            {% for d in pre_drivers %}
+            <option value="{{ d.id }}" {% if d.id == auto_driver_id %}selected{% endif %}>{{ d.name }} ({{ d.driver_id or '' }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gps-hidden-fields" aria-hidden="true">
+    <input type="text" id="parkingDisplay" class="form-control" readonly tabindex="-1" placeholder="Auto from vehicle">
+    <input type="hidden" id="parkingId" value="">
+    <input type="hidden" id="parkingLat" value="">
+    <input type="hidden" id="parkingLng" value="">
+  </div>
+  <div id="parkingNotSetMessage" class="alert alert-info py-2 px-3 mt-0 mb-3 d-none small">
+    <i class="bi bi-info-circle me-1"></i>Parking location set nahi. Admin se set karwain.
+  </div>

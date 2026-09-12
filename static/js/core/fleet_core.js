@@ -4273,6 +4273,21 @@
         dropdown.style.bottom = (window.innerHeight - rect.top + gap) + 'px';
     };
 
+    function _fleetTsIsCoarsePointer() {
+        try {
+            if (document.documentElement.classList.contains('capacitor-native')) return true;
+            if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function'
+                && window.Capacitor.isNativePlatform()) return true;
+            if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+            if (window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches) return true;
+        } catch (e) {}
+        return false;
+    }
+
+    function _fleetTsIsFilterSelect(el) {
+        return !!(el && el.closest && el.closest('#filterForm'));
+    }
+
     window.initSearchableDropdowns = function(scope) {
         if (typeof TomSelect === 'undefined') return;
         var root = scope || document;
@@ -4335,6 +4350,8 @@
                     return raw || 'option';
                 })();
                 var _emptyLabelCap = _emptyLabel.charAt(0).toUpperCase() + _emptyLabel.slice(1);
+                var isFilterSelect = _fleetTsIsFilterSelect(el);
+                var lockAfterPick = isFilterSelect || _fleetTsIsCoarsePointer();
 
                 /* Always attach dropdown to body — card-body parent clips/hides list while typing on mobile;
                  * visualViewport handlers below avoid closing while keyboard is adjusting (see scroll helpers). */
@@ -4342,6 +4359,7 @@
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: false,
                     openOnFocus: false,
+                    closeAfterSelect: true,
                     selectOnTab: true,
                     maxOptions: 300,
                     dropdownParent: 'body',
@@ -4351,6 +4369,10 @@
                         if (window._isReturningFromCamera) {
                             try { this.blur(); } catch (e) {}
                             try { this.close(); } catch (e) {}
+                            return;
+                        }
+                        if (this._selectLockUntil && Date.now() < this._selectLockUntil) {
+                            try { this.close(); } catch (e2) {}
                         }
                     },
                     onBeforeOpen: function() {
@@ -4451,6 +4473,15 @@
                     if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
                     if (window._isReturningFromCamera || window._isShieldActive) return;
                     if (ts.isDisabled) return;
+                    if (ts._selectLockUntil && Date.now() < ts._selectLockUntil) {
+                        ts._justSelected = true;
+                        _setOverwriteReady(false);
+                        try { ts.close(); } catch (eLock) {}
+                        if (lockAfterPick) {
+                            try { ts.blur(); } catch (eBlur) {}
+                        }
+                        return;
+                    }
                     // _justSelected guards against re-opening immediately after
                     // the user confirms a selection (TS internally refocuses then).
                     if (ts._justSelected) {
@@ -4474,6 +4505,8 @@
 
                 ts.on('blur', function() {
                     _setOverwriteReady(false);
+                    // Keep the just-selected lock through Android keyboard blur/focus bounce.
+                    if (ts._selectLockUntil && Date.now() < ts._selectLockUntil) return;
                     // CRITICAL: clear _justSelected on every blur so that
                     // Shift+Tab or any re-entry highlights on the FIRST return.
                     ts._justSelected = false;
@@ -4481,8 +4514,23 @@
 
                 ts.on('item_add', function() {
                     ts._justSelected = true;
+                    ts._selectLockUntil = Date.now() + 500;
                     _setOverwriteReady(false);
                     if (ts._wsSilentFill || window._wsOcrIsUpdating) return;
+                    // Filter / phone: keep the picked value. Do not refocus the
+                    // search box — that reopens the list and IME can wipe the item.
+                    if (lockAfterPick) {
+                        try { ts.close(); } catch (eClose) {}
+                        setTimeout(function() {
+                            ts._justSelected = true;
+                            try { ts.close(); } catch (eClose2) {}
+                            try { ts.blur(); } catch (eBlur2) {}
+                            if (ts.control_input) {
+                                try { ts.control_input.blur(); } catch (eBlur3) {}
+                            }
+                        }, 0);
+                        return;
+                    }
                     // TS internally refocuses control_input after selection;
                     // keep _justSelected true through that synthetic focus so
                     // we don't re-open the dropdown.
@@ -4504,8 +4552,11 @@
                     // can transiently focus this control. Only reopen when the user
                     // is still actively typing in this input after the remove.
                     if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
+                    if (lockAfterPick) return;
+                    if (ts._selectLockUntil && Date.now() < ts._selectLockUntil) return;
                     window.setTimeout(function() {
                         if (ts._wsSilentFill || ts._suppressOpen || ts._cascadePending || window._wsOcrIsUpdating) return;
+                        if (ts._selectLockUntil && Date.now() < ts._selectLockUntil) return;
                         if (document.activeElement !== ts.control_input) return;
                         if (!ts.isOpen) ts.open();
                     }, 0);
@@ -4517,6 +4568,7 @@
 
                 // ── Keydown: overwrite-on-type + Backspace + Enter-to-tab ──────
                 ts.control_input.addEventListener('keydown', function(e) {
+                    if (ts._selectLockUntil && Date.now() < ts._selectLockUntil) return;
                     if (ts._overwriteReady) {
                         if (e.key === 'Backspace') {
                             e.preventDefault();
