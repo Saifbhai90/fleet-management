@@ -110,24 +110,54 @@
     return m && m.value === '1';
   }
 
+  var _gpsCache = { lat: null, lng: null, acc: null, t: 0 };
+
   function fetchGpsForOdometer(cb) {
     var _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
     var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    var done = function(lat, lng, acc) {
+      _gpsCache = { lat: lat, lng: lng, acc: acc, t: Date.now() };
+      cb(lat, lng, acc);
+    };
     if (_isNative && Geo) {
-      Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 })
-        .then(function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); })
-        .catch(function() { cb(null, null, null); });
+      Geo.getCurrentPosition({ enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 })
+        .then(function(p) { done(p.coords.latitude, p.coords.longitude, p.coords.accuracy); })
+        .catch(function() { done(null, null, null); });
       return;
     }
     if (!_isNative && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        function(p) { cb(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
-        function() { cb(null, null, null); },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+        function(p) { done(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+        function() { done(null, null, null); },
+        { enableHighAccuracy: false, timeout: 4000, maximumAge: 120000 }
       );
       return;
     }
-    cb(null, null, null);
+    done(null, null, null);
+  }
+
+  function startGpsPrefetch() {
+    if (_gpsCache.t && (Date.now() - _gpsCache.t) < 120000) return;
+    fetchGpsForOdometer(function() {});
+  }
+
+  function gpsNowOrWait(maxWaitMs, cb) {
+    if (_gpsCache.t && (Date.now() - _gpsCache.t) < 180000) {
+      cb(_gpsCache.lat, _gpsCache.lng, _gpsCache.acc);
+      return;
+    }
+    var finished = false;
+    var timer = setTimeout(function() {
+      if (finished) return;
+      finished = true;
+      cb(_gpsCache.lat, _gpsCache.lng, _gpsCache.acc);
+    }, maxWaitMs);
+    fetchGpsForOdometer(function(lat, lng, acc) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      cb(lat, lng, acc);
+    });
   }
 
   function odometerStampOpts(rowId, lat, lng, accuracyMeters) {
@@ -147,9 +177,9 @@
       vehicleNo: ctx.vehicleNo,
       driverName: ctx.driverName || '',
       rearCamera: true,
-      useFixedFrame: true,
-      maxSide: 2048,
-      quality: 0.88
+      useFixedFrame: false,
+      maxSide: 960,
+      quality: 0.65
     };
   }
 
@@ -159,7 +189,7 @@
     }
     return window.fleetStampAttendancePhoto(dataUrl, null, odometerStampOpts(rowId, lat, lng, accuracyMeters))
       .then(function(res) {
-        if (res && res.dataUrl) queueOdometerPending(rowId, res.dataUrl);
+        if (res && res.dataUrl) setRowPhotoUi(rowId, res.dataUrl);
         return uploadJpeg(rowId, res.dataUrl);
       });
   }
@@ -302,7 +332,7 @@
   function runWithGps(rowId, dataUrl, fromRear) {
     if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     setOdomBusy(rowId, true);
-    fetchGpsForOdometer(function(lat, lng, acc) {
+    gpsNowOrWait(700, function(lat, lng, acc) {
       var opts = odometerStampOpts(rowId, lat, lng, acc);
       if (fromRear) opts.rearCamera = true;
       if (typeof window.fleetStampAttendancePhoto !== 'function') {
@@ -311,7 +341,10 @@
         return;
       }
       window.fleetStampAttendancePhoto(dataUrl, null, opts)
-        .then(function(res) { return uploadJpeg(rowId, res.dataUrl); })
+        .then(function(res) {
+          if (res && res.dataUrl) setRowPhotoUi(rowId, res.dataUrl);
+          return uploadJpeg(rowId, res.dataUrl);
+        })
         .catch(function(err) {
           if (isUserCancel(err)) return;
           window.taskEntryNotice('Photo upload nahi hui', err.message || String(err));
@@ -352,28 +385,32 @@
       openFilePickerForRow(rowId, source === 'CAMERA');
       return;
     }
+    startGpsPrefetch();
     setOdomBusy(rowId, true);
-    fetchGpsForOdometer(function(lat, lng, acc) {
-      Cam.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: 'base64',
-        source: source,
-        direction: 'REAR',
-        saveToGallery: false
-      }).then(function(photo) {
-        var raw = 'data:image/jpeg;base64,' + (photo.base64String || '');
-        return stampAndUpload(rowId, raw, lat, lng, acc);
-      }).catch(function(err) {
-        if (isUserCancel(err)) {
-          window.taskEntryNotice('Photo nahi lagi', 'Camera ya gallery band kar di — koi masla nahi. Attach dubara daba kar live camera ya gallery se laga sakte ho.');
-          return;
-        }
-        window.taskEntryNotice('Camera open nahi hua', (err && err.message) ? err.message : 'Dubara try karein.');
-      }).finally(function() {
-        setOdomBusy(rowId, false);
-        if (window.fleetClearResumePath) window.fleetClearResumePath();
+    Cam.getPhoto({
+      quality: 70,
+      width: 1280,
+      allowEditing: false,
+      resultType: 'base64',
+      source: source,
+      direction: 'REAR',
+      saveToGallery: false
+    }).then(function(photo) {
+      var raw = 'data:image/jpeg;base64,' + (photo.base64String || '');
+      return new Promise(function(resolve, reject) {
+        gpsNowOrWait(600, function(lat, lng, acc) {
+          stampAndUpload(rowId, raw, lat, lng, acc).then(resolve).catch(reject);
+        });
       });
+    }).catch(function(err) {
+      if (isUserCancel(err)) {
+        window.taskEntryNotice('Photo nahi lagi', 'Camera ya gallery band kar di — koi masla nahi. Attach dubara daba kar live camera ya gallery se laga sakte ho.');
+        return;
+      }
+      window.taskEntryNotice('Camera open nahi hua', (err && err.message) ? err.message : 'Dubara try karein.');
+    }).finally(function() {
+      setOdomBusy(rowId, false);
+      if (window.fleetClearResumePath) window.fleetClearResumePath();
     });
   }
 
@@ -396,6 +433,7 @@
     var rowId = btn.getAttribute('data-row');
     if (!rowId || !rowEditUnlocked(rowId)) return;
     var isNative = !!(window.FleetBridge && window.FleetBridge.isNative);
+    startGpsPrefetch();
     pickPhotoSource().then(function(choice) {
       if (!choice || choice === 'cancel') return;
       if (isNative) nativeGetPhoto(rowId, choice === 'gallery' ? 'PHOTOS' : 'CAMERA');

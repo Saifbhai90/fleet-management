@@ -2083,15 +2083,15 @@
             '@page{size:A4 landscape;margin:7mm 6mm 9mm 6mm;}' +
             '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
             'body{font-family:"Segoe UI",Arial,sans-serif;font-size:7px;margin:0;padding:0;background:#f8fafc;color:#1a1a2e;}' +
-            /* ── Toolbar ── */
-            '.toolbar{position:sticky;top:0;z-index:99;display:flex;align-items:center;justify-content:space-between;gap:10px;' +
+            /* ── Toolbar (fixed row, never sticky inside a scroller — Android drops taps) ── */
+            '.toolbar{position:relative;z-index:5;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:10px;' +
                 'background:linear-gradient(135deg,#1e3a5f 0%,#2563a8 100%);color:#fff;' +
-                'padding:10px 18px;box-shadow:0 3px 12px rgba(15,23,42,.25);}' +
-            '.toolbar-left{display:flex;flex-direction:column;}' +
-            '.toolbar-title{margin:0;font-size:15px;font-weight:700;letter-spacing:.2px;}' +
-            '.toolbar-sub{font-size:10px;opacity:.75;margin-top:1px;}' +
-            '.toolbar-right{display:flex;align-items:center;gap:6px;}' +
-            '.toolbar button{padding:6px 16px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:opacity .15s;}' +
+                'padding:10px 14px;box-shadow:0 3px 12px rgba(15,23,42,.25);}' +
+            '.toolbar-left{display:flex;flex-direction:column;min-width:0;flex:1 1 auto;overflow:hidden;pointer-events:none;}' +
+            '.toolbar-title{margin:0;font-size:15px;font-weight:700;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.toolbar-sub{font-size:10px;opacity:.75;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+            '.toolbar-right{display:flex;align-items:center;gap:6px;flex-shrink:0;position:relative;z-index:6;}' +
+            '.toolbar button{padding:8px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:opacity .15s;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}' +
             '.toolbar button:hover{opacity:.88;}' +
             '.btn-p{background:#3b82f6;color:#fff;}' +
             '.btn-c{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);}' +
@@ -2116,6 +2116,9 @@
             /* ── Page footer ── */
             '.rpt-page-footer{padding:6px 18px;display:flex;justify-content:space-between;font-size:8px;color:#94a3b8;border-top:1px solid #e2e8f0;background:#fff;}' +
             '@media print{' +
+                'body > *:not(#_fleetPrintPreviewRoot){display:none!important;}' +
+                '#_fleetPrintPreviewRoot{position:static!important;overflow:visible!important;height:auto!important;display:block!important;}' +
+                '#_fleetPrintPreviewRoot .rpt-scroll{overflow:visible!important;height:auto!important;}' +
                 '.toolbar{display:none!important;}' +
                 'body{background:#fff;padding:0;}' +
                 '.rpt-wrap{padding:2px;}' +
@@ -2127,10 +2130,97 @@
         }
 
         function _removeFleetPrintPreviewOverlay() {
+            var prog = document.getElementById('_fleetPreviewPrintProgress');
+            if (prog) prog.remove();
             var ex = document.getElementById('_fleetPrintPreviewRoot');
             if (ex) ex.remove();
             document.documentElement.classList.remove('fleet-print-preview-open');
             document.body.classList.remove('fleet-print-preview-open');
+            try { window.fleetClosePrintPreview = null; } catch (e) {}
+        }
+
+        function _ensureHtml2Pdf(onReady, onError) {
+            if (typeof window.html2pdf === 'function') {
+                onReady();
+                return;
+            }
+            var existing = document.querySelector('script[data-fleet-html2pdf="1"]');
+            if (existing) {
+                existing.addEventListener('load', onReady);
+                existing.addEventListener('error', onError);
+                return;
+            }
+            var scr = document.createElement('script');
+            scr.src = '/static/vendor/html2pdf/0.10.2/html2pdf.bundle.min.js?v=8006';
+            scr.setAttribute('data-fleet-html2pdf', '1');
+            scr.onload = onReady;
+            scr.onerror = onError;
+            document.head.appendChild(scr);
+        }
+
+        function _showFleetPreviewPrintProgress() {
+            var ov = document.getElementById('_fleetPreviewPrintProgress');
+            if (ov) ov.remove();
+            ov = document.createElement('div');
+            ov.id = '_fleetPreviewPrintProgress';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:100010;background:rgba(30,58,138,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;';
+            ov.innerHTML = '<div style="text-align:center;color:#fff;"><div style="width:44px;height:44px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_bp_spin .7s linear infinite;"></div><div style="font-weight:600;">Generating PDF...</div></div>';
+            if (!document.getElementById('_bp_spin_kf')) {
+                var kf = document.createElement('style');
+                kf.id = '_bp_spin_kf';
+                kf.textContent = '@keyframes _bp_spin{to{transform:rotate(360deg)}}';
+                document.head.appendChild(kf);
+            }
+            document.body.appendChild(ov);
+            return ov;
+        }
+
+        /** Native print must PDF the preview itself — window.print is remapped and its spinner sits under this overlay. */
+        function _printFleetPreviewOverlay(titleText) {
+            var wrap = document.querySelector('#_fleetPrintPreviewRoot .rpt-wrap');
+            if (!wrap) return;
+            if (!_isFleetNativeOrAppShell()) {
+                window.print();
+                return;
+            }
+            var ov = _showFleetPreviewPrintProgress();
+            var fname = String(titleText || document.title || 'Report').replace(/[^a-zA-Z0-9_ -]/g, '') || 'Report';
+            fname = fname.replace(/\s+/g, '_') + '.pdf';
+            function fail(msg) {
+                if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+                alert(msg || 'PDF generation failed.');
+            }
+            _ensureHtml2Pdf(function() {
+                try {
+                    window.html2pdf().set({
+                        margin: [6, 4, 6, 4],
+                        filename: fname,
+                        image: { type: 'jpeg', quality: 0.92 },
+                        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                        pagebreak: { mode: ['css', 'legacy'] }
+                    }).from(wrap).output('blob').then(function(blob) {
+                        if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+                        if (window.FleetBridge && typeof window.FleetBridge.downloadBlob === 'function') {
+                            window.FleetBridge.downloadBlob(blob, fname);
+                        } else {
+                            var url = URL.createObjectURL(blob);
+                            var a = document.createElement('a');
+                            a.href = url;
+                            a.download = fname;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                        }
+                    }).catch(function() {
+                        fail('PDF generation failed.');
+                    });
+                } catch (e) {
+                    fail('PDF generation failed.');
+                }
+            }, function() {
+                fail('Could not load PDF library.');
+            });
         }
 
         function _isFleetNativeOrAppShell() {
@@ -2150,12 +2240,13 @@
             var timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
             var root = document.createElement('div');
             root.id = '_fleetPrintPreviewRoot';
-            root.style.cssText = 'position:fixed;inset:0;z-index:100000;overflow:auto;-webkit-overflow-scrolling:touch;background:#f8fafc;';
+            root.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;flex-direction:column;overflow:hidden;background:#f8fafc;';
             var styleEl = document.createElement('style');
             styleEl.textContent = _fleetPreviewCssResolved() +
                 'html.fleet-print-preview-open,body.fleet-print-preview-open{overflow:hidden!important;}' +
-                '#_fleetPrintPreviewRoot .toolbar-right{position:relative;z-index:2;}' +
-                '#_fleetPrintPreviewRoot .btn-c,#_fleetPrintPreviewRoot .btn-p{pointer-events:auto;min-height:40px;min-width:64px;}';
+                '#_fleetPrintPreviewRoot .rpt-meta{flex-shrink:0;}' +
+                '#_fleetPrintPreviewRoot .rpt-scroll{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;}' +
+                '#_fleetPrintPreviewRoot .btn-c,#_fleetPrintPreviewRoot .btn-p{pointer-events:auto;min-height:44px;min-width:72px;}';
             root.appendChild(styleEl);
             /* Toolbar */
             var bar = document.createElement('div');
@@ -2163,8 +2254,8 @@
             bar.innerHTML =
                 '<div class="toolbar-left"><p class="toolbar-title">' + titleText + '</p><span class="toolbar-sub">Fleet Management System &mdash; Print Preview</span></div>' +
                 '<div class="toolbar-right">' +
-                    '<button type="button" class="btn-p" id="_fleetPreviewPrint">&#128438; Print</button>' +
-                    '<button type="button" class="btn-c" id="_fleetPreviewClose">&#10005; Close</button>' +
+                    '<button type="button" class="btn-p" id="_fleetPreviewPrint">Print</button>' +
+                    '<button type="button" class="btn-c" id="_fleetPreviewClose">Close</button>' +
                 '</div>';
             root.appendChild(bar);
             /* Meta strip */
@@ -2172,50 +2263,66 @@
             meta.className = 'rpt-meta';
             meta.innerHTML = '<span><b>Report:</b>&nbsp;' + titleText + '</span><span><b>Date:</b>&nbsp;' + dateStr + '</span><span><b>Generated:</b>&nbsp;' + timeStr + '</span>';
             root.appendChild(meta);
-            /* Table */
+            /* Scrollable report body — toolbar stays pinned and tappable */
+            var scroll = document.createElement('div');
+            scroll.className = 'rpt-scroll';
             var wrap = document.createElement('div');
             wrap.className = 'rpt-wrap';
             wrap.appendChild(clone);
-            root.appendChild(wrap);
-            /* Page footer */
+            scroll.appendChild(wrap);
             var pgfoot = document.createElement('div');
             pgfoot.className = 'rpt-page-footer';
             pgfoot.innerHTML = '<span>Fleet Management System</span><span>' + titleText + ' &mdash; ' + dateStr + '</span>';
-            root.appendChild(pgfoot);
+            scroll.appendChild(pgfoot);
+            root.appendChild(scroll);
             document.body.appendChild(root);
             document.documentElement.classList.add('fleet-print-preview-open');
             document.body.classList.add('fleet-print-preview-open');
 
             function closePreview(ev) {
                 if (ev) {
-                    try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                    try {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                    } catch (e) {}
                 }
-                _removeFleetPrintPreviewOverlay();
                 document.removeEventListener('keydown', onPreviewKeydown, true);
+                _removeFleetPrintPreviewOverlay();
             }
             function onPreviewKeydown(e) {
                 if (e.key === 'Escape') closePreview(e);
             }
+            function bindPreviewTap(el, fn) {
+                if (!el) return;
+                var last = 0;
+                function go(ev) {
+                    var nowTap = Date.now();
+                    if (nowTap - last < 500) {
+                        try {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                        } catch (e) {}
+                        return;
+                    }
+                    last = nowTap;
+                    fn(ev);
+                }
+                el.addEventListener('pointerup', go, true);
+                el.addEventListener('click', go, true);
+                el.addEventListener('touchend', go, { capture: true, passive: false });
+            }
             var closeBtn = root.querySelector('#_fleetPreviewClose');
             var printBtnOv = root.querySelector('#_fleetPreviewPrint');
-            if (closeBtn) {
-                closeBtn.addEventListener('click', closePreview);
-                closeBtn.addEventListener('touchend', function(ev) {
-                    /* Some Android WebViews drop click after scroll; touchend still closes. */
-                    closePreview(ev);
-                }, { passive: false });
-            }
-            if (printBtnOv) {
-                printBtnOv.addEventListener('click', function(ev) {
-                    try { ev.preventDefault(); } catch (e) {}
-                    window.print();
-                });
-            }
-            /* Delegation fallback if button node is replaced */
-            root.addEventListener('click', function(ev) {
-                var t = ev.target && ev.target.closest ? ev.target.closest('#_fleetPreviewClose') : null;
-                if (t) closePreview(ev);
+            bindPreviewTap(closeBtn, closePreview);
+            bindPreviewTap(printBtnOv, function(ev) {
+                try {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                } catch (e) {}
+                _printFleetPreviewOverlay(titleText);
             });
+            window.fleetClosePrintPreview = closePreview;
             document.addEventListener('keydown', onPreviewKeydown, true);
         }
 
@@ -6607,9 +6714,10 @@
 
         var _origPrint = window.print.bind(window);
         window.print = function() {
-            var el = document.getElementById('printContainer') || document.querySelector('.main-content') || document.body;
+            var previewWrap = document.querySelector('#_fleetPrintPreviewRoot .rpt-wrap');
+            var el = previewWrap || document.getElementById('printContainer') || document.querySelector('.main-content') || document.body;
             var ov = document.createElement('div');
-            ov.style.cssText = 'position:fixed;inset:0;z-index:99998;background:rgba(30,58,138,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:100010;background:rgba(30,58,138,.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;';
             ov.innerHTML = '<div style="text-align:center;color:#fff;"><div style="width:44px;height:44px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:_bp_spin .7s linear infinite;"></div><div style="font-weight:600;">Generating PDF...</div></div>';
             if (!document.getElementById('_bp_spin_kf')) {
                 var kf = document.createElement('style');
@@ -7086,6 +7194,17 @@
             if ((bioLock && bioLock.style.display === 'flex') ||
                 (pinLock && pinLock.style.display === 'flex')) {
                 return true; // swallow back press — user must authenticate
+            }
+            var printPreview = document.getElementById('_fleetPrintPreviewRoot');
+            if (printPreview) {
+                if (typeof window.fleetClosePrintPreview === 'function') {
+                    window.fleetClosePrintPreview();
+                } else {
+                    printPreview.remove();
+                    document.documentElement.classList.remove('fleet-print-preview-open');
+                    document.body.classList.remove('fleet-print-preview-open');
+                }
+                return true;
             }
             // Bootstrap modals
             var modals = document.querySelectorAll('.modal.show');

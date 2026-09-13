@@ -81,12 +81,20 @@ html.capacitor-native .task-batch-scope-narration {
   margin-left: auto;
 }
 
+.task-batch-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  z-index: 2;
+}
+
 .task-batch-title-export {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-left: auto;
   min-height: 40px;
   padding: 6px 12px;
   border: 1px solid #dbe3ec;
@@ -97,7 +105,6 @@ html.capacitor-native .task-batch-scope-narration {
   font-weight: 700;
   line-height: 1;
   flex: 0 0 auto;
-  z-index: 2;
 }
 
 .task-batch-title-export .bi {
@@ -178,7 +185,7 @@ html.capacitor-native .task-batch-title-row .task-batch-page-title {
   width: 100%;
   min-width: 0;
   margin: 0;
-  padding: 0 48px;
+  padding: 0 88px 0 48px;
   text-align: center;
 }
 
@@ -187,20 +194,18 @@ html.capacitor-native .task-batch-title-row .task-batch-title-text {
 }
 
 html.capacitor-native .task-batch-title-row .task-batch-page-title::after {
-  content: '';
-  display: block;
-  width: 22px;
-  height: 3px;
-  margin-top: 5px;
-  border-radius: 99px;
-  background: linear-gradient(90deg, #2563eb 0%, #0d9488 100%);
+  display: none !important;
 }
 
-html.capacitor-native .task-batch-title-export {
+html.capacitor-native .task-batch-title-actions {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  margin-left: 0;
+}
+
+html.capacitor-native .task-batch-title-export {
   width: 40px;
   height: 40px;
   min-width: 40px;
@@ -238,6 +243,13 @@ html.capacitor-native .task-batch-page .task-batch-card {
 
 html.capacitor-native .task-batch-page .task-batch-card {
   background: #fff !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+html.capacitor-native .gps-attendance-page .task-batch-card.gps-action-card {
+  background: #fff !important;
 }
 
 @media (max-width: 767.98px) {
@@ -268,9 +280,7 @@ html.capacitor-native .task-batch-page .task-batch-card {
   }
 
   .task-batch-scope-narration {
-    text-align: center;
-    padding: 0 48px;
-    font-size: 0.78rem;
+    display: none !important;
   }
 
   .task-batch-title-row .btn-nav-back-rounded {
@@ -303,25 +313,23 @@ html.capacitor-native .task-batch-page .task-batch-card {
   .task-batch-title-row .task-batch-page-title {
     width: 100%;
     margin: 0;
-    padding: 0 48px;
+    padding: 0 88px 0 48px;
     text-align: center;
   }
 
   .task-batch-title-row .task-batch-page-title::after {
-    content: '';
-    display: block;
-    width: 22px;
-    height: 3px;
-    margin: 5px auto 0;
-    border-radius: 99px;
-    background: linear-gradient(90deg, #2563eb 0%, #0d9488 100%);
+    display: none !important;
   }
 
-  .task-batch-title-export {
+  .task-batch-title-actions {
     position: absolute;
     right: 0;
     top: 50%;
     transform: translateY(-50%);
+    margin-left: 0;
+  }
+
+  .task-batch-title-export {
     width: 40px;
     height: 40px;
     min-width: 40px;
@@ -334,37 +342,51 @@ html.capacitor-native .task-batch-page .task-batch-card {
     color: #0f172a;
   }
 
+  .task-batch-page .task-batch-page-header.task-batch-topset {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 2px;
+  }
+
   .task-batch-page .task-batch-filter-summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    margin-top: 8px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    text-align: left;
-  }
-
-  .task-batch-page .task-batch-filter-facts {
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .task-batch-page .task-batch-filter-primary {
-    font-size: 0.95rem;
-    font-weight: 700;
+    min-height: 36px;
+    margin-top: 0;
+    padding: 2px 0 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
     color: #0f172a;
   }
 
+  .task-batch-page .task-batch-filter-facts {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .task-batch-page .task-batch-filter-primary {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #334155;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .task-batch-page .task-batch-filter-secondary {
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: #64748b;
-    line-height: 1.35;
+    display: none;
   }
 
   .task-batch-page .task-batch-header-filter-btn {
@@ -445,10 +467,6 @@ html.capacitor-native .task-batch-page .task-batch-card {
     font-weight: 600;
   }
 
-  .task-batch-page .task-batch-page-header.task-batch-topset {
-    align-items: stretch !important;
-  }
-
   .task-batch-page .task-batch-page-header .task-batch-title-row {
     flex: 1 1 100%;
     padding-bottom: 8px;
@@ -461,6 +479,8 @@ html.capacitor-native .task-batch-page .task-batch-card {
     box-shadow: none !important;
     background: #fff !important;
     margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
   }
 
   .task-batch-page .task-batch-table-wrap.table-responsive {
@@ -509,12 +529,15 @@ html.capacitor-native .task-batch-page .task-batch-card {
     width: 100%;
     max-width: none;
     box-sizing: border-box;
-    margin: 0;
-    padding: 0 0 12px;
+    margin: 0 0 12px;
+    padding: 0 0 4px;
     border: none;
     border-bottom: 1px solid #e2e8f0;
-    background: transparent !important;
-    --bs-table-bg: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+    background: #fff !important;
+    --bs-table-bg: #fff;
     --bs-table-accent-bg: transparent;
     position: relative;
     --task-rail: #0d9488;
@@ -523,16 +546,14 @@ html.capacitor-native .task-batch-page .task-batch-card {
   #taskReportTable.task-batch-table tbody tr.task-row::before {
     content: '';
     position: absolute;
-    left: 2px;
-    top: 14px;
-    bottom: 8px;
-    width: 8px;
+    left: 0;
+    top: 12px;
+    bottom: 12px;
+    width: 3px;
     pointer-events: none;
     z-index: 3;
-    background:
-      radial-gradient(circle, var(--task-rail) 0 3px, transparent 3.5px) top center / 8px 8px no-repeat,
-      radial-gradient(circle, var(--task-rail) 0 3px, transparent 3.5px) bottom center / 8px 8px no-repeat,
-      linear-gradient(var(--task-rail), var(--task-rail)) center / 2.5px calc(100% - 8px) no-repeat;
+    border-radius: 0 3px 3px 0;
+    background: var(--task-rail);
   }
 
   #taskReportTable.task-batch-table.table-hover > tbody > tr.task-row:hover > *,
@@ -618,54 +639,113 @@ html.capacitor-native .task-batch-page .task-batch-card {
     text-transform: none;
   }
 
-  #taskReportTable.task-batch-table tbody td.task-batch-start-cell[data-label]::before {
+  #taskReportTable.task-batch-table tbody td.task-batch-start-cell[data-label]::before,
+  #taskReportTable.task-batch-table tbody td.task-batch-start-reading[data-label]::before {
     display: none !important;
     content: none !important;
   }
 
   #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-metric-cell.task-batch-metric-compact {
     grid-column: span 2;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    justify-content: flex-start !important;
-    gap: 4px;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px;
+    padding: 12px 12px !important;
+  }
+
+  #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-pair-left,
+  #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-pair-right {
+    position: relative;
+    margin: 0 !important;
+  }
+
+  #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-pair-left {
+    padding-right: 14px !important;
+  }
+
+  #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-pair-right {
+    padding-left: 14px !important;
+  }
+
+  #taskReportTable.task-batch-table tbody tr.task-row > td.task-batch-pair-right::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 1px;
+    background: #cbd5e1;
+    pointer-events: none;
   }
 
   #taskReportTable.task-batch-table tbody td.task-batch-metric-cell.task-batch-metric-compact[data-label]::before {
-    align-self: flex-start;
-  }
-
-  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link .badge,
-  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link .badge {
-    background: transparent !important;
-    border: none !important;
-    color: #0f172a !important;
-    font-size: 0.9rem !important;
-    font-weight: 700 !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
+    align-self: center;
   }
 
   #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link,
   #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link {
     display: inline-flex !important;
     align-items: center;
-    gap: 6px;
-    min-height: 34px;
-    padding: 4px 10px;
-    background: #f1f5f9;
-    border: 1px solid #dbe3ec;
-    border-radius: 9px;
-    color: #0f172a;
+    justify-content: center;
+    gap: 2px !important;
+    min-height: 32px !important;
+    padding: 2px 8px 2px 10px !important;
+    background: #eff6ff !important;
+    border: 1.5px solid #93c5fd !important;
+    border-radius: 999px !important;
+    color: #1d4ed8;
   }
 
   #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link::after,
   #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link::after {
-    content: '›';
-    font-size: 1rem;
-    font-weight: 700;
+    content: none !important;
+  }
+
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link .bi,
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link .bi {
+    font-size: 0.85rem;
+    color: #2563eb;
     line-height: 1;
-    color: #94a3b8;
+  }
+
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link .badge,
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link .badge {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    font-size: 0.9rem !important;
+    font-weight: 800 !important;
+    color: #1d4ed8 !important;
+    border-radius: 0 !important;
+  }
+
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .emg-link:active,
+  #taskReportTable.task-batch-table tbody td.task-batch-metric-cell .tracker-link:active {
+    background: #dbeafe !important;
+  }
+
+  #taskReportTable.task-batch-table tbody td.task-diff.text-danger .task-batch-metric-plain,
+  #taskReportTable.task-batch-table tbody td.kms-diff.is-neg .task-batch-metric-plain,
+  #taskReportTable.task-batch-table tbody td.pct-diff.is-neg .task-batch-metric-plain {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #fee2e2;
+    color: #b91c1c !important;
+    font-weight: 750;
+  }
+
+  #taskReportTable.task-batch-table tbody td.task-diff:not(.text-danger) .task-batch-metric-plain {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #0f172a;
   }
 
   #taskReportTable.task-batch-table tbody tr.task-row > td.pct-diff {
@@ -674,9 +754,15 @@ html.capacitor-native .task-batch-page .task-batch-card {
   }
 
   .task-batch-mobile-summary {
-    width: 100%;
+    width: auto;
+    max-width: none;
     box-sizing: border-box;
-    padding: 14px 12px 10px;
+    background: linear-gradient(145deg, #1d4ed8 0%, #2563eb 48%, #3b82f6 100%);
+    border: none;
+    border-radius: 14px;
+    padding: 14px 14px 13px;
+    margin: 10px 10px 0;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
   }
 
   .task-batch-mobile-card-head {
@@ -684,6 +770,11 @@ html.capacitor-native .task-batch-page .task-batch-card {
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border-bottom: none;
+    background: transparent;
   }
 
   .task-batch-mobile-card-title {
@@ -691,29 +782,73 @@ html.capacitor-native .task-batch-page .task-batch-card {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
+    text-align: left;
   }
 
   .task-batch-mobile-card-vno {
     font-size: 1.2rem;
     font-weight: 800;
     letter-spacing: -0.02em;
-    color: #0f172a;
-    line-height: 1.25;
+    color: #fff;
+    line-height: 1.2;
+    word-break: break-word;
+    text-shadow: 0 1px 0 rgba(15, 23, 42, 0.12);
   }
 
   .task-batch-mobile-card-type {
     font-size: 0.78rem;
     font-weight: 600;
-    color: #475569;
+    color: rgba(255, 255, 255, 0.92);
     line-height: 1.3;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .task-batch-type-icon {
+    font-size: 0.78rem;
+    opacity: 0.85;
+    flex: 0 0 auto;
   }
 
   .task-batch-mobile-card-geo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
     font-size: 0.72rem;
     font-weight: 500;
-    color: #64748b;
+    color: rgba(255, 255, 255, 0.82);
     line-height: 1.35;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .task-batch-geo-station {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .task-batch-geo-icon {
+    font-size: 0.72rem;
+    opacity: 0.8;
+    flex: 0 0 auto;
+  }
+
+  .task-batch-geo-admin {
+    display: block;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 1.1rem;
+    color: rgba(255, 255, 255, 0.78);
   }
 
   .task-batch-geo-part {
@@ -722,41 +857,69 @@ html.capacitor-native .task-batch-page .task-batch-card {
 
   .task-batch-geo-abbr {
     font-weight: 700;
-    color: #94a3b8;
+    color: rgba(255, 255, 255, 0.62);
   }
 
   .task-batch-mobile-card-meta {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
     gap: 6px;
     flex: 0 0 auto;
   }
 
-  .task-batch-mobile-card-status {
-    font-size: 0.68rem;
+  .task-batch-mobile-card-status,
+  .task-batch-mobile-card-status.is-saved {
+    font-size: 0.7rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     color: #0369a1;
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
+    background: #e0f2fe;
+    border: none;
     border-radius: 999px;
-    padding: 3px 9px;
+    padding: 4px 10px;
     white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
   }
 
   .task-batch-mobile-card-seq {
-    font-size: 0.72rem;
-    font-weight: 800;
-    color: #fff;
-    background: #0f172a;
-    border-radius: 999px;
-    min-width: 28px;
-    height: 28px;
-    padding: 0 10px;
-    display: inline-flex;
+    display: none !important;
+  }
+
+  .task-batch-start-pill {
+    display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .task-batch-start-pill .task-batch-start-field-title {
+    margin: 0;
+    padding: 0;
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+  }
+
+  .task-batch-start-pill .start-reading {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .task-batch-start-pill .task-batch-km-unit {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94a3b8;
   }
 
   .task-batch-page .task-batch-metric-plain,
@@ -776,30 +939,36 @@ html.capacitor-native .task-batch-page .task-batch-card {
   #taskReportTable.task-batch-table tfoot#batchTotals,
   #taskReportTable.task-batch-table tfoot {
     display: block !important;
-    width: auto !important;
-    margin: 12px 12px 0;
-    padding: 14px 12px 12px;
+    width: 100% !important;
+    margin: 8px 0 0;
+    padding: 0 0 8px;
     background: #fff;
-    border: 1px solid #e8edf3;
-    border-radius: 16px;
+    border: none;
+    border-top: 1px solid #e8edf3;
+    border-radius: 0;
     box-sizing: border-box;
   }
 
   #taskReportTable.task-batch-table tfoot#batchTotals::before {
     content: 'Summary';
-    display: block;
-    margin: 0 2px 10px;
-    font-size: 0.68rem;
+    display: flex;
+    align-items: center;
+    margin: 10px 10px 8px;
+    padding: 12px 14px;
+    background: linear-gradient(145deg, #1d4ed8 0%, #2563eb 48%, #3b82f6 100%);
+    color: #fff;
+    border-radius: 14px;
+    font-size: 1rem;
     font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94a3b8;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
   }
 
   #taskReportTable.task-batch-table tfoot tr {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 0;
     padding: 0;
     background: transparent;
   }
@@ -810,17 +979,19 @@ html.capacitor-native .task-batch-page .task-batch-card {
 
   #taskReportTable.task-batch-table tfoot td:not([colspan]) {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     min-width: 0;
-    padding: 10px 12px !important;
-    border: 1px solid #eef2f7 !important;
-    border-radius: 12px;
-    background: #f8fafc;
+    padding: 13px 14px !important;
+    border: none !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    border-radius: 0;
+    background: transparent;
     text-align: left !important;
-    font-size: 1.02rem;
-    font-weight: 800;
+    font-size: 0.95rem;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: #0f172a;
     line-height: 1.2;
@@ -829,34 +1000,66 @@ html.capacitor-native .task-batch-page .task-batch-card {
   #taskReportTable.task-batch-table tfoot td[id]::before {
     content: attr(data-mob-label);
     display: block;
-    margin-bottom: 4px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0;
+    margin: 0;
+    font-size: 0.81rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
     text-transform: none;
-    color: #64748b;
+    color: #334155;
+  }
+
+  #taskReportTable.task-batch-table tfoot td.task-batch-pair-right {
+    position: relative;
+    padding-left: 16px !important;
+  }
+
+  #taskReportTable.task-batch-table tfoot td.task-batch-pair-right::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 1px;
+    background: #cbd5e1;
+    pointer-events: none;
   }
 
   #taskReportTable.task-batch-table tfoot td#ftPct {
     grid-column: 1 / -1;
   }
 
-  #taskReportTable.task-batch-table tfoot td.is-warn {
-    color: #b45309;
-    background: #fffbeb;
-    border-color: #fde68a !important;
+  #taskReportTable.task-batch-table tfoot td.is-warn,
+  #taskReportTable.task-batch-table tfoot td.is-alert {
+    background: transparent;
+    color: #0f172a;
   }
 
-  #taskReportTable.task-batch-table tfoot td.is-alert {
+  #taskReportTable.task-batch-table tfoot td.is-warn .task-batch-metric-plain {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #ffedd5;
+    color: #9a3412;
+    font-weight: 750;
+  }
+
+  #taskReportTable.task-batch-table tfoot td.is-alert .task-batch-metric-plain {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: #fee2e2;
     color: #b91c1c;
-    background: #fef2f2;
-    border-color: #fecaca !important;
+    font-weight: 750;
   }
 
   .task-batch-page .task-batch-card .card-footer {
     background: transparent !important;
     border-top: none !important;
-    padding: 10px 16px 4px !important;
+    padding: 4px 16px 12px !important;
   }
 
   .task-batch-page .task-batch-page-count {
@@ -885,6 +1088,31 @@ html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-p
 
 html.capacitor-native body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table {
   min-width: 0 !important;
+}
+
+html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card > .card-body,
+html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card .card-body.p-0 {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page-header {
+  margin-bottom: 4px !important;
+  padding-bottom: 6px !important;
+}
+
+@media (min-width: 768px) {
+  .task-batch-page .task-batch-start-pill {
+    display: contents;
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .task-batch-page .emg-link .bi,
+  .task-batch-page .tracker-link .bi {
+    display: none;
+  }
 }
 
 .gps-attendance-page .gps-hidden-fields {
@@ -996,14 +1224,22 @@ html.capacitor-native body[data-fleet-endpoint="task_report_list"] #taskReportTa
 }
 
 @media (max-width: 767.98px) {
-  .gps-attendance-page .task-batch-filter-card .card-body {
+  .gps-attendance-page .task-batch-filter-card:not(.is-collapsible) .card-body {
     padding: 0 12px 8px !important;
+  }
+
+  .gps-attendance-page .task-batch-filter-card.is-collapsible > .card-body {
+    padding: 0 !important;
+  }
+
+  .gps-attendance-page .task-batch-filter-card.is-collapsible.is-open > .card-body {
+    padding: 8px 0 4px !important;
   }
 
   .gps-attendance-page .gps-action-card {
     margin: 0 !important;
     border-radius: 0 !important;
-    background: #fff;
+    background: #fff !important;
   }
 
   .gps-attendance-page .gps-action-card .card-body {
@@ -1014,6 +1250,30 @@ html.capacitor-native body[data-fleet-endpoint="task_report_list"] #taskReportTa
     margin-top: -6px;
     font-size: 0.72rem;
     color: #94a3b8;
+  }
+
+  .gps-attendance-page .task-batch-filter-summary {
+    display: flex !important;
+    align-items: flex-start;
+    min-height: 0;
+  }
+
+  .gps-attendance-page .task-batch-filter-facts {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .gps-attendance-page .task-batch-filter-primary {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  .gps-attendance-page .task-batch-filter-summary.is-empty {
+    display: none !important;
   }
 }
 
@@ -1032,4 +1292,18 @@ html.capacitor-native body[data-fleet-endpoint="driver_attendance_checkout"] .ta
   padding-left: 0 !important;
   padding-right: 0 !important;
   background: #f4f6f9 !important;
+}
+
+html.capacitor-native .gps-attendance-page .task-batch-filter-summary:not(.is-empty) {
+  display: flex !important;
+  align-items: flex-start;
+}
+
+html.capacitor-native .gps-attendance-page .task-batch-filter-primary {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }

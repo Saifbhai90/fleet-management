@@ -91,7 +91,7 @@ def upload_image_bytes(data: bytes, folder: str = "attendance", max_retries: int
 
     # Attendance selfies are latency-sensitive (GPS check-in/out APIs).
     folder_l = (folder or "").strip().lower()
-    webp_method = 2 if folder_l.startswith("attendance") else 4
+    webp_method = 2 if folder_l.startswith("attendance") or folder_l.startswith("task_odometer") else 4
     processed = _process_image_to_webp(data, method=webp_method)
     uid = uuid.uuid4().hex
     key = f"{folder.rstrip('/')}/{uid}.webp"

@@ -383,6 +383,15 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
     }
 
+    /** Laptop Flask via USB adb reverse — Android reports no Wi-Fi/data internet. */
+    private boolean isLocalUsbServer() {
+        return FleetServerProbe.isLoopbackUrl(resolveServerBaseUrl());
+    }
+
+    private boolean canAttemptServer() {
+        return hasNetworkConnectivity() || isLocalUsbServer();
+    }
+
     private String resolveServerBaseUrl() {
         Bridge bridge = getBridge();
         if (bridge != null) {
@@ -395,9 +404,8 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     }
 
     private void runServerProbe() {
-        // Fast path: if the device has no network connectivity at all, show the offline
-        // overlay immediately instead of waiting for the 1.1s server probe to time out.
-        if (minSplashDone && !hasNetworkConnectivity()) {
+        // Fast path: no Wi-Fi/data AND not a USB localhost server → offline overlay.
+        if (minSplashDone && !canAttemptServer()) {
             serverReachable = false;
             evaluatePostSplashNetworkState();
             return;
@@ -448,8 +456,8 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (Boolean.TRUE.equals(serverReachable)) {
             return;
         }
-        // Truly offline (no network) OR both probe + main frame failed → show error screen.
-        boolean trulyOffline = !hasNetworkConnectivity();
+        // Truly offline (no network, and not USB localhost) OR probe + main frame failed.
+        boolean trulyOffline = !canAttemptServer();
         if (trulyOffline || (Boolean.FALSE.equals(serverReachable) && webViewMainFrameFailed)) {
             showNetworkOverlay(false);
         }
@@ -563,7 +571,7 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
     }
 
     private void probeServerAndMaybeReload(boolean fromManualRetry) {
-        if (!hasNetworkConnectivity()) {
+        if (!canAttemptServer()) {
             serverReachable = false;
             if (fromManualRetry) {
                 Toast.makeText(this, R.string.fleet_network_error_title, Toast.LENGTH_SHORT).show();
@@ -701,8 +709,17 @@ public class MainActivity extends BridgeActivity implements FleetBridgeWebViewCl
         if (!minSplashDone) {
             return;
         }
-        // Splash done but app not yet loaded: immediately reflect offline state if so.
-        if (!hasNetworkConnectivity() || Boolean.FALSE.equals(serverReachable)) {
+        // Splash done but app not yet loaded. USB localhost still deserves a probe —
+        // Android will keep saying "no internet" even when adb reverse is healthy.
+        if (!canAttemptServer()) {
+            showNetworkOverlay(false);
+            return;
+        }
+        if (isLocalUsbServer() || serverReachable == null) {
+            runServerProbe();
+            return;
+        }
+        if (Boolean.FALSE.equals(serverReachable)) {
             showNetworkOverlay(false);
         }
     }

@@ -6661,8 +6661,23 @@ def _upload_attendance_image_bytes_with_fallback(data, folder='attendance'):
     """Upload via R2 (WebP); if R2 misconfigured or fails, save JPEG bytes under uploads/."""
     if not data:
         return None
+    local_fast = os.environ.get('FLEET_MOBILE_DEV') == '1' or os.environ.get('LOCAL_FAST_BOOT') == '1'
+    folder_l = (folder or '').strip().lower()
+    if local_fast and folder_l.startswith('task_odometer'):
+        try:
+            root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            upload_dir = os.path.join(root, 'uploads', folder)
+            os.makedirs(upload_dir, exist_ok=True)
+            fname = uuid.uuid4().hex + '.jpg'
+            fpath = os.path.join(upload_dir, fname)
+            with open(fpath, 'wb') as out:
+                out.write(data)
+            return '/uploads/%s/%s' % (folder, fname)
+        except Exception as exc_local:
+            app.logger.warning('Local odometer save failed (%s), trying R2', exc_local)
     try:
-        return upload_image_bytes(data, folder=folder)
+        retries = 1 if folder_l.startswith('task_odometer') else 3
+        return upload_image_bytes(data, folder=folder, max_retries=retries)
     except Exception as exc:
         app.logger.warning('Attendance photo R2 upload failed (%s), using disk fallback', exc)
     try:

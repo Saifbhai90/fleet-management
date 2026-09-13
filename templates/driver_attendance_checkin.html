@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}GPS Check-in{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task_batch_chrome.css') }}?v=1008">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task_batch_chrome.css') }}?v=1015">
 {% endblock %}
 
 {% block content %}
@@ -750,15 +750,21 @@
 
   function syncGpsParkingNarration() {
     var el = document.getElementById('gpsParkingNarration');
-    if (!el) return;
+    var line = document.getElementById('gpsFilterNarration');
     var name = (parkingDisplay && parkingDisplay.value) ? String(parkingDisplay.value).trim() : '';
-    if (!name || name === '—') {
-      el.textContent = '';
+    if (name === '—') name = '';
+    if (el) {
+      el.textContent = name;
       el.classList.add('d-none');
-      return;
+      if (name) el.classList.add('d-md-block');
+      else el.classList.remove('d-md-block');
     }
-    el.textContent = name;
-    el.classList.remove('d-none');
+    if (typeof window.syncGpsFilterNarration === 'function') {
+      window.syncGpsFilterNarration();
+    } else if (line) {
+      var scope = (line.getAttribute('data-scope') || '').trim();
+      line.textContent = name ? (scope ? scope + ' · ' + name : name) : (scope || '');
+    }
   }
 
   shiftSelect.addEventListener('change', function() { serverAutoDriverId = null; preDriversDutyOff = {}; onShiftChange(); });

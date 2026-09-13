@@ -1,7 +1,310 @@
 {% extends "base.html" %}
 {% block title %}Vehicles Daily Task Report{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/task_batch_chrome.css') }}?v=1007">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/task_batch_chrome.css') }}?v=1013">
+<style>
+@media (max-width: 767.98px) {
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card,
+  html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card {
+    background: #fff !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card > .card-body,
+  html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card .card-body.p-0,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-page .task-batch-card > .card-body {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table > tbody,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-table-wrap {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tbody tr.task-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 0 12px !important;
+    padding: 0 0 4px !important;
+    border: none !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    background: #fff !important;
+    --task-rail: #0d9488;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tbody tr.task-row::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 12px !important;
+    bottom: 12px !important;
+    width: 3px !important;
+    border-radius: 0 3px 3px 0 !important;
+    background: var(--task-rail) !important;
+    background-image: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-summary {
+    width: auto !important;
+    background: linear-gradient(145deg, #1d4ed8 0%, #2563eb 48%, #3b82f6 100%) !important;
+    border: none !important;
+    border-radius: 14px !important;
+    padding: 14px 14px 13px !important;
+    margin: 10px 10px 0 !important;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22) !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-card-vno {
+    color: #fff !important;
+    font-size: 1.2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.2 !important;
+    text-shadow: 0 1px 0 rgba(15, 23, 42, 0.12);
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-card-type,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-card-geo,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-geo-station,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-geo-admin {
+    color: rgba(255, 255, 255, 0.9) !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-geo-abbr {
+    color: rgba(255, 255, 255, 0.62) !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-card-status,
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-mobile-card-status.is-saved {
+    color: #9a3412 !important;
+    background: #ffedd5 !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 4px 10px !important;
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody tr.task-row > td.task-batch-start-reading {
+    display: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-start-pill {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    padding: 13px 12px !important;
+    margin: 8px 0 0 !important;
+    border: none !important;
+    border-top: 1px solid #e8edf3 !important;
+    background: transparent !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-start-pill .task-batch-start-field-title {
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    color: #334155 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-start-pill .start-reading {
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody tr.task-row > td.task-batch-metric-cell.task-batch-metric-compact {
+    grid-column: span 2 !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 12px 12px !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody tr.task-row > td.task-batch-pair-left {
+    position: relative !important;
+    padding-right: 14px !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody tr.task-row > td.task-batch-pair-right {
+    position: relative !important;
+    padding-left: 14px !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody tr.task-row > td.task-batch-pair-right::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 10px !important;
+    bottom: 10px !important;
+    width: 1px !important;
+    background: #cbd5e1 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .emg-link,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .tracker-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    min-height: 32px !important;
+    padding: 2px 8px 2px 10px !important;
+    background: #eff6ff !important;
+    border: 1.5px solid #93c5fd !important;
+    border-radius: 999px !important;
+    color: #1d4ed8 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .emg-link::after,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .tracker-link::after {
+    content: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .emg-link .badge,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .tracker-link .badge {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    font-size: 0.9rem !important;
+    font-weight: 800 !important;
+    color: #1d4ed8 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .emg-link .bi,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-batch-metric-cell .tracker-link .bi {
+    display: inline-block !important;
+    font-size: 0.85rem !important;
+    color: #2563eb !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-diff.text-danger .task-batch-metric-plain,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.kms-diff.is-neg .task-batch-metric-plain,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.pct-diff.is-neg .task-batch-metric-plain {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 2px 10px !important;
+    border-radius: 999px !important;
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    font-weight: 750 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable tbody td.task-diff:not(.text-danger) .task-batch-metric-plain {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 2px 10px !important;
+    border-radius: 999px !important;
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot,
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot#batchTotals {
+    display: block !important;
+    width: 100% !important;
+    margin: 8px 0 0 !important;
+    padding: 0 0 8px !important;
+    background: #fff !important;
+    border: none !important;
+    border-top: 1px solid #e8edf3 !important;
+    border-radius: 0 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot#batchTotals::before {
+    content: 'Summary' !important;
+    display: flex !important;
+    align-items: center !important;
+    margin: 10px 10px 8px !important;
+    padding: 12px 14px !important;
+    background: linear-gradient(145deg, #1d4ed8 0%, #2563eb 48%, #3b82f6 100%) !important;
+    color: #fff !important;
+    border-radius: 14px !important;
+    font-size: 1rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    text-transform: none !important;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2);
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot tr {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0 !important;
+    background: transparent !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td[colspan] {
+    display: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td:not([colspan]) {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    padding: 13px 14px !important;
+    border: none !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    font-size: 0.95rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td[id]::before {
+    content: attr(data-mob-label) !important;
+    margin: 0 !important;
+    font-size: 0.81rem !important;
+    font-weight: 500 !important;
+    color: #334155 !important;
+    text-transform: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td.task-batch-pair-right {
+    position: relative !important;
+    padding-left: 16px !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td.task-batch-pair-right::after {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 10px !important;
+    bottom: 10px !important;
+    width: 1px !important;
+    background: #cbd5e1 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td#ftPct {
+    grid-column: 1 / -1 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td.is-alert .task-batch-metric-plain {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 2px 10px !important;
+    border-radius: 999px !important;
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] #taskReportTable.task-batch-table tfoot td.is-warn .task-batch-metric-plain {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 2px 10px !important;
+    border-radius: 999px !important;
+    background: #ffedd5 !important;
+    color: #9a3412 !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-card .card-footer {
+    display: flex !important;
+    justify-content: center !important;
+    padding: 8px 14px 16px !important;
+    background: #fff !important;
+    border-top: none !important;
+  }
+  html body[data-fleet-endpoint="task_report_list"] .task-batch-page-count {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    padding: 4px 12px !important;
+    border-radius: 999px !important;
+    background: #f1f5f9 !important;
+    color: #64748b !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+  }
+}
+</style>
 {% endblock %}
 {% block content %}
 {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
@@ -30,16 +333,27 @@
 {% set change_narration = ns.change_parts|join(' · ') %}
 {% macro report_vehicle_summary(row, seq) -%}
 {% set v = row.vehicle %}
+{% set station = v.parking_station %}
+{% set tehsil = station.tehsil if station else none %}
+{% set district_name = v.district.name if v.district else none %}
 <div class="task-batch-mobile-summary d-md-none">
   <div class="task-batch-mobile-card-head">
     <div class="task-batch-mobile-card-title">
       <span class="task-batch-mobile-card-vno">{{ v.vehicle_no }}</span>
-      <span class="task-batch-mobile-card-type">{{ v.vehicle_type or '—' }}{% if sel_project %} · {{ sel_project }}{% endif %}</span>
-      <span class="task-batch-mobile-card-geo">{% if v.parking_station %}<span class="task-batch-geo-part">{{ v.parking_station.name }}</span>{% if v.parking_station.tehsil %} · <span class="task-batch-geo-part"><span class="task-batch-geo-abbr">Teh.</span> {{ v.parking_station.tehsil }}</span>{% endif %}{% else %}—{% endif %}{% if v.district %} · <span class="task-batch-geo-part"><span class="task-batch-geo-abbr">Dis.</span> {{ v.district.name }}</span>{% endif %}</span>
+      <span class="task-batch-mobile-card-type"><i class="bi bi-truck task-batch-type-icon" aria-hidden="true"></i>{{ v.vehicle_type or '—' }}{% if sel_project %} · {{ sel_project }}{% endif %}</span>
+      <span class="task-batch-mobile-card-geo">
+        {% if station %}
+        <span class="task-batch-geo-station"><i class="bi bi-geo-alt task-batch-geo-icon" aria-hidden="true"></i>{{ station.name }}</span>
+        {% if tehsil or district_name %}
+        <span class="task-batch-geo-admin">{% if tehsil %}<span class="task-batch-geo-abbr">Teh.</span> {{ tehsil }}{% endif %}{% if tehsil and district_name %} · {% endif %}{% if district_name %}<span class="task-batch-geo-abbr">Dis.</span> {{ district_name }}{% endif %}</span>
+        {% endif %}
+        {% else %}
+        <span class="task-batch-geo-station">—</span>
+        {% endif %}
+      </span>
     </div>
     <div class="task-batch-mobile-card-meta">
       <span class="task-batch-mobile-card-status is-saved">{{ row.task_date|ddmmyyyy }}</span>
-      <span class="task-batch-mobile-card-seq">{{ seq }}</span>
     </div>
   </div>
 </div>
@@ -49,24 +363,28 @@
     <div class="task-batch-title-row">
       {{ nav_back_button() }}
       <h2 class="mb-0 task-batch-page-title"><i class="bi bi-clipboard2-data me-2 text-primary"></i><span class="task-batch-title-text"><span class="d-none d-md-inline">Vehicles </span>Daily Task Report</span></h2>
-      <button type="button" class="task-batch-title-export" id="btnExportReport" title="Export" aria-haspopup="menu" aria-expanded="false">
-        <i class="bi bi-download" aria-hidden="true"></i>
-        <span class="d-none d-md-inline">Export</span>
-      </button>
+      <div class="task-batch-title-actions">
+        <button type="button" class="task-batch-title-export" id="btnPrintReport" title="Print / Preview" aria-label="View">
+          <i class="bi bi-eye" aria-hidden="true"></i>
+          <span class="d-none d-md-inline">Print / Preview</span>
+        </button>
+        <button type="button" class="task-batch-title-export" id="btnExportReport" title="Export" aria-haspopup="menu" aria-expanded="false">
+          <i class="bi bi-download" aria-hidden="true"></i>
+          <span class="d-none d-md-inline">Export</span>
+        </button>
+      </div>
     </div>
     {% if locked_narration %}
-    <p class="task-batch-scope-narration mb-0">{{ locked_narration }}</p>
+    <p class="task-batch-scope-narration mb-0 d-none d-md-block">{{ locked_narration }}</p>
     {% endif %}
     {% if rows %}
     <button type="button" class="task-batch-filter-summary d-md-none" id="taskEntryFilterToggle" aria-expanded="false" aria-controls="taskEntryFilterBody" data-open-label="Close" data-closed-label="Change">
       <span class="task-batch-filter-facts">
-        <span class="task-batch-filter-primary">{{ from_date|ddmmyyyy }}{% if to_date and to_date != from_date %} – {{ to_date|ddmmyyyy }}{% endif %}</span>
-        {% if change_narration %}<span class="task-batch-filter-secondary">{{ change_narration }}</span>{% endif %}
+        <span class="task-batch-filter-primary">{{ from_date|ddmmyyyy }}{% if to_date and to_date != from_date %} – {{ to_date|ddmmyyyy }}{% endif %}{% if change_narration or locked_narration %} · {{ change_narration or locked_narration }}{% endif %}</span>
       </span>
       <span class="task-batch-header-filter-btn">Change</span>
     </button>
     {% endif %}
-    <button type="button" id="btnPrintReport" class="d-none" tabindex="-1" aria-hidden="true" title="Print / Preview"></button>
   </div>
 
   <div class="card shadow border-0 task-batch-filter-card fm-no-card-press{% if rows %} is-collapsible{% endif %}" id="taskEntryFilterCard">
@@ -169,6 +487,10 @@
               <td class="ps-3 d-none d-md-table-cell">{{ loop.index }}</td>
               <td class="task-batch-start-cell">
                 {{ report_vehicle_summary(row, loop.index) }}
+                <div class="task-batch-start-pill d-md-none">
+                  <span class="task-batch-start-field-title">Start Reading</span>
+                  <span class="start-reading">{{ "%.0f"|format(row.start_reading) }}<span class="task-batch-km-unit"> KM</span></span>
+                </div>
                 <span class="d-none d-md-inline">{{ row.task_date|ddmmyyyy }}</span>
               </td>
               <td class="d-none d-md-table-cell">{{ row.vehicle.district.name if row.vehicle.district else '-' }}</td>
@@ -176,7 +498,9 @@
               <td class="d-none d-md-table-cell">{{ row.vehicle.parking_station.name if row.vehicle.parking_station else '-' }}</td>
               <td class="d-none d-md-table-cell">{{ row.vehicle.vehicle_type or '-' }}</td>
               <td class="fw-medium d-none d-md-table-cell">{{ row.vehicle.vehicle_no }}</td>
-              <td class="text-end task-batch-start-reading"><span class="task-batch-metric-plain">{{ "%.0f"|format(row.start_reading) }}</span></td>
+              <td class="text-end task-batch-start-reading">
+                <span class="d-none d-md-inline">{{ "%.0f"|format(row.start_reading) }}</span>
+              </td>
               <td class="text-end task-batch-close-cell"><span class="task-batch-metric-plain">{{ "%.0f"|format(row.close_reading) }}</span></td>
               <td class="text-center odometer-cell">
                 {% if row.odometer_photo_path %}
@@ -194,20 +518,22 @@
                 {% endif %}
               </td>
               <td class="text-end kms-driven"><span class="task-batch-metric-plain">{{ row.kms_driven }}</span></td>
-              <td class="text-center task-batch-metric-cell task-batch-metric-compact"><span class="task-batch-metric-plain">{{ row.tasks_count }}</span></td>
-              <td class="text-center task-batch-metric-cell task-batch-metric-compact">
-                <a href="#" class="emg-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
+              <td class="text-center task-batch-metric-cell"><span class="task-batch-metric-plain">{{ row.tasks_count }}</span></td>
+              <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
+                <a href="#" class="emg-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
                   <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
+                  <i class="bi bi-chevron-right" aria-hidden="true"></i>
                 </a>
               </td>
-              <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact {% if task_diff != 0 %}text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{{ task_diff }}</span></td>
-              <td class="text-end task-batch-metric-cell task-batch-metric-compact">
-                <a href="#" class="tracker-link text-decoration-none" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
+              <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{{ task_diff }}</span></td>
+              <td class="text-end task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
+                <a href="#" class="tracker-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ row.task_date.strftime('%d-%m-%Y') }}">
                   <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
+                  <i class="bi bi-chevron-right" aria-hidden="true"></i>
                 </a>
               </td>
-              <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact {% if row.pct_diff is not none and row.pct_diff >= 10 %}text-danger fw-bold{% elif row.kms_diff < 0 %}text-warning{% endif %}"><span class="task-batch-metric-plain">{{ row.kms_diff }}</span></td>
-              <td class="text-end pct-diff task-batch-metric-cell {% if row.pct_diff is not none %}{% if row.pct_diff >= 10 %}text-danger fw-bold{% elif row.pct_diff < 0 %}text-warning{% endif %}{% endif %}">
+              <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if row.kms_diff < 0 %} text-warning is-neg{% elif row.pct_diff is not none and row.pct_diff >= 10 %} text-danger fw-bold is-neg{% endif %}"><span class="task-batch-metric-plain">{{ row.kms_diff }}</span></td>
+              <td class="text-end pct-diff task-batch-metric-cell{% if row.pct_diff is not none %}{% if row.pct_diff >= 10 %} text-danger fw-bold is-neg{% elif row.pct_diff < 0 %} text-warning is-neg{% endif %}{% endif %}">
                 <span class="task-batch-metric-plain">{% if row.pct_diff is not none %}{{ row.pct_diff }}%{% else %}Driven KM Zero{% endif %}</span>
               </td>
             </tr>
@@ -224,13 +550,13 @@
           <tfoot class="table-light fw-bold task-batch-totals" style="font-size:.82rem;" id="batchTotals">
             <tr>
               <td colspan="10" class="ps-3 text-end task-batch-totals-title">Total</td>
-              <td class="text-end task-batch-total-cell" id="ftKms" data-mob-label="KMs Driven">{{ "%.2f"|format(total_kms) }}</td>
-              <td class="text-center task-batch-total-cell" id="ftTasks" data-mob-label="Tasks">{{ total_tasks }}</td>
-              <td class="text-center task-batch-total-cell" id="ftEmg" data-mob-label="EMG">{{ total_emg }}</td>
-              <td class="text-center task-batch-total-cell{% if total_task_diff %} is-alert{% endif %}" id="ftTaskDiff" data-mob-label="Task Diff">{{ total_task_diff }}</td>
-              <td class="text-end task-batch-total-cell" id="ftTracker" data-mob-label="Tracker KM">{{ "%.2f"|format(total_tracker) }}</td>
-              <td class="text-end task-batch-total-cell{% if total_diff < 0 %} is-warn{% elif total_pct is not none and total_pct >= 10 %} is-alert{% endif %}" id="ftDiff" data-mob-label="KMs Diff">{{ "%.2f"|format(total_diff) }}</td>
-              <td class="text-end task-batch-total-cell{% if total_pct is not none and total_pct < 0 %} is-warn{% elif total_pct is not none and total_pct >= 10 %} is-alert{% endif %}" id="ftPct" data-mob-label="% Diff">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</td>
+              <td class="text-end task-batch-total-cell" id="ftKms" data-mob-label="KMs Driven"><span class="task-batch-metric-plain">{{ "%.2f"|format(total_kms) }}</span></td>
+              <td class="text-center task-batch-total-cell" id="ftTasks" data-mob-label="Tasks"><span class="task-batch-metric-plain">{{ total_tasks }}</span></td>
+              <td class="text-center task-batch-total-cell task-batch-pair-left" id="ftEmg" data-mob-label="EMG"><span class="task-batch-metric-plain">{{ total_emg }}</span></td>
+              <td class="text-center task-batch-total-cell task-batch-pair-right{% if total_task_diff %} is-alert{% endif %}" id="ftTaskDiff" data-mob-label="Task Diff"><span class="task-batch-metric-plain">{{ total_task_diff }}</span></td>
+              <td class="text-end task-batch-total-cell task-batch-pair-left" id="ftTracker" data-mob-label="Tracker KM"><span class="task-batch-metric-plain">{{ "%.2f"|format(total_tracker) }}</span></td>
+              <td class="text-end task-batch-total-cell task-batch-pair-right{% if total_diff < 0 %} is-warn{% elif total_pct is not none and total_pct >= 10 %} is-alert{% endif %}" id="ftDiff" data-mob-label="KMs Diff"><span class="task-batch-metric-plain">{{ "%.2f"|format(total_diff) }}</span></td>
+              <td class="text-end task-batch-total-cell{% if total_pct is not none and total_pct < 0 %} is-warn{% elif total_pct is not none and total_pct >= 10 %} is-alert{% endif %}" id="ftPct" data-mob-label="% Diff"><span class="task-batch-metric-plain">{% if total_pct is not none %}{{ total_pct }}%{% else %}—{% endif %}</span></td>
             </tr>
           </tfoot>
           {% endif %}
@@ -1033,10 +1359,8 @@ document.addEventListener('click', function (e) {
             });
     }
 
-    if (_isTaskReportNative() && printBtn) {
-        printBtn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF';
-        printBtn.title = 'Download PDF';
-    }
+    /* View / Print Preview is bound by fleetPrintExport (same overlay as other apps).
+       Native PDF stays on the Export menu — do not remap the View button. */
     
     function _allPagesUrl() {
         var u = new URLSearchParams(window.location.search);
@@ -1101,62 +1425,8 @@ document.addEventListener('click', function (e) {
         return clone;
     }
     
-    if(printBtn) {
-        printBtn.addEventListener('click', function() {
-            printBtn.disabled = true;
-            printBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
-            
-            var previewCss = '@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:10px;margin:0;padding:8px 12px;}.toolbar{position:sticky;top:0;z-index:99;background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:0 0 6px 6px;box-shadow:0 2px 8px rgba(0,0,0,.2);margin:-8px -12px 12px;}.toolbar h4{margin:0;font-size:14px;font-weight:600;}.toolbar button{padding:5px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}.btn-p{background:#3b82f6;color:#fff;}.btn-c{background:#64748b;color:#fff;margin-left:6px;}h3{text-align:center;margin:6px 0 10px;font-size:14px;}table{width:100%;border-collapse:collapse;table-layout:auto;}th,td{border:1px solid #555;padding:3px 5px;text-align:left;vertical-align:top;}th{background:#e9ecef;font-size:9px;}.text-end{text-align:right;}.text-center{text-align:center;}@media print{.toolbar{display:none!important;}}';
-            var title = 'Vehicles Daily Task Report — {{ from_date|ddmmyyyy }} to {{ to_date|ddmmyyyy }}';
-            var nativePdf = _isTaskReportNative();
-            var progressTitle = nativePdf ? 'Generating PDF…' : 'Preparing preview…';
-
-            _showTaskReportProgress(progressTitle, nativePdf ? 'Preparing server export…' : 'Loading report data…');
-
-            if (nativePdf) {
-                _taskReportPdfFromServer(function() {
-                    printBtn.disabled = false;
-                    printBtn.innerHTML = '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF';
-                });
-                return;
-            }
-            
-            _fetchAllTable(function(table){
-                if(!table) {
-                    _hideTaskReportProgress();
-                    printBtn.disabled = false; 
-                    printBtn.innerHTML = nativePdf
-                        ? '<i class="bi bi-file-earmark-pdf me-1"></i>Download PDF'
-                        : '<i class="bi bi-printer me-1"></i>Print / Preview'; 
-                    return; 
-                }
-                
-                var cleanTable = _cleanTaskReportTable(table);
-
-                _updateTaskReportProgress(88, 'Opening preview…', 'Launching print window…');
-                
-                var w = window.open('', '_blank');
-                if(w) {
-                    w.document.write('<!DOCTYPE html><html><head><title>' + title + '</title>');
-                    w.document.write('<style>' + previewCss + '</style></head><body>');
-                    w.document.write('<div class="toolbar"><h4>Vehicles Daily Task Report</h4><div>');
-                    w.document.write('<button class="btn-p" onclick="window.print()">&#128438; Print</button>');
-                    w.document.write('<button class="btn-c" onclick="window.close()">&#10005; Close</button>');
-                    w.document.write('</div></div>');
-                    w.document.write('<h3>' + title + '</h3>');
-                    w.document.write(cleanTable.outerHTML);
-                    w.document.write('</body></html>');
-                    w.document.close();
-                }
-                _updateTaskReportProgress(100, 'Preview ready', 'Use Print in the preview window', true);
-                setTimeout(_hideTaskReportProgress, 700);
-                printBtn.disabled = false;
-                printBtn.innerHTML = '<i class="bi bi-printer me-1"></i>Print / Preview';
-            }, function(pct, titleText, detail) {
-                _updateTaskReportProgress(pct, titleText, detail);
-            });
-        });
-    }
+    /* Print / Preview click is owned by fleetPrintExport so mobile uses the
+       same in-app View overlay as Fuel / MPG / other reports. */
     
 })();
 

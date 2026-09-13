@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -20,8 +21,9 @@ import java.util.concurrent.Executors;
 public final class FleetServerProbe {
 
     private static final String TAG = "FleetServerProbe";
-    /** Keep within SPLASH_MIN_MS so probe completes before we decide to show the overlay. */
+    /** Keep within splash window for remote servers. Local USB (adb reverse) can be slower. */
     private static final int PROBE_TIMEOUT_MS = 1100;
+    private static final int LOCAL_PROBE_TIMEOUT_MS = 3000;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -70,16 +72,19 @@ public final class FleetServerProbe {
         if (baseUrl == null || baseUrl.isEmpty()) {
             return false;
         }
-        if (!hasDeviceInternet(context)) {
+        boolean loopback = isLoopbackUrl(baseUrl);
+        // USB adb reverse to 127.0.0.1 does not create an Android "internet" network.
+        if (!loopback && !hasDeviceInternet(context)) {
             return false;
         }
+        int timeoutMs = loopback ? LOCAL_PROBE_TIMEOUT_MS : PROBE_TIMEOUT_MS;
         HttpURLConnection conn = null;
         try {
             URL url = new URL(trimTrailingSlashes(baseUrl) + "/health");
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(PROBE_TIMEOUT_MS);
-            conn.setReadTimeout(PROBE_TIMEOUT_MS);
+            conn.setConnectTimeout(timeoutMs);
+            conn.setReadTimeout(timeoutMs);
             conn.setInstanceFollowRedirects(true);
             conn.setUseCaches(false);
             int code = conn.getResponseCode();
@@ -92,6 +97,17 @@ public final class FleetServerProbe {
                 conn.disconnect();
             }
         }
+    }
+
+    public static boolean isLoopbackUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return false;
+        }
+        String lower = url.toLowerCase(Locale.US);
+        return lower.contains("://127.0.0.1")
+                || lower.contains("://localhost")
+                || lower.contains("://[::1]")
+                || lower.contains("://10.0.2.2");
     }
 
     public static boolean hasDeviceInternet(Context context) {
