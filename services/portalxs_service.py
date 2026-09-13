@@ -100,18 +100,55 @@ def _parse_rdt(rdt_str: str) -> Optional[datetime]:
     return None
 
 
+def _ignition_on(raw) -> bool | None:
+    """PortalXS sends 'On since …' / 'Off since …', not a boolean."""
+    s = str(raw or '').strip().lower()
+    if not s:
+        return None
+    if s.startswith('on') or s in ('1', 'true', 'yes'):
+        return True
+    if s.startswith('off') or s in ('0', 'false', 'no'):
+        return False
+    return None
+
+
+def classify_live_status(status, ignition, lat=None, lon=None) -> str:
+    """Moving / Idle (engine on, stopped) / Stopped (ign off) / Unknown (no GPS)."""
+    raw = str(status or '').strip()
+    try:
+        has_gps = lat is not None and lon is not None and float(lat) != 0 and float(lon) != 0
+    except (TypeError, ValueError):
+        has_gps = False
+    if not has_gps:
+        return 'Unknown'
+    if raw == 'Moving':
+        return 'Moving'
+    ign = _ignition_on(ignition)
+    if ign is True:
+        return 'Idle'
+    if raw == 'Stopped' or ign is False:
+        return 'Stopped'
+    if raw == 'Idle':
+        return 'Idle'
+    return raw or 'Unknown'
+
+
 def normalize_vehicle(v: dict) -> dict:
     """Normalise a PortalXS vehicle position dict for frontend use."""
+    lat = _to_float(v.get('LAT'))
+    lon = _to_float(v.get('LON'))
+    ignition = v.get('IgnitionStatus', '')
+    raw_status = v.get('VehicleStatus', 'Unknown')
     return {
         'RegNo': v.get('RegNo', ''),
-        'LAT': _to_float(v.get('LAT')),
-        'LON': _to_float(v.get('LON')),
+        'LAT': lat,
+        'LON': lon,
         'Speed': _to_float(v.get('Speed')),
         'Direction': _to_float(v.get('Direction')),
         'Reason': v.get('Reason', ''),
         'LandMark': clean_landmark(v.get('LandMark', '')),
-        'VehicleStatus': v.get('VehicleStatus', 'Unknown'),
-        'IgnitionStatus': v.get('IgnitionStatus', ''),
+        'VehicleStatus': classify_live_status(raw_status, ignition, lat, lon),
+        'IgnitionStatus': ignition,
         'CurrentStatus': v.get('CurrentStatus', ''),
         'GroupName': v.get('GroupName', ''),
         'RDT': v.get('RDT', ''),
@@ -1594,7 +1631,7 @@ def get_summary_stats(account_id: int) -> dict:
     total = len(vehicles)
     moving = sum(1 for v in vehicles if v.get('VehicleStatus') == 'Moving')
     stopped = sum(1 for v in vehicles if v.get('VehicleStatus') == 'Stopped')
-    idle = total - moving - stopped
+    idle = sum(1 for v in vehicles if v.get('VehicleStatus') == 'Idle')
     return {
         'total': total,
         'moving': moving,

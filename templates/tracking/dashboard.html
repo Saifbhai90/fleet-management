@@ -1057,6 +1057,28 @@
     return '#f59e0b';
   }
 
+  function ignitionOn(v) {
+    var s = String((v && v.IgnitionStatus) || '').trim().toLowerCase();
+    if (!s) return null;
+    if (s.indexOf('on') === 0 || s === '1' || s === 'true' || s === 'yes') return true;
+    if (s.indexOf('off') === 0 || s === '0' || s === 'false' || s === 'no') return false;
+    return null;
+  }
+
+  function classifyStatus(v) {
+    var raw = String((v && v.VehicleStatus) || '').trim();
+    var lat = parseFloat(v && v.LAT);
+    var lon = parseFloat(v && v.LON);
+    var hasGps = !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+    if (!hasGps) return 'Unknown';
+    if (raw === 'Moving') return 'Moving';
+    var ign = ignitionOn(v);
+    if (ign === true && raw !== 'Moving') return 'Idle';
+    if (raw === 'Stopped' || ign === false) return 'Stopped';
+    if (raw === 'Idle') return 'Idle';
+    return raw || 'Unknown';
+  }
+
   function shadeHex(hex, amount) {
     var h = (hex || '#888888').replace('#', '');
     if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
@@ -1154,41 +1176,15 @@
     if (running) moveRaf = requestAnimationFrame(stepMoveAnims);
   }
 
-  function moveMarker(reg, marker, lat, lon, opts) {
-    opts = opts || {};
-    var from = marker.getLatLng();
+  function moveMarker(reg, marker, lat, lon) {
+    delete moveAnims[reg];
+    if (moveRaf) {
+      cancelAnimationFrame(moveRaf);
+      moveRaf = null;
+    }
     var to = L.latLng(lat, lon);
-    var moving = !!opts.moving;
-    var speed = parseFloat(opts.speed) || 0;
-    var heading = parseFloat(opts.heading) || 0;
-    var dist = map.distance(from, to);
-    var jumpy = reduceMotion ||
-      dist > 3000 ||
-      !map.getBounds().pad(0.4).contains(from);
-    if (jumpy) {
-      delete moveAnims[reg];
-      marker.setLatLng(to);
-      if (followReg === reg) map.setView(to, map.getZoom(), { animate: true });
-      return;
-    }
-    var ms = moving ? MOVE_GLIDE_MS : MOVE_ANIM_MS;
-    if (!moving && dist < 1) {
-      delete moveAnims[reg];
-      marker.setLatLng(to);
-      return;
-    }
-    if (moving && dist < 1) {
-      ms = 0;
-    }
-    moveAnims[reg] = {
-      from: from,
-      to: to,
-      t0: nowMs(),
-      ms: ms,
-      heading: heading,
-      coastKmh: (moving && speed >= COAST_MIN_KMH && !reduceMotion) ? speed : 0
-    };
-    if (!moveRaf) moveRaf = requestAnimationFrame(stepMoveAnims);
+    marker.setLatLng(to);
+    if (followReg === reg) map.setView(to, map.getZoom(), { animate: false });
   }
 
   function navArrowSvg(color, uid) {
@@ -1495,7 +1491,7 @@
       total++;
       if (v.VehicleStatus === 'Moving') mv++;
       else if (v.VehicleStatus === 'Stopped') st++;
-      else id++;
+      else if (v.VehicleStatus === 'Idle') id++;
     });
     document.getElementById('statTotal').textContent = total;
     document.getElementById('statMoving').textContent = mv;
@@ -1508,6 +1504,7 @@
   // ── Render ──
   function renderVehicles(vehicles) {
     positions = vehicles || [];
+    positions.forEach(function(v) { v.VehicleStatus = classifyStatus(v); });
     var list = document.getElementById('vehicleList');
 
     // index by RegNo so lookups stay O(1) as the fleet grows
@@ -1548,9 +1545,7 @@
         applied = nextAngle(prev.applied, deg);
         var keys = iconKeys(color, hasTask, v.RegNo, applied);
         if (prev.lat !== lat || prev.lon !== lon) {
-          moveMarker(v.RegNo, m, lat, lon, { moving: cls === 'Moving', speed: v.Speed, heading: deg });
-        } else if (cls === 'Moving' && !moveAnims[v.RegNo] && (parseFloat(v.Speed) || 0) >= COAST_MIN_KMH) {
-          moveMarker(v.RegNo, m, lat, lon, { moving: true, speed: v.Speed, heading: deg });
+          moveMarker(v.RegNo, m, lat, lon);
         }
         if (prev.icon !== keys.full) {
           var car = (prev.iconBase === keys.base && m._icon) ? m._icon.querySelector('.vmarker-car') : null;
