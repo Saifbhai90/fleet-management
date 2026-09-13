@@ -2212,6 +2212,14 @@
       border: none;
       padding: 0;
     }
+    html:not(.capacitor-native) .task-batch-page .emg-link .bi,
+    html:not(.capacitor-native) .task-batch-page .tracker-link .bi {
+      display: none !important;
+    }
+    html:not(.capacitor-native) .task-batch-page .emg-link::after,
+    html:not(.capacitor-native) .task-batch-page .tracker-link::after {
+      content: none !important;
+    }
   }
 
   /* Capacitor scroll → base.html #appNativeShell .main-content only. No per-page scroll hacks. */

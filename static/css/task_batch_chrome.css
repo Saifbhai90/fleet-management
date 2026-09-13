@@ -79,6 +79,17 @@ html.capacitor-native .task-batch-scope-narration {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  flex: 0 0 auto;
+}
+
+html.capacitor-native .task-batch-page .task-batch-report-actions {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  html:not(.capacitor-native) .task-batch-page .task-batch-title-actions {
+    display: none !important;
+  }
 }
 
 .task-batch-title-actions {
@@ -1109,9 +1120,14 @@ html.capacitor-native body[data-fleet-endpoint="task_report_list"] .task-batch-p
     padding: 0;
   }
 
-  .task-batch-page .emg-link .bi,
-  .task-batch-page .tracker-link .bi {
-    display: none;
+  html:not(.capacitor-native) .task-batch-page .emg-link .bi,
+  html:not(.capacitor-native) .task-batch-page .tracker-link .bi {
+    display: none !important;
+  }
+
+  html:not(.capacitor-native) .task-batch-page .emg-link::after,
+  html:not(.capacitor-native) .task-batch-page .tracker-link::after {
+    content: none !important;
   }
 }
 
