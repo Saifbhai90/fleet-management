@@ -1071,7 +1071,7 @@
   var showLabels = true;
 
   /* ── Smooth movement between polls ──────────────────────────────────
-     Positions arrive every 30s. Instead of teleporting each marker we
+     Positions arrive every 15s. Instead of teleporting each marker we
      interpolate over ~1.2s and rotate along the shortest angular path,
      so vehicles glide along the road the way native tracking apps do. */
   var MOVE_ANIM_MS = 1200;
@@ -1212,7 +1212,7 @@
   /* ═══════════════════════════════════════════════════════════════
      Sidebar list: incremental (diff) rendering.
      Rows and group sections are created once and then patched in place,
-     so a 30s poll only touches the vehicles that actually changed. This
+     so a 15s poll only touches the vehicles that actually changed. This
      also preserves scroll position, collapsed groups and row selection.
      ═══════════════════════════════════════════════════════════════ */
   var rowNodes = {};      // RegNo -> row element
@@ -2175,7 +2175,7 @@
   });
 
   // ── Auto refresh (pauses when tab is hidden — saves battery/bandwidth) ──
-  var REFRESH_MS = 30000;
+  var REFRESH_MS = 15000;
   var UFONE_TASK_MS = 60000;
   var lastRefreshAt = Date.now();
   setInterval(function() {

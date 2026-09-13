@@ -214,7 +214,7 @@
           {% endif %}
         </div>
         <div class="card-body">
-          <p class="text-muted small">Positions auto-refresh every 30 seconds. Polling starts automatically when any tracking page is opened — use these buttons only for manual control.</p>
+          <p class="text-muted small">Positions auto-refresh every 15 seconds. Polling starts automatically when any tracking page is opened — use these buttons only for manual control.</p>
           <div class="d-flex flex-wrap gap-2 set-acct-actions">
             <form method="post" action="{{ url_for('tracking_settings_start_polling') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

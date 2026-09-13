@@ -191,7 +191,7 @@
   var marker = L.marker([lat, lon], { icon: markerIcon(colorFor(status)) }).addTo(map);
   marker.bindPopup(popupContent(regno, {{ vehicle.LandMark | tojson }}, {{ vehicle.Speed | tojson }})).openPopup();
 
-  // ── Live position refresh every 30s (pauses on hidden tab) ──
+  // ── Live position refresh every 15s (pauses on hidden tab) ──
   setInterval(function() {
     if (document.hidden) return;
     fetch('/api/tracking/positions').then(function(r) { return r.json(); }).then(function(data) {
@@ -205,7 +205,7 @@
       marker.setPopupContent(popupContent(v.RegNo, v.LandMark, v.Speed));
       map.panTo([nlat, nlon]);
     }).catch(function() {});
-  }, 30000);
+  }, 15000);
 })();
 </script>
 {% endblock %}

@@ -4,7 +4,7 @@ PortalXS Service Layer
 Wraps the SOAP client with:
 - Fernet password encryption (reuse tracker_automation crypto)
 - Thread-safe in-memory cache for live positions
-- Background polling thread (30s interval)
+- Background polling thread (15s interval)
 - DB persistence for vehicle mappings + alerts
 - Auto-relogin on session expiry
 """
@@ -345,6 +345,8 @@ _live_cache_lock = threading.Lock()
 _live_cache_ts: dict[str, float] = {}     # account_id -> timestamp of last refresh
 _poll_thread: Optional[threading.Thread] = None
 _poll_thread_stop = threading.Event()
+LIVE_POLL_INTERVAL_SEC = 15
+LIVE_CACHE_TTL_SEC = 20
 
 
 def get_cached_positions(account_id: int) -> list[dict]:
@@ -535,9 +537,9 @@ def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
     from models import PortalXSAccount, PortalXSVehicleMapping
     from app import db
 
-    # Use cache if fresh (< 25 seconds old)
+    # Use cache if fresh — UI reads this; the poll thread keeps it warm.
     age = get_cache_age(account_id)
-    if not force and age is not None and age < 25:
+    if not force and age is not None and age < LIVE_CACHE_TTL_SEC:
         return get_cached_positions(account_id)
 
     last_exc = None
@@ -1368,7 +1370,7 @@ def fetch_nearest_vehicles(account_id: int, regno: str) -> list[dict]:
 # ── Background polling thread ────────────────────────────────────────────────
 
 def _poll_loop(app):
-    """Background thread: poll all active accounts every 30 seconds."""
+    """Background thread: poll all active accounts every 15 seconds."""
     with app.app_context():
         from app import db
         from models import PortalXSAccount
@@ -1391,7 +1393,7 @@ def _poll_loop(app):
                 db.session.remove()
             except Exception:
                 pass
-            _poll_thread_stop.wait(30)
+            _poll_thread_stop.wait(LIVE_POLL_INTERVAL_SEC)
 
 
 def start_polling(app):
