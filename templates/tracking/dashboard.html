@@ -32,11 +32,6 @@
   .tb-fresh-dot.DELAYED { background: #f59e0b; }
   .tb-fresh-dot.OFFLINE { background: #ef4444; }
   .tb-fresh-dot.UNKNOWN { background: #94a3b8; }
-  .fleet-vmarker.gps-delayed { opacity: .78; filter: saturate(.8); }
-  .fleet-vmarker.gps-offline { opacity: .52; filter: saturate(.55); }
-  .vrow.gps-delayed { opacity: .8; }
-  .vrow.gps-offline { opacity: .62; }
-  .vdot.gps-stale { box-shadow: 0 0 0 1px rgba(245,158,11,.65); }
   .tb-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
   .tb-btn:hover { background: rgba(255,255,255,.25); color: #fff; }
   .tb-select { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 12px; outline: none; }
@@ -1121,12 +1116,6 @@
     return 'UNKNOWN';
   }
 
-  function applyMarkerFreshness(marker, v) {
-    if (!marker || !marker._icon) return;
-    marker._icon.classList.toggle('gps-delayed', gpsStatusOf(v) === 'delayed');
-    marker._icon.classList.toggle('gps-offline', gpsStatusOf(v) === 'offline');
-  }
-
   function applyFeedMeta(data) {
     if (!data) return;
     if (data.source) feedMeta.source = data.source;
@@ -1370,9 +1359,7 @@
     row.dataset.lat = v.LAT;
     row.dataset.lon = v.LON;
     row.classList.toggle('has-ufone-task', hasTask);
-    row.classList.toggle('gps-delayed', gpsStatusOf(v) === 'delayed');
-    row.classList.toggle('gps-offline', gpsStatusOf(v) === 'offline');
-    if (els.dot) els.dot.className = 'vdot ' + cls + (gpsStatusOf(v) === 'delayed' || gpsStatusOf(v) === 'offline' ? ' gps-stale' : '');
+    if (els.dot) els.dot.className = 'vdot ' + cls;
     if (els.regTxt) els.regTxt.textContent = v.RegNo;
     if (els.tag) els.tag.style.display = hasTask ? '' : 'none';
     if (els.sub) els.sub.textContent = (lm || '-') + ' \u00B7 ' + time;
@@ -1593,7 +1580,6 @@
           else m.setIcon(carIcon(color, applied, hasTask, v.RegNo));
         }
         if (m.getPopup()) m.setPopupContent(popupHtml(v));
-        applyMarkerFreshness(m, v);
         markerState[v.RegNo] = { lat: lat, lon: lon, icon: keys.full, iconBase: keys.base, applied: applied };
       } else {
         applied = deg;
@@ -1603,7 +1589,6 @@
         var mReg = v.RegNo;
         m.on('click', function() { selectVehicle(mReg, isMobile()); });
         markers[v.RegNo] = m;
-        applyMarkerFreshness(m, v);
         var newKeys = iconKeys(color, hasTask, v.RegNo, applied);
         markerState[v.RegNo] = { lat: lat, lon: lon, icon: newKeys.full, iconBase: newKeys.base, applied: applied };
       }
@@ -2244,7 +2229,6 @@
       var state = markerState[v.RegNo];
       var applied = state ? state.applied : (parseFloat(v.Direction) || 0);
       markers[v.RegNo].setIcon(carIcon(color, applied, hasTask, v.RegNo));
-      applyMarkerFreshness(markers[v.RegNo], v);
       if (state) {
         var keys = iconKeys(color, hasTask, v.RegNo, applied);
         state.icon = keys.full;
