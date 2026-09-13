@@ -34,8 +34,8 @@
       <span class="task-batch-mobile-card-geo">{% if v.parking_station %}<span class="task-batch-geo-part">{{ v.parking_station.name }}</span>{% if v.parking_station.tehsil %} · <span class="task-batch-geo-part"><span class="task-batch-geo-abbr">Teh.</span> {{ v.parking_station.tehsil }}</span>{% endif %}{% else %}—{% endif %}{% if v.district %} · <span class="task-batch-geo-part"><span class="task-batch-geo-abbr">Dis.</span> {{ v.district.name }}</span>{% endif %}</span>
     </div>
     <div class="task-batch-mobile-card-meta">
-      <span class="task-batch-mobile-card-status{% if row.saved %} is-saved{% endif %}">{{ 'Saved' if row.saved else 'Pending' }}</span>
-      <span class="task-batch-mobile-card-seq">{{ seq }}</span>
+      <span class="task-batch-mobile-card-status{% if row.saved %} is-saved{% endif %}">{{ 'Saved' if row.saved else 'Pending' }} {{ seq }}</span>
+      <span class="task-batch-mobile-card-seq d-none">{{ seq }}</span>
     </div>
   </div>
 </div>
@@ -727,7 +727,7 @@
       display: block !important;
       width: 100% !important;
     }
-    /* 4-col grid: Close can take 3/4, Attach 1/4; paired metrics still sit 50/50. */
+    /* 4-col grid: paired metrics sit 50/50; Close and Attach each take a full row. */
     .task-batch-table tbody tr.task-row {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1016,19 +1016,19 @@
       margin: 0;
     }
 
-    /* Close / Odoo / KMs — plain stacked rows in the same card */
+    /* Close Reading is full-width. Attach / Odoo meter is the next full-width row. */
     .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-close-cell {
-      grid-column: 1 / 4 !important;
+      grid-column: 1 / -1 !important;
       width: auto !important;
       max-width: none !important;
     }
     .task-batch-page .task-batch-table tbody tr.task-row > td.odometer-cell {
-      grid-column: 4 / 5 !important;
+      grid-column: 1 / -1 !important;
       width: auto !important;
       max-width: none !important;
-      align-self: end !important;
-      justify-content: flex-end !important;
-      padding-left: 8px !important;
+      align-self: stretch !important;
+      justify-content: flex-start !important;
+      padding-left: 12px !important;
     }
     .task-batch-page .task-batch-table tbody td.odometer-cell[data-label]::before {
       display: none !important;
@@ -1049,10 +1049,10 @@
       margin: 0;
     }
     .task-batch-page .task-batch-table tbody tr.task-row > td.task-batch-close-cell {
-      padding-right: 6px !important;
+      padding-right: 12px !important;
     }
     .task-batch-page .task-batch-table tbody tr.task-row > td.odometer-cell {
-      padding-left: 6px !important;
+      padding-left: 12px !important;
     }
     .task-batch-page .task-batch-table tbody tr.task-row > td.kms-driven {
       border-top: none !important;
@@ -1220,11 +1220,11 @@
       background: #e2e8f0;
     }
 
-    /* Odoo meter sits beside Close Reading — button only, no second label */
+    /* Odoo meter is a full-width row under Close Reading */
     .task-batch-page .task-batch-table tbody tr.task-row > td.odometer-cell {
       flex-direction: column !important;
-      align-items: flex-end !important;
-      justify-content: flex-end !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
       gap: 6px;
     }
     .task-batch-page .task-batch-table tbody td.odometer-cell[data-label]::before {
@@ -1232,9 +1232,9 @@
       content: none !important;
     }
     .task-batch-page .odometer-cell .odom-ctrl-wrap {
-      flex: 0 0 auto;
-      width: auto !important;
-      justify-content: flex-end;
+      flex: 1 1 auto;
+      width: 100% !important;
+      justify-content: stretch;
     }
     .task-batch-page .odometer-cell .odom-btn-text {
       font-size: 0.8rem;
@@ -1867,36 +1867,144 @@
       padding-left: 12px !important;
       padding-right: 12px !important;
     }
-    #batchForm tbody tr.task-row > td.task-batch-close-cell {
-      padding-left: 12px !important;
-      padding-right: 8px !important;
+    .task-entry-form .task-batch-scope-narration {
+      display: none !important;
     }
-    #batchForm tbody tr.task-row > td.odometer-cell {
-      padding-left: 0 !important;
+    .task-entry-form.task-batch-page {
+      background: #eef2f6;
+      padding-left: 12px !important;
       padding-right: 12px !important;
     }
-    #batchForm tbody td.task-batch-close-cell .close-input {
+    .task-entry-form .task-batch-page-header {
+      margin-left: -12px !important;
+      margin-right: -12px !important;
+      width: calc(100% + 24px) !important;
+      padding: 2px 16px 12px !important;
+      background: #fff;
+    }
+    .task-entry-form .task-batch-filter-summary {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      width: 100% !important;
+      margin-top: 10px !important;
+      padding: 12px 12px 12px 12px !important;
+      background: #fff !important;
+      border: 1px solid #e8edf3 !important;
+      border-radius: 16px !important;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+    .task-entry-form .task-batch-filter-cal {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #2563eb;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.15rem;
+    }
+    .task-entry-form .task-batch-filter-facts {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .task-entry-form .task-batch-filter-primary {
+      font-size: 1.02rem !important;
+      font-weight: 800 !important;
+      letter-spacing: -0.02em;
+    }
+    .task-entry-form .task-batch-header-filter-btn {
+      background: #eff6ff !important;
+      color: #2563eb !important;
+      border-radius: 999px !important;
+      padding: 7px 12px !important;
+    }
+    .task-entry-form .task-batch-filter-card.is-collapsible.is-open {
+      margin: 8px 0 10px !important;
+      padding: 10px 12px !important;
+      border-radius: 16px !important;
+      background: #fff !important;
+    }
+    .task-entry-form .task-batch-card,
+    .task-entry-form #batchForm .task-batch-card {
+      background: transparent !important;
+    }
+    .task-entry-form #batchForm tbody tr.task-row {
+      margin: 0 0 14px !important;
+      padding: 0 0 8px !important;
+      border: 1px solid #e8edf3 !important;
+      border-radius: 18px !important;
+      overflow: hidden !important;
+      background: #fff !important;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06) !important;
+    }
+    .task-entry-form #batchForm tbody tr.task-row::before {
+      display: none !important;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-summary {
+      padding: 14px 14px 16px !important;
+      margin: 0 !important;
+      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 58%, #3b82f6 100%);
+      color: #fff;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-card-vno {
+      color: #fff !important;
+      font-size: 1.18rem !important;
+      font-weight: 800 !important;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-card-type,
+    .task-entry-form #batchForm .task-batch-mobile-card-geo {
+      color: rgba(255, 255, 255, 0.86) !important;
+    }
+    .task-entry-form #batchForm .task-batch-geo-abbr {
+      color: rgba(255, 255, 255, 0.7) !important;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-card-status {
+      background: #fff7ed !important;
+      border: none !important;
+      color: #c2410c !important;
+      border-radius: 999px !important;
+      padding: 4px 10px !important;
+      font-size: 0.68rem !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.01em;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-card-status.is-saved {
+      background: #ecfeff !important;
+      color: #0f766e !important;
+    }
+    .task-entry-form #batchForm .task-batch-mobile-card-status.is-ready {
+      background: #ecfdf5 !important;
+      color: #047857 !important;
+    }
+    .task-entry-form #batchForm .task-batch-start-pill {
+      padding: 14px 14px !important;
+      border-top: none !important;
+    }
+    .task-entry-form #batchForm tbody td.task-batch-close-cell .close-input {
       width: 100% !important;
       max-width: 100% !important;
     }
-    .task-batch-page .task-batch-footer-hint {
+    .task-entry-form .task-batch-footer-hint {
       display: none !important;
     }
-    .task-batch-page .task-batch-card .card-footer {
+    .task-entry-form .task-batch-card .card-footer {
       position: static !important;
       bottom: auto !important;
       left: auto !important;
       right: auto !important;
       z-index: auto;
-      background: #fff !important;
-      border-top: 1px solid #eef2f7 !important;
-      padding: 14px 12px 16px !important;
+      background: transparent !important;
+      border-top: none !important;
+      padding: 6px 0 16px !important;
       margin: 0 !important;
       gap: 0 !important;
       box-shadow: none !important;
     }
-    html.capacitor-native .task-batch-page .task-batch-card .card-footer,
-    html.capacitor-native .task-batch-page .task-batch-card .card-footer.native-submit-sticky {
+    html.capacitor-native .task-entry-form .task-batch-card .card-footer,
+    html.capacitor-native .task-entry-form .task-batch-card .card-footer.native-submit-sticky {
       position: static !important;
       left: auto !important;
       right: auto !important;
@@ -1916,80 +2024,131 @@
       flex: 0 0 auto !important;
     }
 
-    /* Attach stays one row with Close — photo must not stack a second thumb + × */
-    .task-batch-page .task-batch-table tbody tr.task-row > td.odometer-cell,
-    #batchForm tbody tr.task-row > td.odometer-cell {
-      align-self: end !important;
-      flex-direction: row !important;
-      flex-wrap: nowrap !important;
-      align-items: center !important;
-      justify-content: flex-end !important;
-      overflow: visible !important;
+    /* Close Reading is full-width. Attach sits on the next row, outside the field. */
+    .task-entry-form #batchForm tbody tr.task-row > td.task-batch-close-cell,
+    .task-entry-form .task-batch-table tbody tr.task-row > td.task-batch-close-cell {
+      grid-column: 1 / -1 !important;
+      padding: 4px 14px 8px !important;
     }
-    .task-batch-page .task-batch-table tbody td.odometer-cell > *,
-    #batchForm tbody td.odometer-cell > * {
-      width: auto !important;
+    .task-entry-form #batchForm tbody tr.task-row > td.odometer-cell,
+    .task-entry-form .task-batch-table tbody tr.task-row > td.odometer-cell {
+      grid-column: 1 / -1 !important;
+      align-self: stretch !important;
+      flex-direction: column !important;
+      flex-wrap: nowrap !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+      overflow: visible !important;
+      padding: 0 14px 10px !important;
+      gap: 6px !important;
+    }
+    .task-entry-form #batchForm tbody td.odometer-cell > *,
+    .task-entry-form .task-batch-table tbody td.odometer-cell > * {
+      width: 100% !important;
       max-width: 100% !important;
     }
-    .task-batch-page .odometer-cell .odom-thumb-link,
-    .task-batch-page .odometer-cell .odom-thumb-placeholder,
-    #batchForm .odometer-cell .odom-thumb-link,
-    #batchForm .odometer-cell .odom-thumb-placeholder {
+    .task-entry-form #batchForm tbody td.odometer-cell[data-label]::before,
+    .task-entry-form .task-batch-table tbody td.odometer-cell[data-label]::before {
+      display: none !important;
+      content: none !important;
+    }
+    .task-entry-form .odometer-cell .odom-thumb-link,
+    .task-entry-form .odometer-cell .odom-thumb-placeholder {
       display: none !important;
     }
-    .task-batch-page .odometer-cell .odom-ctrl-wrap,
-    #batchForm .odometer-cell .odom-ctrl-wrap {
+    .task-entry-form .odometer-cell .odom-ctrl-wrap,
+    .task-entry-form #batchForm .odometer-cell .odom-ctrl-wrap {
       flex-direction: row !important;
       flex-wrap: nowrap !important;
       align-items: center !important;
-      justify-content: flex-end !important;
-      width: auto !important;
-      height: 48px;
+      justify-content: stretch !important;
+      width: 100% !important;
+      height: auto;
       min-height: 48px;
-      max-height: 48px;
-      gap: 0 !important;
+      max-height: none;
+      gap: 8px !important;
       overflow: visible !important;
     }
-    .task-batch-page .odometer-cell .btn-group,
-    #batchForm .odometer-cell .btn-group {
+    .task-entry-form .odometer-cell .btn-group,
+    .task-entry-form #batchForm .odometer-cell .btn-group {
       position: relative;
-      display: inline-flex !important;
+      display: flex !important;
+      flex: 1 1 auto;
       flex-wrap: nowrap !important;
       align-items: center;
-      width: auto !important;
+      width: 100% !important;
       margin: 0 !important;
     }
-    .task-batch-page .odometer-cell .odom-ctrl-wrap.has-photo .odom-photo-btn,
-    #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-photo-btn {
-      width: 48px !important;
-      height: 48px !important;
-      min-width: 48px !important;
+    .task-entry-form .odometer-cell .odom-photo-btn,
+    .task-entry-form #batchForm .odometer-cell .odom-photo-btn {
+      flex: 1 1 auto;
+      width: 100% !important;
       min-height: 48px !important;
-      padding: 0 !important;
-      border: 1px solid #dbe3ec !important;
+      height: 48px !important;
+      justify-content: center;
+      gap: 8px !important;
+      padding: 0 14px !important;
+      border: 1.5px dashed #93c5fd !important;
+      border-radius: 12px !important;
+      background: #eff6ff !important;
+      color: #1d4ed8 !important;
+      box-shadow: none !important;
+      animation: none !important;
+      font-weight: 700;
+    }
+    .task-entry-form .odometer-cell .odom-meter-icon {
+      display: inline-block !important;
+      font-size: 1.15rem;
+      color: #2563eb;
+    }
+    .task-entry-form #batchForm td.odometer-cell,
+    .task-entry-form #batchForm td.odometer-cell > * {
+      text-align: left !important;
+      align-self: stretch !important;
+    }
+    .task-entry-form #batchForm td.odometer-cell .task-batch-field-label {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .task-entry-form .odometer-cell .odom-btn-text {
+      display: inline !important;
+      font-size: 0.88rem !important;
+      font-weight: 700;
+      color: #1d4ed8;
+    }
+    .task-entry-form .odometer-cell .odom-ctrl-wrap.has-photo .odom-photo-btn,
+    .task-entry-form #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-photo-btn {
+      width: 100% !important;
+      height: 48px !important;
+      min-width: 0 !important;
+      min-height: 48px !important;
+      justify-content: flex-start;
+      padding: 0 12px 0 6px !important;
+      border: 1.5px solid #86efac !important;
       border-radius: 12px !important;
       overflow: hidden;
-      background: #f8fafc !important;
+      background: #f0fdf4 !important;
     }
-    .task-batch-page .odometer-cell .odom-ctrl-wrap.has-photo .odom-btn-text,
-    .task-batch-page .odometer-cell .odom-ctrl-wrap.has-photo .odom-meter-icon,
-    #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-btn-text,
-    #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-meter-icon {
-      display: none !important;
+    .task-entry-form .odometer-cell .odom-ctrl-wrap.has-photo .odom-btn-text,
+    .task-entry-form .odometer-cell .odom-ctrl-wrap.has-photo .odom-meter-icon,
+    .task-entry-form #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-btn-text,
+    .task-entry-form #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-meter-icon {
+      display: inline-block !important;
+      color: #047857;
     }
-    .task-batch-page .odometer-cell .odom-ctrl-wrap.has-photo .odom-inline-thumb,
-    #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-inline-thumb {
+    .task-entry-form .odometer-cell .odom-ctrl-wrap.has-photo .odom-inline-thumb,
+    .task-entry-form #batchForm .odometer-cell .odom-ctrl-wrap.has-photo .odom-inline-thumb {
       display: block !important;
-      width: 48px !important;
-      height: 48px !important;
-      max-width: 48px !important;
-      max-height: 48px !important;
+      width: 36px !important;
+      height: 36px !important;
+      max-width: 36px !important;
+      max-height: 36px !important;
       border: none !important;
-      border-radius: 11px !important;
+      border-radius: 8px !important;
       object-fit: cover;
     }
-    .task-batch-page .odometer-cell .odom-clear-btn,
-    #batchForm .odometer-cell .odom-clear-btn {
+    .task-entry-form .odometer-cell .odom-clear-btn,
+    .task-entry-form #batchForm .odometer-cell .odom-clear-btn {
       position: absolute;
       top: -7px;
       right: -7px;
@@ -2007,6 +2166,77 @@
       border: 1px solid #fecaca !important;
       color: #dc2626 !important;
       box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.kms-driven {
+      padding: 12px 14px !important;
+    }
+    .task-entry-form #batchForm tbody td.kms-driven[data-label]::before {
+      display: none !important;
+      content: none !important;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.kms-driven .task-batch-field-label {
+      flex: 1 1 auto;
+      width: auto !important;
+      max-width: none !important;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.kms-driven .kms-driven-out {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 2px;
+      width: auto !important;
+      max-width: none !important;
+      margin-left: auto;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.task-batch-metric-cell--first[data-label]::before {
+      display: none !important;
+      content: none !important;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.task-batch-metric-cell--first > .task-batch-field-label {
+      flex: 1 1 auto;
+      width: auto !important;
+      max-width: none !important;
+      align-self: center !important;
+      text-align: left !important;
+      order: -3;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.task-batch-metric-cell--first > .form-control {
+      order: 2;
+      margin-left: auto;
+    }
+    .task-entry-form #batchForm td.kms-diff .task-batch-metric-plain::after {
+      content: ' KM';
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+    .task-entry-form #batchForm tbody tr.task-row > td.task-batch-metric-cell {
+      padding-left: 14px !important;
+      padding-right: 14px !important;
+    }
+    .task-entry-form #batchForm tbody td.task-batch-metric-cell.text-danger .task-batch-metric-plain,
+    .task-entry-form #batchForm tbody td.task-batch-metric-cell.text-danger .badge {
+      color: #ef4444 !important;
+    }
+    .task-entry-form #batchForm tbody td.task-batch-metric-cell .tracker-link .badge {
+      color: #2563eb !important;
+    }
+    .task-entry-form #batchForm tbody td.task-batch-close-cell .close-input {
+      background: #fff !important;
+      border: 1.5px solid #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+      border-radius: 12px !important;
+      min-height: 48px !important;
+      padding-right: 14px !important;
+    }
+    .task-entry-form .task-batch-card .card-footer .task-batch-save-btn {
+      border-radius: 14px;
+      min-height: 50px;
+      font-weight: 800;
+    }
+    .task-entry-form .task-batch-card .card-footer .btn-outline-secondary {
+      min-height: 50px;
+      border-radius: 14px;
+      background: #fff !important;
     }
   }
 
@@ -2116,41 +2346,80 @@
   html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm tr.task-row.is-saved {
     --task-rail: #0d9488;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm td.odometer-cell {
-    align-self: end !important;
-    flex-direction: row !important;
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form.task-batch-page.container-fluid {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    background: #eef2f6 !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form .task-batch-page-header {
+    margin-left: -12px !important;
+    margin-right: -12px !important;
+    width: calc(100% + 24px) !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form .task-batch-filter-summary {
+    background: #fff !important;
+    border: 1px solid #e8edf3 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form .task-batch-card,
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .task-batch-card,
+  html.capacitor-native body.fm-aurora-theme:not(.dark-mode)[data-fleet-endpoint="task_report_new"] .main-content .task-entry-form #batchForm .card.task-batch-card {
+    background: transparent !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm tbody tr.task-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+    border-radius: 18px !important;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06) !important;
+    background: #fff !important;
+    border: 1px solid #e8edf3 !important;
+    overflow: hidden !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content,
+  html.capacitor-native body.fm-aurora-theme:not(.dark-mode)[data-fleet-endpoint="task_report_new"] #appNativeShell .main-content {
+    background: #eef2f6 !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm td.task-batch-close-cell {
+    grid-column: 1 / -1 !important;
+  }
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm td.odometer-cell {
+    grid-column: 1 / -1 !important;
+    align-self: stretch !important;
+    flex-direction: column !important;
     flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm td.odometer-cell > * {
-    width: auto !important;
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm td.odometer-cell > * {
+    width: 100% !important;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-thumb-link,
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-thumb-placeholder {
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-thumb-link,
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-thumb-placeholder {
     display: none !important;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-ctrl-wrap {
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-ctrl-wrap {
     flex-direction: row !important;
     flex-wrap: nowrap !important;
-    height: 48px;
-    max-height: 48px;
-    width: auto !important;
+    height: auto;
+    max-height: none;
+    width: 100% !important;
     overflow: visible !important;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-ctrl-wrap.has-photo .odom-photo-btn {
-    width: 48px !important;
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-ctrl-wrap.has-photo .odom-photo-btn {
+    width: 100% !important;
     height: 48px !important;
-    min-width: 48px !important;
-    padding: 0 !important;
+    min-width: 0 !important;
+    padding: 0 12px 0 6px !important;
     border-radius: 12px !important;
     overflow: hidden;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-ctrl-wrap.has-photo .odom-btn-text,
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-ctrl-wrap.has-photo .odom-meter-icon {
-    display: none !important;
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-ctrl-wrap.has-photo .odom-btn-text,
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-ctrl-wrap.has-photo .odom-meter-icon {
+    display: inline-block !important;
   }
-  html.capacitor-native body[data-fleet-endpoint="task_report_new"] #batchForm .odom-clear-btn {
+  html.capacitor-native body[data-fleet-endpoint="task_report_new"] .task-entry-form #batchForm .odom-clear-btn {
     position: absolute;
     top: -7px;
     right: -7px;
@@ -2183,7 +2452,7 @@
 {% if not lock_vehicle and sel_vehicle %}{% set _ = ns_lock.change_parts.append(sel_vehicle) %}{% endif %}
 {% set locked_narration = ns_lock.lock_parts|join(' · ') %}
 {% set change_narration = ns_lock.change_parts|join(' · ') %}
-<div class="container-fluid task-batch-page px-md-3">
+<div class="container-fluid task-batch-page task-entry-form px-md-3">
   <div class="d-flex justify-content-between align-items-center mb-md-4 flex-wrap gap-2 task-batch-page-header task-batch-topset">
     <div class="task-batch-title-row">
       {% from 'partials/nav_back_button.html' import nav_back_button with context %}
@@ -2194,10 +2463,12 @@
     <p class="task-batch-scope-narration mb-0">{{ locked_narration }}</p>
     {% endif %}
     {% if rows %}
+    {% set date_scope = ((locked_narration or '') ~ (' · ' if locked_narration and change_narration else '') ~ (change_narration or '')) %}
     <button type="button" class="task-batch-filter-summary d-md-none" id="taskEntryFilterToggle" aria-expanded="false" aria-controls="taskEntryFilterBody" data-open-label="Close" data-closed-label="Change">
+      <span class="task-batch-filter-cal" aria-hidden="true"><i class="bi bi-calendar3"></i></span>
       <span class="task-batch-filter-facts">
         <span class="task-batch-filter-primary">{{ view_date.strftime('%d-%m-%Y') }}</span>
-        {% if change_narration %}<span class="task-batch-filter-secondary">{{ change_narration }}</span>{% endif %}
+        {% if date_scope %}<span class="task-batch-filter-secondary">{{ date_scope }}</span>{% endif %}
       </span>
       <span class="task-batch-header-filter-btn">Change</span>
     </button>
@@ -2369,8 +2640,9 @@
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Closing KM" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center align-middle odometer-cell task-batch-input-priority task-entry-tap-cell" style="min-width:72px;vertical-align:middle;">
+                  <span class="d-md-none task-batch-field-label">Odoo meter</span>
                   <input type="hidden" name="vehicle_{{ row.vehicle.id }}_odometer_photo_url" class="odom-url-input" data-row="{{ row.vehicle.id }}" value="{{ row.odometer_photo_path or '' }}">
-                  <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if row.odometer_photo_path %} has-photo{% endif %}{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera{% endif %}">
+                  <div class="d-flex flex-column align-items-center gap-1 odom-ctrl-wrap{% if row.odometer_photo_path %} has-photo{% endif %}{% if s %} odom-wrap-locked{% endif %}" data-row="{{ row.vehicle.id }}" tabindex="{% if s %}-1{% else %}0{% endif %}" title="{% if s %}Edit row to change photo{% else %}Paste (Ctrl+V) when focused, or click camera for file / mobile rear camera{% endif %}">
                     {% if row.odometer_photo_path %}
                     <button type="button" class="att-photo-fullview-btn p-0 border-0 bg-transparent d-inline-block odom-thumb-link" title="Odoo meter — full view"
                             data-url="{{ row.odometer_photo_path }}" data-label="Odoo meter photo">
@@ -2382,15 +2654,16 @@
                     <div class="btn-group btn-group-sm" role="group">
                       <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 odom-photo-btn task-editable-field task-entry-tap-target d-inline-flex align-items-center gap-1 {% if row.odometer_photo_path %}border-success{% endif %}" data-row="{{ row.vehicle.id }}" title="Add / change photo" {% if s %}disabled{% endif %}>
                         <img alt="" width="22" height="22" class="odom-inline-thumb rounded border flex-shrink-0 {% if row.odometer_photo_path %}border-success{% else %}d-none{% endif %}" style="object-fit:cover;" {% if row.odometer_photo_path %}src="{{ row.odometer_photo_path }}"{% endif %}>
-                        <i class="bi bi-speedometer2 odom-meter-icon flex-shrink-0"></i>
+                        <i class="bi bi-camera odom-meter-icon flex-shrink-0"></i>
                         <span class="d-md-none odom-btn-text">{% if row.odometer_photo_path %}Change{% else %}Attach{% endif %}</span>
                       </button>
                       <button type="button" class="btn btn-outline-danger btn-sm py-0 px-1 odom-clear-btn task-entry-tap-target {% if not row.odometer_photo_path %}d-none{% endif %} task-editable-field" data-row="{{ row.vehicle.id }}" title="Remove photo" {% if s %}disabled{% endif %}>×</button>
                     </div>
                   </div>
                 </td>
-                <td class="text-end kms-driven">{{ fmt_num(kms_driven) }}</td>
+                <td class="text-end kms-driven{% if close_r is none %} is-empty-metric{% endif %}"><span class="d-md-none task-batch-field-label">KMs driven</span><span class="kms-driven-out"><span class="kms-driven-value">{% if close_r is none %}--{% else %}{{ fmt_num(kms_driven) }}{% endif %}</span><span class="task-batch-km-unit d-md-none"> KM</span></span></td>
                 <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first task-entry-tap-cell">
+                  <span class="d-md-none task-batch-field-label">Tasks</span>
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
@@ -2406,8 +2679,8 @@
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                   </a>
                 </td>
-                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact"><span class="task-batch-metric-plain">{{ fmt_num(kms_diff) }}</span></td>
-                <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">{{ pct_diff }}</span></td>
+                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact"><span class="task-batch-metric-plain">{% if close_r is none %}--{% else %}{{ fmt_num(kms_diff) }}{% endif %}</span></td>
+                <td class="text-end pct-diff task-batch-metric-cell"><span class="task-batch-metric-plain">{% if close_r is none %}--{% else %}{{ pct_diff }}{% endif %}</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last{% if not s %} task-batch-actions-status-only{% endif %}">
                   {% if s %}
                     {% if can_edit_saved_task_rows or can_delete_saved_task_rows %}
@@ -2751,13 +3024,17 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     var kmsDriven = closeNum - start;
     var kmsDiff = kmsDriven - tracker;
     var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
+    var closeEmpty = closeRaw === '';
     if (kmsDrivenEl) {
-      kmsDrivenEl.textContent = fmtNum(kmsDriven);
-      kmsDrivenEl.classList.remove('is-empty-metric');
+      var drivenVal = kmsDrivenEl.querySelector('.kms-driven-value');
+      var drivenText = closeEmpty ? '--' : fmtNum(kmsDriven);
+      if (drivenVal) drivenVal.textContent = drivenText;
+      else kmsDrivenEl.textContent = drivenText;
+      kmsDrivenEl.classList.toggle('is-empty-metric', closeEmpty);
     }
-    if (kmsOut) kmsOut.textContent = fmtNum(kmsDiff);
-    if (pctOut) pctOut.textContent = pctDiff;
-    var pctVal = (pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN;
+    if (kmsOut) kmsOut.textContent = closeEmpty ? '--' : fmtNum(kmsDiff);
+    if (pctOut) pctOut.textContent = closeEmpty ? '--' : pctDiff;
+    var pctVal = closeEmpty ? NaN : ((pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN);
     var pctRed = !isNaN(pctVal) && pctVal >= 10;
     if (pctTd && pctTd.classList.contains('task-batch-metric-cell')) {
       pctTd.className = 'text-end pct-diff task-batch-metric-cell' + (pctRed ? ' text-danger fw-bold' : (!isNaN(pctVal) && pctVal < 0 ? ' text-warning' : ''));
@@ -2785,7 +3062,8 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     if (!chip) return;
     if (chip.classList.contains('is-saved')) return;
     var filled = (closeRaw || '').trim() !== '';
-    chip.textContent = filled ? 'Ready' : 'Pending';
+    var seq = row.getAttribute('data-seq') || '';
+    chip.textContent = (filled ? 'Ready' : 'Pending') + (seq ? ' ' + seq : '');
     chip.classList.toggle('is-ready', filled);
     row.classList.toggle('task-row-incomplete', !filled);
     row.classList.toggle('task-row-ready', filled);
@@ -3254,7 +3532,7 @@ document.addEventListener('DOMContentLoaded', function() {
           td.removeAttribute('data-label');
           continue;
         }
-        if (td.classList.contains('task-batch-num-cell')) {
+        if (td.classList.contains('task-batch-num-cell') || td.classList.contains('task-batch-close-cell') || td.classList.contains('odometer-cell') || td.classList.contains('kms-driven') || td.classList.contains('task-batch-metric-cell--first')) {
           td.removeAttribute('data-label');
           continue;
         }
