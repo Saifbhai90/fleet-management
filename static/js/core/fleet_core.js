@@ -4153,6 +4153,7 @@
             // Do not skip ahead to Fuel Pump / later fields. Parent keeps focus.
         })();
     }
+    window.fleetWaitFocusSelect = _tsWaitEnableThenFocus;
 
     function _tsMoveFocus(origSelect) {
         var form = origSelect.closest('form');
@@ -4631,6 +4632,12 @@
                         setTimeout(function() {
                             ts._justSelected = true;
                             try { ts.close(); } catch (eClose2) {}
+                            /* Web desktop filter: pick → next field (District → Project).
+                               Phone/coarse keeps blur so IME does not reopen and wipe the value. */
+                            if (isFilterSelect && !_fleetTsIsCoarsePointer()) {
+                                _tsMoveFocus(el);
+                                return;
+                            }
                             try { ts.blur(); } catch (eBlur2) {}
                             if (ts.control_input) {
                                 try { ts.control_input.blur(); } catch (eBlur3) {}

@@ -2810,8 +2810,18 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return String(sel.value || '');
   }
 
+  function isTaskEntryWebDesktop() {
+    try {
+      if (document.documentElement.classList.contains('capacitor-native')) return false;
+      if (window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches) return false;
+      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return false;
+    } catch (e) {}
+    return true;
+  }
+
   function settleFilterSelect(sel) {
     if (!sel || !sel.tomselect) return;
+    if (isTaskEntryWebDesktop()) return;
     var ts = sel.tomselect;
     ts._justSelected = true;
     ts._selectLockUntil = Date.now() + 500;
@@ -2851,13 +2861,21 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       var did = filterSelectValue(districtSelect);
       if (did === '') return;
       settleFilterSelect(districtSelect);
-      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
+      if (typeof fleetBeginCascade === 'function') fleetBeginCascade(projectSelect);
+      if (isTaskEntryWebDesktop() && typeof fleetWaitFocusSelect === 'function') {
+        fleetWaitFocusSelect(projectSelect);
+      }
       if (did !== '0') {
         fetch('/get_projects_by_district/' + did)
           .then(function(r) { return r.json(); })
           .then(function(arr) {
             fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
+          })
+          .catch(function() {
+            fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
           });
+      } else {
+        fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
       }
       reloadTaskEntryVehicles();
     });
