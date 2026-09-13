@@ -26,7 +26,8 @@ from services.portalxs_service import (
     create_account, update_account, delete_account,
     test_connection, encrypt_password, decrypt_password,
     start_polling, stop_polling, is_polling,
-    consume_position_warning, friendly_portalxs_error,
+    friendly_portalxs_error,
+    build_live_positions_payload, note_live_feed_unavailable,
 )
 from services.mileage_record_service import (
     aggregate_range_rows,
@@ -166,17 +167,28 @@ def tracking_dashboard():
     vehicles = []
     stats = {'total': 0, 'moving': 0, 'stopped': 0, 'idle': 0}
     error = None
+    feed = {
+        'source': None,
+        'fetched_at': None,
+        'cache_age_sec': None,
+        'data_status': 'UNKNOWN',
+        'warning': None,
+    }
 
     if acct_id:
         try:
-            vehicles = fetch_live_positions(acct_id, force=False)
+            feed = build_live_positions_payload(acct_id, force=False)
+            vehicles = feed.get('vehicles') or []
             stats = get_summary_stats(acct_id)
-            error = consume_position_warning(acct_id)
+            error = feed.get('warning')
         except Exception as e:
             error = friendly_portalxs_error(e)
+            note_live_feed_unavailable(acct_id, e)
             vehicles = get_cached_positions(acct_id)
             if vehicles:
+                feed = build_live_positions_payload(acct_id, vehicles=vehicles)
                 stats = get_summary_stats(acct_id)
+                error = error or feed.get('warning')
             else:
                 logger.warning('tracking_dashboard fetch failed acct=%s: %s', acct_id, e)
     else:
@@ -189,6 +201,13 @@ def tracking_dashboard():
         accounts=accounts,
         current_account_id=acct_id,
         error=error,
+        feed={
+            'source': feed.get('source'),
+            'fetched_at': feed.get('fetched_at'),
+            'cache_age_sec': feed.get('cache_age_sec'),
+            'data_status': feed.get('data_status'),
+            'warning': feed.get('warning'),
+        },
         ufone_tasks_by_reg=_ufone_tasks_for_tracking(),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
@@ -268,22 +287,44 @@ def api_tracking_positions():
     if not acct_id:
         return jsonify({'error': 'No account configured', 'vehicles': [], 'stats': {}})
     try:
-        vehicles = fetch_live_positions(acct_id, force=False)
-        stats = get_summary_stats(acct_id)
-        warning = consume_position_warning(acct_id)
+        payload = build_live_positions_payload(acct_id, force=False)
         return jsonify({
-            'vehicles': vehicles,
-            'stats': stats,
+            'vehicles': payload['vehicles'],
+            'stats': get_summary_stats(acct_id),
             'account_id': acct_id,
             'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
-            'warning': warning,
+            'warning': payload.get('warning'),
+            'source': payload.get('source'),
+            'fetched_at': payload.get('fetched_at'),
+            'cache_age_sec': payload.get('cache_age_sec'),
+            'data_status': payload.get('data_status'),
         })
     except Exception as e:
+        note_live_feed_unavailable(acct_id, e)
+        cached = get_cached_positions(acct_id)
+        if cached:
+            payload = build_live_positions_payload(acct_id, vehicles=cached)
+            return jsonify({
+                'vehicles': payload['vehicles'],
+                'stats': get_summary_stats(acct_id),
+                'account_id': acct_id,
+                'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+                'warning': payload.get('warning') or friendly_portalxs_error(e),
+                'source': payload.get('source') or 'cache',
+                'fetched_at': payload.get('fetched_at'),
+                'cache_age_sec': payload.get('cache_age_sec'),
+                'data_status': payload.get('data_status') or 'DELAYED',
+                'error': friendly_portalxs_error(e),
+            }), 200
         return jsonify({
             'error': friendly_portalxs_error(e),
             'vehicles': [],
             'stats': {},
-            'warning': None,
+            'warning': friendly_portalxs_error(e),
+            'source': None,
+            'fetched_at': None,
+            'cache_age_sec': None,
+            'data_status': 'OFFLINE',
         }), 200
 
 
@@ -294,22 +335,44 @@ def api_tracking_refresh():
     if not acct_id:
         return jsonify({'error': 'No account configured'}), 400
     try:
-        vehicles = fetch_live_positions(acct_id, force=True)
-        stats = get_summary_stats(acct_id)
-        warning = consume_position_warning(acct_id)
+        payload = build_live_positions_payload(acct_id, force=True)
         return jsonify({
-            'vehicles': vehicles,
-            'stats': stats,
+            'vehicles': payload['vehicles'],
+            'stats': get_summary_stats(acct_id),
             'refreshed_at': pk_now().isoformat(),
             'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
-            'warning': warning,
+            'warning': payload.get('warning'),
+            'source': payload.get('source'),
+            'fetched_at': payload.get('fetched_at'),
+            'cache_age_sec': payload.get('cache_age_sec'),
+            'data_status': payload.get('data_status'),
         })
     except Exception as e:
+        note_live_feed_unavailable(acct_id, e)
+        cached = get_cached_positions(acct_id)
+        if cached:
+            payload = build_live_positions_payload(acct_id, vehicles=cached)
+            return jsonify({
+                'vehicles': payload['vehicles'],
+                'stats': get_summary_stats(acct_id),
+                'refreshed_at': pk_now().isoformat(),
+                'ufone_tasks_by_reg': _ufone_tasks_for_tracking(),
+                'warning': payload.get('warning') or friendly_portalxs_error(e),
+                'source': payload.get('source') or 'cache',
+                'fetched_at': payload.get('fetched_at'),
+                'cache_age_sec': payload.get('cache_age_sec'),
+                'data_status': payload.get('data_status') or 'DELAYED',
+                'error': friendly_portalxs_error(e),
+            }), 200
         return jsonify({
             'error': friendly_portalxs_error(e),
             'vehicles': [],
             'stats': {},
-            'warning': None,
+            'warning': friendly_portalxs_error(e),
+            'source': None,
+            'fetched_at': None,
+            'cache_age_sec': None,
+            'data_status': 'OFFLINE',
         }), 200
 
 

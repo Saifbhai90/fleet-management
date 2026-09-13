@@ -25,7 +25,7 @@ from typing import Optional
 from sqlalchemy import func
 
 from services.portalxs_coordination import portalxs_work
-from utils import clean_geo_location, normalize_vehicle_reg_key, safe_float
+from utils import clean_geo_location, normalize_vehicle_reg_key, pk_now, safe_float
 
 logger = logging.getLogger(__name__)
 
@@ -89,15 +89,92 @@ def _to_int(val, default=0):
         return default
 
 
+# Live RDT from PortalXS / last_rdt is naive Pakistan time (same as pk_now).
+# Evidence: local mappings store '2026-09-13 01:19:04' beside IgnitionStatus
+# 'On since 9/13/2026 12:59:19 AM'. Do not treat these as UTC.
+_RDT_FORMATS = (
+    '%Y-%m-%dT%H:%M:%S.%f',
+    '%Y-%m-%d %H:%M:%S.%f',
+    '%Y-%m-%dT%H:%M:%S',
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%dT%H:%M',
+    '%Y-%m-%d %H:%M',
+    '%d/%m/%Y %H:%M:%S',
+    '%d/%m/%y %H:%M:%S',
+    '%m/%d/%Y %I:%M:%S %p',
+    '%m/%d/%Y %I:%M %p',
+)
+
+
 def _parse_rdt(rdt_str: str) -> Optional[datetime]:
+    """Parse a PortalXS GPS/record timestamp as naive Asia/Karachi local time."""
     if not rdt_str:
         return None
-    for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S'):
+    s = str(rdt_str).strip()
+    if not s:
+        return None
+    for fmt in _RDT_FORMATS:
         try:
-            return datetime.strptime(rdt_str, fmt)
+            return datetime.strptime(s, fmt)
         except ValueError:
             continue
+    if 'T' in s or (len(s) >= 19 and s[10] == ' '):
+        try:
+            return datetime.fromisoformat(s[:26])
+        except ValueError:
+            return None
     return None
+
+
+GPS_LIVE_MAX_SEC = 60
+GPS_DELAYED_MAX_SEC = 300
+
+
+def gps_age_sec(rdt_str, now: Optional[datetime] = None) -> Optional[int]:
+    """Seconds since PortalXS RDT. None if RDT is missing or unparseable."""
+    parsed = _parse_rdt(rdt_str)
+    if parsed is None:
+        return None
+    current = now or pk_now()
+    delta = (current - parsed).total_seconds()
+    if delta < 0:
+        # Small clock skew: treat as just now. Large future = bad parse.
+        return 0 if delta > -3600 else None
+    return int(delta)
+
+
+def classify_gps_status(age_sec: Optional[int], has_gps: bool) -> str:
+    """Per-vehicle freshness. Does not change Moving/Idle/Stopped."""
+    if not has_gps:
+        return 'unknown'
+    if age_sec is None:
+        return 'unknown'
+    if age_sec <= GPS_LIVE_MAX_SEC:
+        return 'live'
+    if age_sec <= GPS_DELAYED_MAX_SEC:
+        return 'delayed'
+    return 'offline'
+
+
+def _has_valid_gps(lat, lon) -> bool:
+    try:
+        return lat is not None and lon is not None and float(lat) != 0 and float(lon) != 0
+    except (TypeError, ValueError):
+        return False
+
+
+def annotate_vehicle_freshness(vehicles: list[dict], now: Optional[datetime] = None) -> list[dict]:
+    """Shallow-copy vehicles and add gps_age_sec / gps_status at serve time."""
+    current = now or pk_now()
+    out = []
+    for v in vehicles or []:
+        row = dict(v)
+        has_gps = _has_valid_gps(row.get('LAT'), row.get('LON'))
+        age = gps_age_sec(row.get('RDT'), now=current) if has_gps else None
+        row['gps_age_sec'] = age
+        row['gps_status'] = classify_gps_status(age, has_gps)
+        out.append(row)
+    return out
 
 
 def _ignition_on(raw) -> bool | None:
@@ -380,6 +457,7 @@ def normalize_trend(t: dict) -> dict:
 _live_cache: dict[str, list[dict]] = {}  # account_id -> list of normalised vehicles
 _live_cache_lock = threading.Lock()
 _live_cache_ts: dict[str, float] = {}     # account_id -> timestamp of last refresh
+_live_cache_meta: dict[str, dict] = {}    # account_id -> feed source / SOAP health
 _poll_thread: Optional[threading.Thread] = None
 _poll_thread_stop = threading.Event()
 LIVE_POLL_INTERVAL_SEC = 15
@@ -399,11 +477,96 @@ def get_cache_age(account_id: int) -> Optional[float]:
     return None
 
 
-def _set_cached_positions(account_id: int, vehicles: list[dict]):
+def _set_cached_positions(account_id: int, vehicles: list[dict],
+                          *, source: str = 'portalxs', soap_ok: bool = True):
     key = str(account_id)
+    now = time.time()
     with _live_cache_lock:
         _live_cache[key] = vehicles
-        _live_cache_ts[key] = time.time()
+        _live_cache_ts[key] = now
+        meta = dict(_live_cache_meta.get(key) or {})
+        meta['source'] = source
+        meta['served_from'] = source
+        meta['served_at'] = now
+        meta['soap_ok'] = bool(soap_ok)
+        if soap_ok and source == 'portalxs':
+            meta['fetched_at'] = now
+            meta['fetched_at_pk'] = pk_now().isoformat(timespec='seconds')
+        _live_cache_meta[key] = meta
+
+
+def _mark_feed_served(account_id: int, served_from: str, soap_ok: Optional[bool] = None):
+    key = str(account_id)
+    with _live_cache_lock:
+        meta = dict(_live_cache_meta.get(key) or {})
+        meta['served_from'] = served_from
+        meta['served_at'] = time.time()
+        if soap_ok is not None:
+            meta['soap_ok'] = bool(soap_ok)
+            if not meta.get('source'):
+                meta['source'] = served_from
+        _live_cache_meta[key] = meta
+
+
+def get_live_feed_meta(account_id: int) -> dict:
+    """Public feed metadata for the live map. No credentials."""
+    key = str(account_id)
+    now = time.time()
+    with _live_cache_lock:
+        meta = dict(_live_cache_meta.get(key) or {})
+        ts = _live_cache_ts.get(key)
+    fetched_at = meta.get('fetched_at')
+    if fetched_at is not None:
+        cache_age = int(max(0, now - fetched_at))
+    elif ts is not None:
+        cache_age = int(max(0, now - ts))
+    else:
+        cache_age = None
+    return {
+        'source': meta.get('served_from') or meta.get('source') or 'cache',
+        'fetched_at': meta.get('fetched_at_pk'),
+        'cache_age_sec': cache_age,
+        'soap_ok': bool(meta.get('soap_ok')),
+    }
+
+
+def classify_feed_status(meta: dict, vehicles: list[dict]) -> str:
+    """LIVE is GPS freshness after a successful PortalXS snapshot, never poll OK."""
+    ages = [
+        v.get('gps_age_sec') for v in (vehicles or [])
+        if v.get('gps_age_sec') is not None
+    ]
+    if not meta.get('soap_ok'):
+        cache_age = meta.get('cache_age_sec')
+        source = meta.get('source')
+        if source == 'db' or cache_age is None or cache_age > GPS_DELAYED_MAX_SEC:
+            return 'OFFLINE'
+        return 'DELAYED'
+    if not ages:
+        return 'UNKNOWN'
+    best = min(ages)
+    if best <= GPS_LIVE_MAX_SEC:
+        return 'LIVE'
+    if best <= GPS_DELAYED_MAX_SEC:
+        return 'DELAYED'
+    return 'OFFLINE'
+
+
+def build_live_positions_payload(account_id: int, force: bool = False,
+                                 vehicles: Optional[list[dict]] = None) -> dict:
+    """Vehicles plus freshness fields. Existing vehicle keys are unchanged."""
+    if vehicles is None:
+        vehicles = fetch_live_positions(account_id, force=force)
+    annotated = annotate_vehicle_freshness(vehicles)
+    meta = get_live_feed_meta(account_id)
+    return {
+        'vehicles': annotated,
+        'source': meta['source'],
+        'fetched_at': meta['fetched_at'],
+        'cache_age_sec': meta['cache_age_sec'],
+        'data_status': classify_feed_status(meta, annotated),
+        'warning': get_position_warning(account_id),
+    }
 
 
 # ── Client management ────────────────────────────────────────────────────────
@@ -459,10 +622,26 @@ _POSITION_WARNING_LOCK = threading.Lock()
 _LIVE_FETCH_ATTEMPTS = 3
 
 
-def consume_position_warning(account_id: int) -> Optional[str]:
-    """One-shot warning for the UI after a stale/DB fallback fetch."""
+def get_position_warning(account_id: int) -> Optional[str]:
+    """Current fallback warning. Stays until a genuine PortalXS SOAP success."""
     with _POSITION_WARNING_LOCK:
-        return _POSITION_FETCH_WARNINGS.pop(account_id, None)
+        return _POSITION_FETCH_WARNINGS.get(account_id)
+
+
+def consume_position_warning(account_id: int) -> Optional[str]:
+    """Return the fallback warning without clearing it.
+
+    The warning is popped only after a successful PortalXS SOAP fetch.
+    """
+    return get_position_warning(account_id)
+
+
+def note_live_feed_unavailable(account_id: int, exc: Exception) -> None:
+    """Keep last positions, but stop calling the feed LIVE."""
+    with _POSITION_WARNING_LOCK:
+        _POSITION_FETCH_WARNINGS[account_id] = friendly_portalxs_error(exc)
+    cached = get_cached_positions(account_id)
+    _mark_feed_served(account_id, 'cache' if cached else 'db', soap_ok=False)
 
 
 def friendly_portalxs_error(exc: Exception) -> str:
@@ -542,11 +721,12 @@ def _finish_fetch_with_fallback(account_id: int, last_exc: Exception) -> list[di
     if cached:
         with _POSITION_WARNING_LOCK:
             _POSITION_FETCH_WARNINGS[account_id] = friendly_portalxs_error(last_exc)
+        _mark_feed_served(account_id, 'cache', soap_ok=False)
         return cached
 
     db_vehicles = _positions_from_db_mappings(account_id)
     if db_vehicles:
-        _set_cached_positions(account_id, db_vehicles)
+        _set_cached_positions(account_id, db_vehicles, source='db', soap_ok=False)
         with _POSITION_WARNING_LOCK:
             _POSITION_FETCH_WARNINGS[account_id] = (
                 friendly_portalxs_error(last_exc) + ' (last saved positions dikha rahe hain)'
@@ -577,6 +757,7 @@ def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
     # Use cache if fresh — UI reads this; the poll thread keeps it warm.
     age = get_cache_age(account_id)
     if not force and age is not None and age < LIVE_CACHE_TTL_SEC:
+        _mark_feed_served(account_id, 'cache')
         return get_cached_positions(account_id)
 
     last_exc = None
@@ -588,7 +769,7 @@ def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
                 raw_vehicles = []
 
             vehicles = [normalize_vehicle(v) for v in raw_vehicles]
-            _set_cached_positions(account_id, vehicles)
+            _set_cached_positions(account_id, vehicles, source='portalxs', soap_ok=True)
 
             acct = db.session.get(PortalXSAccount, account_id)
             if acct:

@@ -26,7 +26,17 @@
   .tb-stat.stopped .num { color: #cbd5e1; }
   .tb-stat.idle .num { color: #3b82f6; }
   .tb-stat.total .num { color: #60a5fa; }
-  .tb-updated { font-size: 11px; color: #9ec5ff; white-space: nowrap; }
+  .tb-updated { font-size: 11px; color: #9ec5ff; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .tb-fresh-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; flex-shrink: 0; }
+  .tb-fresh-dot.LIVE { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+  .tb-fresh-dot.DELAYED { background: #f59e0b; }
+  .tb-fresh-dot.OFFLINE { background: #ef4444; }
+  .tb-fresh-dot.UNKNOWN { background: #94a3b8; }
+  .fleet-vmarker.gps-delayed { opacity: .78; filter: saturate(.8); }
+  .fleet-vmarker.gps-offline { opacity: .52; filter: saturate(.55); }
+  .vrow.gps-delayed { opacity: .8; }
+  .vrow.gps-offline { opacity: .62; }
+  .vdot.gps-stale { box-shadow: 0 0 0 1px rgba(245,158,11,.65); }
   .tb-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
   .tb-btn:hover { background: rgba(255,255,255,.25); color: #fff; }
   .tb-select { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 12px; outline: none; }
@@ -235,7 +245,11 @@
   .ts-grip { display: none; }
   .ts-grip-bar { width: 46px; height: 5px; border-radius: 99px; background: #3b4d61; }
   .ts-grip-meta { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #94a3b8; font-weight: 600; }
-  .ts-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,.6); animation: tkLive 1.8s infinite; }
+  .ts-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; box-shadow: none; }
+  .ts-live-dot.LIVE { background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,.6); animation: tkLive 1.8s infinite; }
+  .ts-live-dot.DELAYED { background: #f59e0b; animation: none; }
+  .ts-live-dot.OFFLINE { background: #ef4444; animation: none; }
+  .ts-live-dot.UNKNOWN { background: #94a3b8; animation: none; }
   @keyframes tkLive {
     0% { box-shadow: 0 0 0 0 rgba(34,197,94,.55); }
     70% { box-shadow: 0 0 0 7px rgba(34,197,94,0); }
@@ -531,19 +545,17 @@
       <div class="tb-stat stopped" data-stat-filter="Stopped"><div class="num" id="statStopped">{{ stats.stopped }}</div><div class="lbl">Stopped</div></div>
       <div class="tb-stat idle" data-stat-filter="Idle"><div class="num" id="statIdle">{{ stats.idle }}</div><div class="lbl">Idle</div></div>
     </div>
-    <div class="tb-updated" id="tbUpdated">--</div>
+    <div class="tb-updated" id="tbUpdated" title="GPS freshness"><span class="tb-fresh-dot UNKNOWN" id="tbFreshDot"></span><span id="tbFreshText">--</span></div>
     <label class="tb-check"><input type="checkbox" id="showLabelsChk" checked> Show Labels</label>
     <button id="forceRefreshBtn" class="tb-btn"><i class="bi bi-arrow-clockwise"></i><span>Refresh</span></button>
   </div>
 
-  {% if error %}
-  <div class="tracking-error" id="trackingErrorBanner">
-    <i class="bi bi-exclamation-triangle"></i> {{ error }}
-    {% if can_see_page('tracking_settings') and 'configured' in (error|lower) %}
+  <div class="tracking-error" id="trackingErrorBanner" {% if not error %}style="display:none;"{% endif %}>
+    <i class="bi bi-exclamation-triangle"></i> <span id="trackingErrorText">{{ error or '' }}</span>
+    {% if can_see_page('tracking_settings') and error and 'configured' in (error|lower) %}
     &mdash; <a href="{{ url_for('tracking_settings') }}" style="color:#fca5a5;text-decoration:underline;">Configure account</a>
     {% endif %}
   </div>
-  {% endif %}
 
   <!-- Body: Sidebar + Map -->
   <div class="tracking-body">
@@ -552,7 +564,7 @@
       <div class="ts-grip" id="tsGrip">
         <span class="ts-grip-bar"></span>
         <div class="ts-grip-meta">
-          <span class="ts-live-dot"></span>
+          <span class="ts-live-dot" id="tsLiveDot"></span>
           <span><b id="tsGripCount">{{ stats.total }}</b> vehicles</span>
           <span>&middot;</span>
           <span id="tsGripHint">swipe up for list</span>
@@ -835,6 +847,8 @@
   var selectedGroups = new Set();
   var positions = [];
   var posByReg = {};
+  var feedMeta = {{ feed | default({}) | tojson }};
+  var feedReceivedAt = Date.now();
   var ufoneTasksByReg = {{ ufone_tasks_by_reg | tojson }};
   var nearestLayer = L.layerGroup();
   var nearestMarkers = {};
@@ -1079,6 +1093,102 @@
     return raw || 'Unknown';
   }
 
+  function gpsStatusOf(v) {
+    return (v && v.gps_status) || 'unknown';
+  }
+
+  function displayGpsAgeSec(v) {
+    if (!v || v.gps_age_sec == null || v.gps_age_sec === '') return null;
+    var age = Number(v.gps_age_sec);
+    if (isNaN(age)) return null;
+    return Math.max(0, Math.round(age + (Date.now() - feedReceivedAt) / 1000));
+  }
+
+  function formatGpsAge(sec) {
+    if (sec == null) return 'unknown';
+    if (sec < 60) return sec + 's old';
+    var mins = Math.floor(sec / 60);
+    var rem = sec % 60;
+    if (mins < 60) return rem ? (mins + 'm ' + rem + 's old') : (mins + 'm old');
+    var hrs = Math.floor(mins / 60);
+    var hm = mins % 60;
+    return hm ? (hrs + 'h ' + hm + 'm old') : (hrs + 'h old');
+  }
+
+  function freshnessLabel(status) {
+    var s = String(status || 'UNKNOWN').toUpperCase();
+    if (s === 'LIVE' || s === 'DELAYED' || s === 'OFFLINE' || s === 'UNKNOWN') return s;
+    return 'UNKNOWN';
+  }
+
+  function applyMarkerFreshness(marker, v) {
+    if (!marker || !marker._icon) return;
+    marker._icon.classList.toggle('gps-delayed', gpsStatusOf(v) === 'delayed');
+    marker._icon.classList.toggle('gps-offline', gpsStatusOf(v) === 'offline');
+  }
+
+  function applyFeedMeta(data) {
+    if (!data) return;
+    if (data.source) feedMeta.source = data.source;
+    if (data.fetched_at != null) feedMeta.fetched_at = data.fetched_at;
+    if (data.cache_age_sec != null) feedMeta.cache_age_sec = data.cache_age_sec;
+    if (data.data_status) feedMeta.data_status = data.data_status;
+    if (data.warning !== undefined) feedMeta.warning = data.warning;
+    if (data.error && !feedMeta.warning) feedMeta.warning = data.error;
+    feedReceivedAt = Date.now();
+  }
+
+  function freshestDisplayAge() {
+    var best = null;
+    positions.forEach(function(v) {
+      var age = displayGpsAgeSec(v);
+      if (age == null) return;
+      if (best == null || age < best) best = age;
+    });
+    return best;
+  }
+
+  function updateFreshnessUi() {
+    var status = freshnessLabel(feedMeta.data_status);
+    var age = freshestDisplayAge();
+    var text;
+    if (status === 'OFFLINE') {
+      text = age == null ? 'OFFLINE' : ('OFFLINE · Last GPS ' + formatGpsAge(age).replace(' old', ' ago'));
+    } else if (status === 'UNKNOWN') {
+      text = 'UNKNOWN · No GPS time';
+    } else {
+      text = status + (age == null ? '' : (' · GPS ' + formatGpsAge(age)));
+    }
+    var dot = document.getElementById('tbFreshDot');
+    var label = document.getElementById('tbFreshText');
+    if (dot) dot.className = 'tb-fresh-dot ' + status;
+    if (label) label.textContent = text;
+    var updated = document.getElementById('tbUpdated');
+    if (updated) updated.title = text;
+    var gripDot = document.getElementById('tsLiveDot');
+    if (gripDot) gripDot.className = 'ts-live-dot ' + status;
+    var gripHint = document.getElementById('tsGripHint');
+    if (gripHint) gripHint.textContent = text;
+    var banner = document.getElementById('trackingErrorBanner');
+    var bannerText = document.getElementById('trackingErrorText');
+    var warn = feedMeta.warning;
+    if (banner) {
+      if (warn) {
+        if (bannerText) bannerText.textContent = warn;
+        banner.style.display = '';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+    var gpsEls = document.querySelectorAll('[data-gps-age]');
+    for (var i = 0; i < gpsEls.length; i++) {
+      var reg = gpsEls[i].getAttribute('data-gps-age');
+      var veh = posByReg[reg];
+      if (!veh) continue;
+      gpsEls[i].textContent = formatGpsAge(displayGpsAgeSec(veh));
+    }
+  }
+
   function shadeHex(hex, amount) {
     var h = (hex || '#888888').replace('#', '');
     if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
@@ -1095,34 +1205,10 @@
 
   var showLabels = true;
 
-  /* ── Smooth movement between polls ──────────────────────────────────
-     PortalXS is still polled every 15s (no extra SOAP load). Moving
-     markers glide across that gap, then coast along heading × speed
-     until the next fix so they do not freeze on the map. */
-  var MOVE_ANIM_MS = 1200;
-  var MOVE_GLIDE_MS = 14000;
-  var COAST_MIN_KMH = 3;
-  var moveAnims = {};
-  var moveRaf = null;
-  var reduceMotion = document.documentElement.classList.contains('legacy-android-gpu') ||
-    !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
-  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
-
-  function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-
-  function offsetLatLng(lat, lng, headingDeg, meters) {
-    var R = 6371000;
-    var br = headingDeg * Math.PI / 180;
-    var lat1 = lat * Math.PI / 180;
-    var lon1 = lng * Math.PI / 180;
-    var ang = meters / R;
-    var lat2 = Math.asin(Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br));
-    var lon2 = lon1 + Math.atan2(
-      Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
-      Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2)
-    );
-    return { lat: lat2 * 180 / Math.PI, lng: lon2 * 180 / Math.PI };
+  function moveMarker(reg, marker, lat, lon) {
+    var to = L.latLng(lat, lon);
+    marker.setLatLng(to);
+    if (followReg === reg) map.setView(to, map.getZoom(), { animate: false });
   }
 
   /* Keeps a continuously growing angle so 350° → 10° turns 20° right, not 340° left */
@@ -1134,57 +1220,6 @@
   function iconKeys(color, hasTask, regNo, appliedDeg) {
     var base = color + '|' + hasTask + '|' + (showLabels ? regNo : '');
     return { base: base, full: base + '|' + Math.round(appliedDeg) };
-  }
-
-  var moveFrame = 0;
-  function stepMoveAnims() {
-    moveRaf = null;
-    moveFrame++;
-    var t = nowMs();
-    var running = false;
-    Object.keys(moveAnims).forEach(function(reg) {
-      var a = moveAnims[reg];
-      var m = markers[reg];
-      if (!m) { delete moveAnims[reg]; return; }
-      var lat;
-      var lng;
-      var p = a.ms ? Math.min(1, (t - a.t0) / a.ms) : 1;
-      if (p < 1) {
-        var e = easeInOutQuad(p);
-        lat = a.from.lat + (a.to.lat - a.from.lat) * e;
-        lng = a.from.lng + (a.to.lng - a.from.lng) * e;
-        running = true;
-      } else if (a.coastKmh >= COAST_MIN_KMH && (t - a.t0) < (a.ms + MOVE_GLIDE_MS)) {
-        var coastSec = (t - a.t0 - a.ms) / 1000;
-        var meters = (a.coastKmh * 1000 / 3600) * coastSec;
-        var coast = offsetLatLng(a.to.lat, a.to.lng, a.heading, meters);
-        lat = coast.lat;
-        lng = coast.lng;
-        p = 1;
-        running = true;
-      } else {
-        lat = a.to.lat;
-        lng = a.to.lng;
-        delete moveAnims[reg];
-      }
-      m.setLatLng([lat, lng]);
-      /* Re-centring every frame is wasted work; every other frame looks identical */
-      if (followReg === reg && (moveFrame % 2 === 0 || p >= 1)) {
-        map.setView([lat, lng], map.getZoom(), { animate: false });
-      }
-    });
-    if (running) moveRaf = requestAnimationFrame(stepMoveAnims);
-  }
-
-  function moveMarker(reg, marker, lat, lon) {
-    delete moveAnims[reg];
-    if (moveRaf) {
-      cancelAnimationFrame(moveRaf);
-      moveRaf = null;
-    }
-    var to = L.latLng(lat, lon);
-    marker.setLatLng(to);
-    if (followReg === reg) map.setView(to, map.getZoom(), { animate: false });
   }
 
   function navArrowSvg(color, uid) {
@@ -1245,14 +1280,16 @@
     var color = colorFor(cls);
     var lm = (v.LandMark || '').replace(/^0\|\|/, '');
     var spd = parseFloat(v.Speed || 0).toFixed(0);
+    var gpsSt = gpsStatusOf(v);
+    var gpsData = gpsSt === 'delayed' ? 'GPS Stale' : (gpsSt === 'offline' ? 'Offline' : (gpsSt === 'live' ? 'Live' : 'Unknown'));
     return '<div class="pop-title">' + v.RegNo + '</div>' +
       '<div class="pop-row"><b>Status:</b> <span style="color:' + color + '">' + cls.toUpperCase() + '</span></div>' +
       '<div class="pop-row"><b>Speed:</b> ' + spd + ' km/h</div>' +
       '<div class="pop-row"><b>Ignition:</b> ' + (v.IgnitionStatus || 'N/A') + '</div>' +
+      '<div class="pop-row"><b>GPS:</b> <span data-gps-age="' + v.RegNo + '">' + formatGpsAge(displayGpsAgeSec(v)) + '</span></div>' +
+      '<div class="pop-row"><b>Data:</b> ' + gpsData + '</div>' +
       '<div class="pop-row"><b>Landmark:</b> ' + (lm || 'n/a') + '</div>' +
       '<div class="pop-row"><b>Time:</b> ' + (v.RDT || 'N/A') + '</div>' +
-      '<div class="pop-row"><b>Mileage:</b> ' + (v.TotalMileage || 0).toFixed(0) + ' km</div>' +
-      '<div class="pop-row"><b>Trips:</b> ' + (v.TotalTrips || 0) + '</div>' +
       '<div class="pop-row"><b>Coords:</b> ' + v.LAT + ', ' + v.LON + '</div>' +
       popupTaskBlock(v.RegNo) +
       '<button type="button" class="pop-link pop-nearest-btn" data-nearest-reg="' + encodeURIComponent(v.RegNo) + '">' +
@@ -1313,7 +1350,7 @@
   }
 
   function rowSignature(v, hasTask) {
-    return [v.VehicleStatus, v.Speed, v.LandMark, v.RDT, v.LAT, v.LON, hasTask].join('|');
+    return [v.VehicleStatus, v.Speed, v.LandMark, v.RDT, v.LAT, v.LON, hasTask, gpsStatusOf(v)].join('|');
   }
 
   function updateRow(row, v) {
@@ -1333,7 +1370,9 @@
     row.dataset.lat = v.LAT;
     row.dataset.lon = v.LON;
     row.classList.toggle('has-ufone-task', hasTask);
-    if (els.dot) els.dot.className = 'vdot ' + cls;
+    row.classList.toggle('gps-delayed', gpsStatusOf(v) === 'delayed');
+    row.classList.toggle('gps-offline', gpsStatusOf(v) === 'offline');
+    if (els.dot) els.dot.className = 'vdot ' + cls + (gpsStatusOf(v) === 'delayed' || gpsStatusOf(v) === 'offline' ? ' gps-stale' : '');
     if (els.regTxt) els.regTxt.textContent = v.RegNo;
     if (els.tag) els.tag.style.display = hasTask ? '' : 'none';
     if (els.sub) els.sub.textContent = (lm || '-') + ' \u00B7 ' + time;
@@ -1554,6 +1593,7 @@
           else m.setIcon(carIcon(color, applied, hasTask, v.RegNo));
         }
         if (m.getPopup()) m.setPopupContent(popupHtml(v));
+        applyMarkerFreshness(m, v);
         markerState[v.RegNo] = { lat: lat, lon: lon, icon: keys.full, iconBase: keys.base, applied: applied };
       } else {
         applied = deg;
@@ -1563,6 +1603,7 @@
         var mReg = v.RegNo;
         m.on('click', function() { selectVehicle(mReg, isMobile()); });
         markers[v.RegNo] = m;
+        applyMarkerFreshness(m, v);
         var newKeys = iconKeys(color, hasTask, v.RegNo, applied);
         markerState[v.RegNo] = { lat: lat, lon: lon, icon: newKeys.full, iconBase: newKeys.base, applied: applied };
       }
@@ -1574,17 +1615,11 @@
         map.removeLayer(markers[reg]);
         delete markers[reg];
         delete markerState[reg];
-        delete moveAnims[reg];
       }
     });
 
     applyFilter();
-    var now = new Date();
-    document.getElementById('tbUpdated').textContent = '\u21BB ' + now.toLocaleTimeString();
-    var gripHint = document.getElementById('tsGripHint');
-    if (gripHint) {
-      gripHint.textContent = '\u21BB ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
+    updateFreshnessUi();
 
     /* Keep the followed vehicle centred and the detail card live */
     if (followReg && markers[followReg]) {
@@ -1841,6 +1876,8 @@
         detailCell('Speed', spd + ' km/h') +
         detailCell('Ignition', v.IgnitionStatus || 'N/A') +
         detailCell('Updated', time) +
+        '<div class="tk-detail-cell"><div class="k">GPS</div><div class="v" data-gps-age="' + v.RegNo + '">' + formatGpsAge(displayGpsAgeSec(v)) + '</div></div>' +
+        detailCell('Data', gpsStatusOf(v) === 'delayed' ? 'GPS Stale' : (gpsStatusOf(v) === 'offline' ? 'Offline' : (gpsStatusOf(v) === 'live' ? 'Live' : 'Unknown'))) +
       '</div>' +
       '<div class="tk-detail-actions">' +
         '<button type="button" class="tk-act follow' + (following ? ' on' : '') + '" data-tk="follow">' +
@@ -2207,6 +2244,7 @@
       var state = markerState[v.RegNo];
       var applied = state ? state.applied : (parseFloat(v.Direction) || 0);
       markers[v.RegNo].setIcon(carIcon(color, applied, hasTask, v.RegNo));
+      applyMarkerFreshness(markers[v.RegNo], v);
       if (state) {
         var keys = iconKeys(color, hasTask, v.RegNo, applied);
         state.icon = keys.full;
@@ -2229,20 +2267,39 @@
     refreshPositions(true);
   });
 
-  // ── Auto refresh (pauses when tab is hidden — saves battery/bandwidth) ──
+  // ── Auto refresh: one in-flight request, then wait 15s ──
   var REFRESH_MS = 15000;
   var UFONE_TASK_MS = 60000;
   var lastRefreshAt = Date.now();
-  setInterval(function() {
-    if (document.hidden) return;
-    refreshPositions(false);
-  }, REFRESH_MS);
+  var positionsInFlight = false;
+  var positionsRequestId = 0;
+  var pollTimer = null;
+
+  function setPositionsBusy(busy) {
+    positionsInFlight = !!busy;
+    var btn = document.getElementById('forceRefreshBtn');
+    if (btn) btn.disabled = !!busy;
+    var indicator = document.getElementById('refreshIndicator');
+    if (indicator) indicator.style.display = busy ? 'block' : 'none';
+  }
+
+  function scheduleNextPoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(function() {
+      pollTimer = null;
+      if (document.hidden) {
+        scheduleNextPoll();
+        return;
+      }
+      refreshPositions(false);
+    }, REFRESH_MS);
+  }
+
   setInterval(function() {
     if (document.hidden) return;
     fetchUfoneTaskMap().then(function() { renderAfterTaskSync(); });
   }, UFONE_TASK_MS);
 
-  // Refresh immediately when returning to a stale tab
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden && (Date.now() - lastRefreshAt) > REFRESH_MS) {
       refreshPositions(false);
@@ -2250,36 +2307,42 @@
   });
 
   function refreshPositions(force) {
-    var indicator = document.getElementById('refreshIndicator');
-    indicator.style.display = 'block';
+    if (positionsInFlight) return;
+    var requestId = ++positionsRequestId;
+    setPositionsBusy(true);
     lastRefreshAt = Date.now();
     var url = force ? '/api/tracking/refresh' : '/api/tracking/positions';
     var opts = { method: force ? 'POST' : 'GET', headers: { 'X-CSRFToken': window.FleetConfig.csrfToken } };
     if (force) opts.headers['Content-Type'] = 'application/json';
     fetch(url, opts).then(function(r) { return r.json(); }).then(function(data) {
+      if (requestId !== positionsRequestId) return;
+      applyFeedMeta(data);
       if (data.ufone_tasks_by_reg && typeof data.ufone_tasks_by_reg === 'object') {
         ufoneTasksByReg = data.ufone_tasks_by_reg;
       }
       if (data.vehicles && data.vehicles.length) {
         renderVehicles(data.vehicles);
-        var errBanner = document.getElementById('trackingErrorBanner');
-        if (errBanner) errBanner.style.display = 'none';
-        if (data.warning) {
-          document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.warning).slice(0, 80);
-        }
       } else if (Object.keys(ufoneTasksByReg).length && positions.length) {
         renderVehicles(positions);
-      } else if (data.error) {
-        document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.error).slice(0, 60);
-      } else if (data.warning) {
-        document.getElementById('tbUpdated').textContent = '\u26A0 ' + String(data.warning).slice(0, 80);
+      } else {
+        updateFreshnessUi();
       }
-      indicator.style.display = 'none';
     }).catch(function() {
-      indicator.style.display = 'none';
-      document.getElementById('tbUpdated').textContent = '\u26A0 refresh failed';
+      if (requestId !== positionsRequestId) return;
+      feedMeta.data_status = feedMeta.data_status === 'LIVE' ? 'DELAYED' : (feedMeta.data_status || 'OFFLINE');
+      feedMeta.warning = 'refresh failed';
+      updateFreshnessUi();
+    }).then(function() {
+      if (requestId !== positionsRequestId) return;
+      setPositionsBusy(false);
+      scheduleNextPoll();
     });
   }
+
+  setInterval(function() {
+    if (document.hidden) return;
+    updateFreshnessUi();
+  }, 10000);
 
   // ── Initial load ──
   var initialVehicles = {{ vehicles | tojson }};
@@ -2297,7 +2360,9 @@
     } else {
       updateStatCounts();
       syncGroupHeaderState();
+      updateFreshnessUi();
     }
+    scheduleNextPoll();
   });
 })();
 </script>
