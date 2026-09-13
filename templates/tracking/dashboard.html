@@ -24,7 +24,7 @@
   .tb-stat .lbl { font-size: 9px; color: #cfe4ff; text-transform: uppercase; }
   .tb-stat.moving .num { color: #22c55e; }
   .tb-stat.stopped .num { color: #cbd5e1; }
-  .tb-stat.idle .num { color: #f59e0b; }
+  .tb-stat.idle .num { color: #3b82f6; }
   .tb-stat.total .num { color: #60a5fa; }
   .tb-updated { font-size: 11px; color: #9ec5ff; white-space: nowrap; }
   .tb-btn { background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2); color: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
@@ -98,7 +98,8 @@
   .vdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .vdot.Moving { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.55); }
   .vdot.Stopped { background: #111827; box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
-  .vdot.Idle, .vdot.unknown { background: #f59e0b; }
+  .vdot.Idle { background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,.45); }
+  .vdot.unknown { background: #f59e0b; }
   .vinfo { flex: 1; min-width: 0; }
   .vreg { font-size: 13px; font-weight: 600; color: #e0e0e0; }
   .vsub { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -623,7 +624,8 @@
         <div class="row"><span class="dot" style="background:#22c55e"></span> Moving</div>
         <div class="row"><span class="dot" style="background:#111827;box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span> Stopped (ign off)</div>
         <div class="row"><span class="dot" style="background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.45);animation:vmarker-pulse 2s ease-out infinite"></span> Active Ufone Task</div>
-        <div class="row"><span class="dot" style="background:#f59e0b"></span> Idle / No GPS</div>
+        <div class="row"><span class="dot" style="background:#3b82f6"></span> Idle (engine on)</div>
+        <div class="row"><span class="dot" style="background:#f59e0b"></span> No GPS / Not responding</div>
         <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Nav arrow · rotates with heading</div>
       </div>
 
@@ -1051,6 +1053,7 @@
   function colorFor(status) {
     if (status === 'Moving') return '#22c55e';
     if (status === 'Stopped') return '#111827';
+    if (status === 'Idle') return '#3b82f6';
     return '#f59e0b';
   }
 
@@ -1071,10 +1074,12 @@
   var showLabels = true;
 
   /* ── Smooth movement between polls ──────────────────────────────────
-     Positions arrive every 15s. Instead of teleporting each marker we
-     interpolate over ~1.2s and rotate along the shortest angular path,
-     so vehicles glide along the road the way native tracking apps do. */
+     PortalXS is still polled every 15s (no extra SOAP load). Moving
+     markers glide across that gap, then coast along heading × speed
+     until the next fix so they do not freeze on the map. */
   var MOVE_ANIM_MS = 1200;
+  var MOVE_GLIDE_MS = 14000;
+  var COAST_MIN_KMH = 3;
   var moveAnims = {};
   var moveRaf = null;
   var reduceMotion = document.documentElement.classList.contains('legacy-android-gpu') ||
@@ -1083,6 +1088,20 @@
   function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
 
   function easeInOutQuad(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+  function offsetLatLng(lat, lng, headingDeg, meters) {
+    var R = 6371000;
+    var br = headingDeg * Math.PI / 180;
+    var lat1 = lat * Math.PI / 180;
+    var lon1 = lng * Math.PI / 180;
+    var ang = meters / R;
+    var lat2 = Math.asin(Math.sin(lat1) * Math.cos(ang) + Math.cos(lat1) * Math.sin(ang) * Math.cos(br));
+    var lon2 = lon1 + Math.atan2(
+      Math.sin(br) * Math.sin(ang) * Math.cos(lat1),
+      Math.cos(ang) - Math.sin(lat1) * Math.sin(lat2)
+    );
+    return { lat: lat2 * 180 / Math.PI, lng: lon2 * 180 / Math.PI };
+  }
 
   /* Keeps a continuously growing angle so 350° → 10° turns 20° right, not 340° left */
   function nextAngle(applied, targetDeg) {
@@ -1105,26 +1124,46 @@
       var a = moveAnims[reg];
       var m = markers[reg];
       if (!m) { delete moveAnims[reg]; return; }
-      var p = Math.min(1, (t - a.t0) / a.ms);
-      var e = easeInOutQuad(p);
-      var lat = a.from.lat + (a.to.lat - a.from.lat) * e;
-      var lng = a.from.lng + (a.to.lng - a.from.lng) * e;
+      var lat;
+      var lng;
+      var p = a.ms ? Math.min(1, (t - a.t0) / a.ms) : 1;
+      if (p < 1) {
+        var e = easeInOutQuad(p);
+        lat = a.from.lat + (a.to.lat - a.from.lat) * e;
+        lng = a.from.lng + (a.to.lng - a.from.lng) * e;
+        running = true;
+      } else if (a.coastKmh >= COAST_MIN_KMH && (t - a.t0) < (a.ms + MOVE_GLIDE_MS)) {
+        var coastSec = (t - a.t0 - a.ms) / 1000;
+        var meters = (a.coastKmh * 1000 / 3600) * coastSec;
+        var coast = offsetLatLng(a.to.lat, a.to.lng, a.heading, meters);
+        lat = coast.lat;
+        lng = coast.lng;
+        p = 1;
+        running = true;
+      } else {
+        lat = a.to.lat;
+        lng = a.to.lng;
+        delete moveAnims[reg];
+      }
       m.setLatLng([lat, lng]);
       /* Re-centring every frame is wasted work; every other frame looks identical */
       if (followReg === reg && (moveFrame % 2 === 0 || p >= 1)) {
         map.setView([lat, lng], map.getZoom(), { animate: false });
       }
-      if (p >= 1) delete moveAnims[reg]; else running = true;
     });
     if (running) moveRaf = requestAnimationFrame(stepMoveAnims);
   }
 
-  function moveMarker(reg, marker, lat, lon) {
+  function moveMarker(reg, marker, lat, lon, opts) {
+    opts = opts || {};
     var from = marker.getLatLng();
     var to = L.latLng(lat, lon);
+    var moving = !!opts.moving;
+    var speed = parseFloat(opts.speed) || 0;
+    var heading = parseFloat(opts.heading) || 0;
+    var dist = map.distance(from, to);
     var jumpy = reduceMotion ||
-      map.distance(from, to) < 1 ||
-      map.distance(from, to) > 3000 ||
+      dist > 3000 ||
       !map.getBounds().pad(0.4).contains(from);
     if (jumpy) {
       delete moveAnims[reg];
@@ -1132,7 +1171,23 @@
       if (followReg === reg) map.setView(to, map.getZoom(), { animate: true });
       return;
     }
-    moveAnims[reg] = { from: from, to: to, t0: nowMs(), ms: MOVE_ANIM_MS };
+    var ms = moving ? MOVE_GLIDE_MS : MOVE_ANIM_MS;
+    if (!moving && dist < 1) {
+      delete moveAnims[reg];
+      marker.setLatLng(to);
+      return;
+    }
+    if (moving && dist < 1) {
+      ms = 0;
+    }
+    moveAnims[reg] = {
+      from: from,
+      to: to,
+      t0: nowMs(),
+      ms: ms,
+      heading: heading,
+      coastKmh: (moving && speed >= COAST_MIN_KMH && !reduceMotion) ? speed : 0
+    };
     if (!moveRaf) moveRaf = requestAnimationFrame(stepMoveAnims);
   }
 
@@ -1492,7 +1547,11 @@
       if (m && prev) {
         applied = nextAngle(prev.applied, deg);
         var keys = iconKeys(color, hasTask, v.RegNo, applied);
-        if (prev.lat !== lat || prev.lon !== lon) moveMarker(v.RegNo, m, lat, lon);
+        if (prev.lat !== lat || prev.lon !== lon) {
+          moveMarker(v.RegNo, m, lat, lon, { moving: cls === 'Moving', speed: v.Speed, heading: deg });
+        } else if (cls === 'Moving' && !moveAnims[v.RegNo] && (parseFloat(v.Speed) || 0) >= COAST_MIN_KMH) {
+          moveMarker(v.RegNo, m, lat, lon, { moving: true, speed: v.Speed, heading: deg });
+        }
         if (prev.icon !== keys.full) {
           var car = (prev.iconBase === keys.base && m._icon) ? m._icon.querySelector('.vmarker-car') : null;
           /* Heading-only change: rotate the live node so its CSS transition runs */
@@ -1758,7 +1817,8 @@
   function statusChip(cls) {
     var color = colorFor(cls);
     var bg = (cls === 'Moving') ? 'rgba(34,197,94,.16)'
-           : (cls === 'Stopped') ? 'rgba(203,213,225,.14)' : 'rgba(245,158,11,.16)';
+           : (cls === 'Stopped') ? 'rgba(203,213,225,.14)'
+           : (cls === 'Idle') ? 'rgba(59,130,246,.16)' : 'rgba(245,158,11,.16)';
     return '<span class="tk-chip" style="background:' + bg + ';color:' + (cls === 'Stopped' ? '#cbd5e1' : color) + ';">' + cls.toUpperCase() + '</span>';
   }
 

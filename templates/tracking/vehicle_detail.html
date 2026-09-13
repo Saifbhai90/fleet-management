@@ -12,7 +12,8 @@
   .info-card .info-value { font-size: 1.1rem; font-weight: 700; }
   .status-moving { background: #d1e7dd; color: #0f5132; }
   .status-stopped { background: #f8d7da; color: #842029; }
-  .status-idle, .status-unknown { background: #fff3cd; color: #664d03; }
+  .status-idle { background: #dbeafe; color: #1e40af; }
+  .status-unknown { background: #fff3cd; color: #664d03; }
   .dark-mode #detailMap { border-color: #333; }
 </style>
 {% endblock %}
@@ -165,7 +166,10 @@
   }).addTo(map);
 
   function colorFor(status) {
-    return status === 'Moving' ? '#198754' : status === 'Stopped' ? '#dc3545' : '#ffc107';
+    if (status === 'Moving') return '#22c55e';
+    if (status === 'Stopped') return '#111827';
+    if (status === 'Idle') return '#3b82f6';
+    return '#f59e0b';
   }
 
   function markerIcon(color) {
