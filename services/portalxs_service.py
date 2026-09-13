@@ -17,14 +17,18 @@ import math
 import os
 import threading
 import time
-from concurrent.futures import TimeoutError as FuturesTimeout
+from concurrent.futures import Future, TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import func
 
-from services.portalxs_coordination import portalxs_work
+from services.portalxs_coordination import (
+    current_portalxs_operation,
+    is_portalxs_bulk_operation,
+    portalxs_work,
+)
 from utils import clean_geo_location, normalize_vehicle_reg_key, pk_now, safe_float
 
 logger = logging.getLogger(__name__)
@@ -462,6 +466,10 @@ _poll_thread: Optional[threading.Thread] = None
 _poll_thread_stop = threading.Event()
 LIVE_POLL_INTERVAL_SEC = 15
 LIVE_CACHE_TTL_SEC = 20
+LIVE_INFLIGHT_WAIT_SEC = 30
+_BULK_SYNC_WARNING = 'PortalXS bulk sync is currently in progress'
+_live_fetch_futures: dict[int, Future] = {}
+_live_fetch_futures_lock = threading.Lock()
 
 
 def get_cached_positions(account_id: int) -> list[dict]:
@@ -556,7 +564,7 @@ def build_live_positions_payload(account_id: int, force: bool = False,
                                  vehicles: Optional[list[dict]] = None) -> dict:
     """Vehicles plus freshness fields. Existing vehicle keys are unchanged."""
     if vehicles is None:
-        vehicles = fetch_live_positions(account_id, force=force)
+        vehicles = serve_live_positions(account_id, force=force)
     annotated = annotate_vehicle_freshness(vehicles)
     meta = get_live_feed_meta(account_id)
     return {
@@ -738,15 +746,85 @@ def _finish_fetch_with_fallback(account_id: int, last_exc: Exception) -> list[di
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+def serve_live_positions(account_id: int, force: bool = False) -> list[dict]:
+    """Map reads: cache if present. SOAP only on first paint or Refresh."""
+    if not force:
+        cached = get_cached_positions(account_id)
+        if cached:
+            _mark_feed_served(account_id, 'cache')
+            return cached
+    return fetch_live_positions(account_id, force=force)
+
+
 def fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
-    """Fetch live positions without competing with a bulk PortalXS sync."""
+    """One in-flight live SOAP per account. Real bulk jobs keep the lock."""
     with portalxs_work(account_id, 'live-position', wait=False) as acquired:
         if not acquired:
-            return _finish_fetch_with_fallback(
-                account_id,
-                RuntimeError('PortalXS bulk sync is currently in progress'),
-            )
-        return _fetch_live_positions(account_id, force=force)
+            return _live_positions_when_locked(account_id)
+        return _run_live_fetch_with_inflight(account_id, force=force)
+
+
+def _register_live_fetch_future(account_id: int) -> Future:
+    fut: Future = Future()
+    with _live_fetch_futures_lock:
+        _live_fetch_futures[int(account_id)] = fut
+    return fut
+
+
+def _clear_live_fetch_future(account_id: int, fut: Future) -> None:
+    with _live_fetch_futures_lock:
+        if _live_fetch_futures.get(int(account_id)) is fut:
+            _live_fetch_futures.pop(int(account_id), None)
+
+
+def _inflight_live_fetch(account_id: int) -> Optional[Future]:
+    with _live_fetch_futures_lock:
+        return _live_fetch_futures.get(int(account_id))
+
+
+def _run_live_fetch_with_inflight(account_id: int, force: bool) -> list[dict]:
+    fut = _register_live_fetch_future(account_id)
+    try:
+        result = _fetch_live_positions(account_id, force=force)
+        if not fut.done():
+            fut.set_result(result)
+        return result
+    except Exception as exc:
+        if not fut.done():
+            fut.set_exception(exc)
+        raise
+    finally:
+        _clear_live_fetch_future(account_id, fut)
+
+
+def _serve_positions_without_new_warning(account_id: int) -> list[dict]:
+    cached = get_cached_positions(account_id)
+    if cached:
+        _mark_feed_served(account_id, 'cache')
+        return cached
+    db_vehicles = _positions_from_db_mappings(account_id)
+    if db_vehicles:
+        _set_cached_positions(account_id, db_vehicles, source='db', soap_ok=False)
+        return db_vehicles
+    raise RuntimeError('GPS server se data nahi mila — retry ho raha hai…')
+
+
+def _live_positions_when_locked(account_id: int) -> list[dict]:
+    """Share an in-flight live SOAP, or serve cache. Warn only for real bulk."""
+    fut = _inflight_live_fetch(account_id)
+    if fut is not None:
+        try:
+            return fut.result(timeout=LIVE_INFLIGHT_WAIT_SEC)
+        except Exception:
+            pass
+
+    holder = current_portalxs_operation(account_id)
+    if is_portalxs_bulk_operation(holder):
+        return _finish_fetch_with_fallback(
+            account_id,
+            RuntimeError(_BULK_SYNC_WARNING),
+        )
+    return _serve_positions_without_new_warning(account_id)
 
 
 def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:

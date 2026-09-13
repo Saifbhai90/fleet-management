@@ -1,7 +1,11 @@
 """Unit checks for Tracker P0/P1 freshness helpers (no live SOAP)."""
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from unittest.mock import patch
 import os
 import sys
+import threading
+import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 os.chdir(ROOT)
@@ -9,18 +13,30 @@ for path in (ROOT, os.path.join(ROOT, 'services')):
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from services import portalxs_service as portalxs_svc  # noqa: E402
+from services.portalxs_coordination import (  # noqa: E402
+    current_portalxs_operation,
+    is_portalxs_bulk_operation,
+    portalxs_work,
+)
 from services.portalxs_service import (  # noqa: E402
     GPS_DELAYED_MAX_SEC,
     GPS_LIVE_MAX_SEC,
     _POSITION_FETCH_WARNINGS,
+    _BULK_SYNC_WARNING,
     _parse_rdt,
+    _set_cached_positions,
     annotate_vehicle_freshness,
+    build_live_positions_payload,
     classify_feed_status,
     classify_gps_status,
     classify_live_status,
     consume_position_warning,
+    fetch_live_positions,
+    get_live_feed_meta,
     get_position_warning,
     gps_age_sec,
+    serve_live_positions,
 )
 
 
@@ -129,6 +145,130 @@ def test_request_id_ignores_stale():
     assert applied == ['new']
 
 
+def _clear_live_state(account_id: int):
+    with portalxs_svc._live_cache_lock:
+        portalxs_svc._live_cache.pop(str(account_id), None)
+        portalxs_svc._live_cache_ts.pop(str(account_id), None)
+        portalxs_svc._live_cache_meta.pop(str(account_id), None)
+    _POSITION_FETCH_WARNINGS.pop(account_id, None)
+
+
+def _sample_vehicle(regno='LEG-18-2874'):
+    return {
+        'RegNo': regno,
+        'LAT': 30.1,
+        'LON': 71.2,
+        'VehicleStatus': 'Moving',
+        'RDT': '2026-09-13 22:49:50',
+    }
+
+
+def test_bulk_operation_names():
+    assert is_portalxs_bulk_operation('mileage-auto-sync')
+    assert is_portalxs_bulk_operation('activity-auto-sync')
+    assert is_portalxs_bulk_operation('fleet-score-snapshot')
+    assert not is_portalxs_bulk_operation('live-position')
+    assert not is_portalxs_bulk_operation(None)
+
+
+def test_map_get_uses_cache_without_soap():
+    acct = 91011
+    _clear_live_state(acct)
+    _set_cached_positions(acct, [_sample_vehicle()], source='portalxs', soap_ok=True)
+    with patch('services.portalxs_service.fetch_live_positions') as mocked:
+        served = serve_live_positions(acct, force=False)
+        payload = build_live_positions_payload(acct, force=False)
+        mocked.assert_not_called()
+    assert served[0]['RegNo'] == 'LEG-18-2874'
+    assert payload['vehicles'][0]['RegNo'] == 'LEG-18-2874'
+    _clear_live_state(acct)
+
+
+def test_refresh_still_requests_soap():
+    acct = 91012
+    _clear_live_state(acct)
+    _set_cached_positions(acct, [_sample_vehicle()], source='portalxs', soap_ok=True)
+    with patch('services.portalxs_service.fetch_live_positions',
+               return_value=[_sample_vehicle('GBF-25-371')]) as mocked:
+        out = serve_live_positions(acct, force=True)
+        mocked.assert_called_once_with(acct, force=True)
+    assert out[0]['RegNo'] == 'GBF-25-371'
+    _clear_live_state(acct)
+
+
+def test_live_lock_collision_is_silent():
+    acct = 91013
+    _clear_live_state(acct)
+    _set_cached_positions(acct, [_sample_vehicle()], source='portalxs', soap_ok=True)
+    started = threading.Event()
+    release = threading.Event()
+
+    def _hold():
+        with portalxs_work(acct, 'live-position', wait=True):
+            started.set()
+            release.wait(2)
+
+    holder = threading.Thread(target=_hold)
+    holder.start()
+    assert started.wait(1)
+    assert current_portalxs_operation(acct) == 'live-position'
+    out = fetch_live_positions(acct, force=True)
+    warning = get_position_warning(acct)
+    meta = get_live_feed_meta(acct)
+    release.set()
+    holder.join(2)
+    assert out[0]['RegNo'] == 'LEG-18-2874'
+    assert warning is None or _BULK_SYNC_WARNING not in warning
+    assert meta['soap_ok'] is True
+    _clear_live_state(acct)
+
+
+def test_real_bulk_lock_sets_warning():
+    acct = 91014
+    _clear_live_state(acct)
+    _set_cached_positions(acct, [_sample_vehicle()], source='portalxs', soap_ok=True)
+    started = threading.Event()
+    release = threading.Event()
+
+    def _hold():
+        with portalxs_work(acct, 'mileage-auto-sync', wait=True):
+            started.set()
+            release.wait(2)
+
+    holder = threading.Thread(target=_hold)
+    holder.start()
+    assert started.wait(1)
+    out = fetch_live_positions(acct, force=True)
+    warning = get_position_warning(acct)
+    release.set()
+    holder.join(2)
+    assert out[0]['RegNo'] == 'LEG-18-2874'
+    assert warning == _BULK_SYNC_WARNING
+    _clear_live_state(acct)
+
+
+def test_inflight_live_soap_is_shared():
+    acct = 91015
+    _clear_live_state(acct)
+    calls = []
+    snapshot = [_sample_vehicle('GBF-25-992')]
+
+    def _fake(_account_id, force=False):
+        calls.append(force)
+        time.sleep(0.25)
+        return snapshot
+
+    with patch('services.portalxs_service._fetch_live_positions', _fake):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first = pool.submit(fetch_live_positions, acct, True)
+            time.sleep(0.05)
+            second = pool.submit(fetch_live_positions, acct, True)
+            assert first.result(timeout=3) == snapshot
+            assert second.result(timeout=3) == snapshot
+    assert calls == [True]
+    _clear_live_state(acct)
+
+
 if __name__ == '__main__':
     test_parse_rdt_real_formats()
     test_gps_status_thresholds()
@@ -138,4 +278,10 @@ if __name__ == '__main__':
     test_warning_is_not_consumed()
     test_future_rdt_clock_skew()
     test_request_id_ignores_stale()
+    test_bulk_operation_names()
+    test_map_get_uses_cache_without_soap()
+    test_refresh_still_requests_soap()
+    test_live_lock_collision_is_silent()
+    test_real_bulk_lock_sets_warning()
+    test_inflight_live_soap_is_shared()
     print('tracker freshness tests OK')
