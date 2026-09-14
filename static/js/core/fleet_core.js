@@ -1117,6 +1117,9 @@
 
         function _cleanTable(tbl) {
             var clone = tbl.cloneNode(true);
+            clone.querySelectorAll('td[data-export], th[data-export]').forEach(function(cell) {
+                cell.textContent = String(cell.getAttribute('data-export') || '').trim();
+            });
             clone.querySelectorAll('.ft-filter-wrap').forEach(function(el){ el.remove(); });
             clone.querySelectorAll('thead tr.mwo-search-row').forEach(function(el){ el.remove(); });
             clone.querySelectorAll('tbody tr').forEach(function(r){
@@ -1243,7 +1246,8 @@
             var row = [];
             tr.querySelectorAll('td, th').forEach(function(cell) {
                 var span = parseInt(cell.getAttribute('colspan') || '1', 10) || 1;
-                var val = cell.textContent.trim();
+                var exportVal = cell.getAttribute('data-export');
+                var val = exportVal !== null ? String(exportVal).trim() : cell.textContent.trim();
                 row.push(val);
                 for (var s = 1; s < span; s++) row.push('');
             });

@@ -491,7 +491,7 @@
             <tr class="data-row task-row is-saved{% if row.vehicle.vehicle_type and 'USG' in row.vehicle.vehicle_type %} table-secondary{% endif %}" style="font-size:.82rem;"
                 data-kms="{{ row.kms_driven }}" data-tasks="{{ row.tasks_count }}" data-emg="{{ row.emg_tasks }}" data-tracker="{{ row.tracker_km }}" data-kmsdiff="{{ row.kms_diff }}" data-pct="{% if row.pct_diff is not none %}{{ row.pct_diff }}{% endif %}">
               <td class="ps-3 d-none d-md-table-cell">{{ loop.index }}</td>
-              <td class="task-batch-start-cell">
+              <td class="task-batch-start-cell" data-export="{{ row.task_date|ddmmyyyy }}">
                 {{ report_vehicle_summary(row, loop.index) }}
                 <div class="task-batch-start-pill d-md-none">
                   <span class="task-batch-start-field-title">Start Reading</span>
