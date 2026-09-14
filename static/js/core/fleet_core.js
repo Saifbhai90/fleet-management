@@ -3273,6 +3273,7 @@
             var tr = document.querySelector('.task-row[data-vehicle-id="' + rowId + '"]');
             if (tr) {
                 vehicleNo = strip(tr.getAttribute('data-vehicle') || '');
+                vehicleNo = vehicleNo.replace(/^Vehicle:\s*/i, '');
                 if (!districtName) districtName = strip(tr.getAttribute('data-district') || '');
             }
         }
