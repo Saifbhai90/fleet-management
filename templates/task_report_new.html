@@ -3200,6 +3200,19 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
 
     var _batchSubmitting = false;
     document.getElementById('batchForm').addEventListener('submit', function(e) {
+      if (typeof window.taskEntryStripOdomDataUrls === 'function') {
+        window.taskEntryStripOdomDataUrls();
+      }
+      if (typeof window.taskEntryOdomUploadsPending === 'function' && window.taskEntryOdomUploadsPending()) {
+        e.preventDefault();
+        var waitMsg = 'Odoo meter photo abhi upload ho rahi hai. Complete hone ke baad Save All dabaen.';
+        if (typeof window.taskEntryNotice === 'function') {
+          window.taskEntryNotice('Photo upload chal rahi hai', waitMsg);
+        } else {
+          alert(waitMsg);
+        }
+        return false;
+      }
       if (_batchSubmitting) {
         e.preventDefault();
         return false;

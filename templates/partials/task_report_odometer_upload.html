@@ -191,10 +191,24 @@
       });
   }
 
+  function isRemoteOdomUrl(url) {
+    var u = String(url || '').trim();
+    return !!u && u.indexOf('data:') !== 0;
+  }
+
+  var _odomBusyRows = {};
+  window.taskEntryOdomUploadsPending = function() {
+    return Object.keys(_odomBusyRows).length > 0;
+  };
+  window.taskEntryStripOdomDataUrls = function() {
+    document.querySelectorAll('.odom-url-input').forEach(function(inp) {
+      if (!isRemoteOdomUrl(inp.value)) inp.value = '';
+    });
+  };
+
   function setRowPhotoUi(rowId, url) {
     var row = document.querySelector('.odom-url-input[data-row="' + rowId + '"]');
     if (!row) return;
-    row.value = url || '';
     var cell = row.closest('.odometer-cell');
     if (!cell) return;
     var wrap = cell.querySelector('.odom-ctrl-wrap');
@@ -205,6 +219,11 @@
     var btn = cell.querySelector('.odom-photo-btn');
     var inline = btn && btn.querySelector('.odom-inline-thumb');
     wrap.classList.toggle('has-photo', !!url);
+    if (isRemoteOdomUrl(url)) {
+      row.value = url;
+    } else if (!url) {
+      row.value = '';
+    }
     if (url) {
       if (ph) ph.classList.add('d-none');
       if (link) {
@@ -320,10 +339,13 @@
 
   function setOdomBusy(rowId, busy) {
     var btn = document.querySelector('.odom-photo-btn[data-row="' + rowId + '"]');
-    if (!btn) return;
-    btn.disabled = !!busy;
-    if (busy) btn.setAttribute('aria-busy', 'true');
-    else btn.removeAttribute('aria-busy');
+    if (btn) {
+      btn.disabled = !!busy;
+      if (busy) btn.setAttribute('aria-busy', 'true');
+      else btn.removeAttribute('aria-busy');
+    }
+    if (busy) _odomBusyRows[String(rowId)] = 1;
+    else delete _odomBusyRows[String(rowId)];
   }
 
   function runWithGps(rowId, dataUrl, fromRear) {

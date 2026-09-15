@@ -83,6 +83,16 @@ from models import project_district
 from collections import defaultdict
 
 
+def _stored_odometer_photo_url(raw):
+    """Only persist hosted photo URLs — never JPEG data URLs from the batch form."""
+    url = (raw or '').strip()
+    if not url or url.lower().startswith('data:'):
+        return ''
+    if len(url) > 2048:
+        return ''
+    return url
+
+
 def _task_report_reg_candidates(vehicle_nos):
     """Exact reg strings likely stored on EMG / mileage rows for these fleet vehicles."""
     cands = set()
@@ -1152,7 +1162,9 @@ def task_report_new():
                 validation_msgs.append(
                     '%s: KMs driven %.2f hai; Settings ki max limit %s KM hai.' % (v.vehicle_no, kms, max_km_cap)
                 )
-            photo_url = (request.form.get('vehicle_%s_odometer_photo_url' % v.id) or '').strip()
+            photo_url = _stored_odometer_photo_url(
+                request.form.get('vehicle_%s_odometer_photo_url' % v.id)
+            )
             if odom_required_setting and not photo_url:
                 validation_msgs.append('%s: Odoo meter photo zaroori hai (Settings).' % (v.vehicle_no,))
         if validation_msgs:
@@ -1161,7 +1173,9 @@ def task_report_new():
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
         for v, existing, close_reading, tasks_count, user_start in to_save:
-            photo_url = (request.form.get('vehicle_%s_odometer_photo_url' % v.id) or '').strip()
+            photo_url = _stored_odometer_photo_url(
+                request.form.get('vehicle_%s_odometer_photo_url' % v.id)
+            )
             if existing:
                 existing.close_reading = close_reading
                 existing.tasks_count = tasks_count
