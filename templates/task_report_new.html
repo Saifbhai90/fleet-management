@@ -2450,16 +2450,16 @@
         {% from 'partials/nav_back_button.html' import nav_from_hidden %}
         {{ nav_from_hidden() }}
         <div class="{% if all_locked %}col-7 col-md-2{% else %}col-6 col-md-2{% endif %}">
-          <label class="form-label">Date <span class="text-danger">*</span></label>
-          <input type="text" name="date" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
+          <label class="form-label" for="taskEntryDateInput">Date <span class="text-danger">*</span></label>
+          <input type="text" name="date" id="taskEntryDateInput" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" autocomplete="off" inputmode="numeric" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
         {% if lock_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
         {% if lock_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
         {% if lock_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
         {% if not lock_district %}
         <div class="col-6 col-md-2">
-          <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select search-select">
+          <label class="form-label" for="districtSelect">District</label>
+          <select name="district_id" id="districtSelect" class="form-select search-select" autocomplete="off">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -2470,7 +2470,7 @@
         {% if not lock_project %}
         <div class="col-6 col-md-2">
           <label class="form-label" for="projectSelect">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select search-select">
+          <select name="project_id" id="projectSelect" class="form-select search-select" autocomplete="off">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -2481,7 +2481,7 @@
         {% if not lock_vehicle %}
         <div class="col-6 col-md-2">
           <label class="form-label" for="vehicleSelect">Vehicle</label>
-          <select name="vehicle_id" id="vehicleSelect" class="form-select search-select">
+          <select name="vehicle_id" id="vehicleSelect" class="form-select search-select" autocomplete="off">
             <option value="0">-- All Vehicles --</option>
             {% for v in filter_vehicles %}
               <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>
@@ -2569,6 +2569,7 @@
                     <span class="task-batch-start-field-title d-md-none">Start Reading</span>
                     <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                            class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}"
+                           inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
                            value="{% if row.start_reading is not none %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                   </div>
                 </td>
@@ -2585,6 +2586,7 @@
                   <span class="d-md-none task-batch-field-label">Close Reading <span class="text-danger">*</span></span>
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
                          class="form-control form-control-sm text-end close-input task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
+                         inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Closing KM" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center align-middle odometer-cell task-batch-input-priority task-entry-tap-cell" style="min-width:72px;vertical-align:middle;">
@@ -2613,6 +2615,7 @@
                 <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first task-entry-tap-cell">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
+                         inputmode="numeric" enterkeyhint="done" autocomplete="off" lang="en"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
@@ -2803,6 +2806,8 @@
 window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ tef.get('lock_district', false)|tojson }};
 window.TASK_REPORT_NEW_LOCK_PROJECT = {{ tef.get('lock_project', false)|tojson }};
 window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }};
+window.TASK_ENTRY_ALL_PROJECTS = {{ (task_entry_all_projects if task_entry_all_projects is defined else [])|tojson }};
+window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if task_entry_projects_by_district is defined else {})|tojson }};
 </script>
 <script>
 (function() {
@@ -2811,11 +2816,136 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
+  var filterForm = document.getElementById('filterForm');
+  var dateInp = document.getElementById('taskEntryDateInput')
+    || document.querySelector('#filterForm input[name="date"]');
+  var dateUserTouched = false;
+  var vehFetchToken = 0;
+  var projFetchToken = 0;
 
   function filterSelectValue(sel) {
     if (!sel) return '';
     if (sel.tomselect) return String(sel.tomselect.getValue() || '');
     return String(sel.value || '');
+  }
+
+  function filterFieldValue(sel, name) {
+    if (sel) {
+      var picked = filterSelectValue(sel);
+      if (picked !== '') return picked;
+    }
+    var hidden = filterForm && filterForm.querySelector('input[type="hidden"][name="' + name + '"]');
+    return hidden ? String(hidden.value || '0') : '0';
+  }
+
+  function keepFilterAllOption(sel, placeholder) {
+    if (!sel) return;
+    var ph = placeholder || '-- All --';
+    if (sel.tomselect) {
+      try { sel.tomselect.addOption({ value: '0', text: ph }); } catch (e) {}
+      return;
+    }
+    var hasAll = false;
+    Array.prototype.forEach.call(sel.options || [], function(opt) {
+      if (String(opt.value) === '0') hasAll = true;
+    });
+    if (!hasAll) {
+      var o = document.createElement('option');
+      o.value = '0';
+      o.textContent = ph;
+      sel.insertBefore(o, sel.firstChild);
+    }
+  }
+
+  function fillFilterSelect(sel, rows, valueKey, textKey, placeholder, selected) {
+    if (!sel || typeof fleetFillSelectRows !== 'function') return;
+    fleetFillSelectRows(sel, rows || [], valueKey, textKey, {
+      placeholder: placeholder,
+      placeholderValue: '0',
+      selected: selected || null
+    });
+    keepFilterAllOption(sel, placeholder);
+  }
+
+  function projectsForDistrict(did) {
+    if (!did || did === '0') return window.TASK_ENTRY_ALL_PROJECTS || [];
+    var map = window.TASK_ENTRY_PROJECTS_BY_DISTRICT || {};
+    if (Object.prototype.hasOwnProperty.call(map, did)) return map[did] || [];
+    if (Object.prototype.hasOwnProperty.call(map, String(did))) return map[String(did)] || [];
+    if (map && Object.keys(map).length) return [];
+    return null;
+  }
+
+  function setFilterDate(value) {
+    if (!dateInp || !value) return;
+    dateInp.value = value;
+    if (dateInp._flatpickr) {
+      try { dateInp._flatpickr.setDate(value, false); } catch (e) {}
+    }
+  }
+
+  function syncFilterNativeValues() {
+    [districtSelect, projectSelect, vehicleSelect].forEach(function(sel) {
+      if (!sel) return;
+      sel.value = filterSelectValue(sel) || '0';
+    });
+    if (dateInp && dateInp._flatpickr && dateInp.value) {
+      try { dateInp._flatpickr.setDate(dateInp.value, false); } catch (e2) {}
+    }
+  }
+
+  function reloadTaskEntryVehicles() {
+    if (!vehicleSelect || vehicleSelect.tagName !== 'SELECT' || lockVehicle) return;
+    var pid = filterFieldValue(projectSelect, 'project_id') || '0';
+    var did = filterFieldValue(districtSelect, 'district_id') || '0';
+    var keep = filterSelectValue(vehicleSelect);
+    var token = ++vehFetchToken;
+    if (typeof fleetBeginCascade === 'function') fleetBeginCascade(vehicleSelect);
+    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(arr) {
+        if (token !== vehFetchToken) return;
+        var selected = null;
+        if (keep && keep !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keep); })) {
+          selected = keep;
+        }
+        fillFilterSelect(vehicleSelect, arr, 'id', 'vehicle_no', '-- All Vehicles --', selected);
+      })
+      .catch(function() {
+        if (token !== vehFetchToken) return;
+        fillFilterSelect(vehicleSelect, [], 'id', 'vehicle_no', '-- All Vehicles --');
+      });
+  }
+
+  function fillProjectsForDistrict(did) {
+    if (!projectSelect) return;
+    var token = ++projFetchToken;
+    if (typeof fleetBeginCascade === 'function') fleetBeginCascade(projectSelect);
+    if (projectSelect.tomselect) {
+      try { projectSelect.tomselect.clear(true); } catch (e0) {}
+    } else {
+      projectSelect.value = '0';
+    }
+    var local = projectsForDistrict(did);
+    if (local) {
+      fillFilterSelect(projectSelect, local, 'id', 'name', '-- All Projects --');
+      return;
+    }
+    if (did && did !== '0') {
+      fetch('/get_projects_by_district/' + encodeURIComponent(did))
+        .then(function(r) { return r.json(); })
+        .then(function(arr) {
+          if (token !== projFetchToken) return;
+          fillFilterSelect(projectSelect, arr, 'id', 'name', '-- All Projects --');
+        })
+        .catch(function() {
+          if (token !== projFetchToken) return;
+          fillFilterSelect(projectSelect, [], 'id', 'name', '-- All Projects --');
+        });
+      return;
+    }
+    fillFilterSelect(projectSelect, window.TASK_ENTRY_ALL_PROJECTS || [], 'id', 'name', '-- All Projects --');
   }
 
   function isTaskEntryWebDesktop() {
@@ -2827,65 +2957,15 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return true;
   }
 
-  function settleFilterSelect(sel) {
-    if (!sel || !sel.tomselect) return;
-    if (isTaskEntryWebDesktop()) return;
-    var ts = sel.tomselect;
-    ts._justSelected = true;
-    ts._selectLockUntil = Date.now() + 500;
-    try { ts.close(); } catch (e) {}
-    try { ts.blur(); } catch (e2) {}
-    if (ts.control_input) {
-      try { ts.control_input.blur(); } catch (e3) {}
-    }
-  }
-
-  function reloadTaskEntryVehicles() {
-    if (!vehicleSelect || vehicleSelect.tagName !== 'SELECT' || lockVehicle) return;
-    var pid = filterSelectValue(projectSelect) || '0';
-    var did = filterSelectValue(districtSelect) || '0';
-    var keep = filterSelectValue(vehicleSelect);
-    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(arr) {
-        var selected = null;
-        if (keep && keep !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keep); })) {
-          selected = keep;
-        }
-        fleetFillSelectRows(vehicleSelect, arr, 'id', 'vehicle_no', {
-          placeholder: '-- All Vehicles --',
-          placeholderValue: '0',
-          selected: selected
-        });
-      })
-      .catch(function() {
-        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      });
-  }
-
-  if (projectSelect && districtSelect && !lockDistrict) {
+  if (districtSelect && !lockDistrict) {
     districtSelect.addEventListener('change', function() {
       var did = filterSelectValue(districtSelect);
       if (did === '') return;
-      settleFilterSelect(districtSelect);
-      if (typeof fleetBeginCascade === 'function') fleetBeginCascade(projectSelect);
-      if (isTaskEntryWebDesktop() && typeof fleetWaitFocusSelect === 'function') {
+      fillProjectsForDistrict(did);
+      reloadTaskEntryVehicles();
+      if (projectSelect && isTaskEntryWebDesktop() && typeof fleetWaitFocusSelect === 'function') {
         fleetWaitFocusSelect(projectSelect);
       }
-      if (did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-            fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
-          })
-          .catch(function() {
-            fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
-          });
-      } else {
-        fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
-      }
-      reloadTaskEntryVehicles();
     });
   }
 
@@ -2908,17 +2988,20 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
     return document.documentElement.classList.contains('capacitor-native')
       || window.matchMedia('(max-width: 767.98px)').matches;
   }
-  function applyTaskEntryDefaultDate(pid) {
-    var dateInp = document.querySelector('#filterForm input[name="date"]');
+  function applyTaskEntryDefaultDate(pid, opts) {
+    opts = opts || {};
     var hintEl = document.getElementById('taskEntryDateHint');
-    if (!dateInp || !pid || pid === '0') {
+    if (!pid || pid === '0') {
       if (hintEl) { hintEl.classList.add('d-none'); hintEl.textContent = ''; }
       return;
     }
     fetch('{{ url_for("api_task_entry_default_date") }}?project_id=' + encodeURIComponent(pid))
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (data.date) dateInp.value = data.date;
+        var canWrite = opts.updateValue !== false
+          && !dateUserTouched
+          && !document.getElementById('batchForm');
+        if (canWrite && data.date) setFilterDate(data.date);
         if (hintEl) {
           if (data.hint && !shouldHideTaskEntryDateHint()) {
             hintEl.innerHTML = '<i class="bi bi-calendar-event me-1"></i>' + data.hint;
@@ -2931,24 +3014,24 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
       })
       .catch(function() {});
   }
-  if (vehicleSelect && vehicleSelect.tagName === 'SELECT' && !lockVehicle) {
-    vehicleSelect.addEventListener('change', function() {
-      if (filterSelectValue(vehicleSelect) === '') return;
-      settleFilterSelect(vehicleSelect);
-    });
+  if (dateInp) {
+    dateInp.addEventListener('input', function() { dateUserTouched = true; });
+    dateInp.addEventListener('change', function() { dateUserTouched = true; });
+  }
+  if (filterForm) {
+    filterForm.addEventListener('submit', syncFilterNativeValues);
   }
 
   if (projectSelect) {
     projectSelect.addEventListener('change', function() {
       var pid = filterSelectValue(projectSelect);
       if (pid === '') return;
-      settleFilterSelect(projectSelect);
       applyTaskEntryDefaultDate(pid);
       reloadTaskEntryVehicles();
     });
-    var initPid = filterSelectValue(projectSelect);
+    var initPid = filterFieldValue(projectSelect, 'project_id');
     if (initPid && initPid !== '0') {
-      applyTaskEntryDefaultDate(initPid);
+      applyTaskEntryDefaultDate(initPid, { updateValue: !document.getElementById('batchForm') });
     }
   }
 
@@ -3180,6 +3263,12 @@ window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }
   }
 
   if (batchTable) {
+    batchTable.addEventListener('wheel', function(e) {
+      var t = e.target;
+      if (t && t.matches && t.matches('input[type="number"]') && document.activeElement === t) {
+        e.preventDefault();
+      }
+    }, { passive: false });
     batchTable.addEventListener('input', function(e) {
       if (e.target && e.target.classList && e.target.classList.contains('close-input')) {
         e.target.classList.remove('is-missing');
