@@ -80,6 +80,7 @@ from utils import (
     pk_now, pk_date, pk_time,
     make_driver_profile_share_token, load_driver_profile_share_token,
     emg_amb_reg_matches_vehicle,
+    emg_amb_reg_matches_vehicle_no,
 )
 from services.driver_job_history import build_driver_job_history, job_history_counts
 from auth_utils import (
@@ -8790,7 +8791,7 @@ def _task_entry_resolve_start_reading(v, task_date, form_dict):
     ).order_by(VehicleDailyTask.task_date.desc()).first()
     has_prev = prev is not None and prev.close_reading is not None
     start_reading = float(prev.close_reading) if has_prev else 0
-    existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+    existing = _latest_vehicle_daily_task(v.id, task_date)
     if existing and existing.start_reading is not None and not has_prev:
         start_reading = float(existing.start_reading)
     key_start = 'vehicle_%s_start_reading' % v.id
@@ -8888,7 +8889,6 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
     form = form or {}
     rows = []
     from services.mileage_record_service import mileage_index_for_date, tracker_km_for_vehicle
-    from services.utils import strip_ufone_reg_tag
     mil_index = mileage_index_for_date(task_date)
     vehicles = list(vehicles or [])
     if not vehicles:
@@ -8899,10 +8899,15 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
     # Batch: existing same-day tasks (was 1 query per vehicle).
     existing_by_vid = {}
     if vehicle_ids:
-        for t in VehicleDailyTask.query.filter(
-            VehicleDailyTask.vehicle_id.in_(vehicle_ids),
-            VehicleDailyTask.task_date == task_date,
-        ).all():
+        for t in (
+            VehicleDailyTask.query
+            .filter(
+                VehicleDailyTask.vehicle_id.in_(vehicle_ids),
+                VehicleDailyTask.task_date == task_date,
+            )
+            .order_by(VehicleDailyTask.id.asc())
+            .all()
+        ):
             existing_by_vid[int(t.vehicle_id)] = t
 
     # Batch: latest previous close reading per vehicle.
@@ -8933,30 +8938,26 @@ def _build_vehicle_rows(vehicles, task_date, form=None):
         ):
             prev_by_vid[int(t.vehicle_id)] = t
 
-    # Batch: EMG counts for the day, match in Python (same rules as emg_amb_reg_matches_vehicle).
-    emg_rows = EmergencyTaskRecord.query.filter(
-        EmergencyTaskRecord.task_date == task_date,
-        or_(
-            EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-            EmergencyTaskRecord.category.is_(None),
-            EmergencyTaskRecord.category == '',
-        ),
-    ).with_entities(EmergencyTaskRecord.amb_reg_no).all()
-    emg_regs = [(r[0] or '').strip() for r in emg_rows if r and (r[0] or '').strip()]
+    # Batch: EMG counts for the loaded vehicles only, same matcher as emg-detail API.
+    emg_regs = []
+    vehicle_nos = [(v.vehicle_no or '').strip() for v in vehicles if v and (v.vehicle_no or '').strip()]
+    emg_match_filters = [emg_amb_reg_matches_vehicle(no) for no in vehicle_nos]
+    if emg_match_filters:
+        emg_rows = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date == task_date,
+            or_(
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                EmergencyTaskRecord.category.is_(None),
+                EmergencyTaskRecord.category == '',
+            ),
+            or_(*emg_match_filters),
+        ).with_entities(EmergencyTaskRecord.amb_reg_no).all()
+        emg_regs = [(r[0] or '').strip() for r in emg_rows if r and (r[0] or '').strip()]
 
     def _emg_count_for_vehicle(vehicle_no):
-        raw = (vehicle_no or '').strip()
-        if not raw:
-            return 0
-        base = strip_ufone_reg_tag(raw) or raw
-        base_l = base.lower()
         n = 0
         for reg in emg_regs:
-            if reg == raw or reg == base:
-                n += 1
-                continue
-            rl = reg.lower()
-            if rl.startswith(base_l + ' ') or rl.startswith(base_l + '-'):
+            if emg_amb_reg_matches_vehicle_no(reg, vehicle_no):
                 n += 1
         return n
 
@@ -9077,6 +9078,16 @@ def _task_report_entry_scope_context(user_context):
         'valid_district_ids': valid_district_ids,
         'scoped_project_ids': scoped_project_ids,
     }
+
+
+def _latest_vehicle_daily_task(vehicle_id, task_date):
+    """Newest row for a vehicle/day — survives pre-unique duplicates."""
+    return (
+        VehicleDailyTask.query
+        .filter_by(vehicle_id=vehicle_id, task_date=task_date)
+        .order_by(VehicleDailyTask.id.desc())
+        .first()
+    )
 
 
 

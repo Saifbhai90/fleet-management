@@ -15,6 +15,7 @@ from models import (
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord,
     VehicleActivityRecord, RedTask, VehicleMoveWithoutTask,
     DriverAttendance, SystemSetting, User, Role, ActivityLog,
+    AttendanceSettings,
 )
 from forms import (
     TaskReportForm, TaskReportFilterForm, EmergencyTaskUploadForm,
@@ -22,6 +23,7 @@ from forms import (
 )
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_, false
+from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, get_user_context
 from utils import (
@@ -46,7 +48,6 @@ _UPLOAD_LOG_CACHE_TTL = 300  # 5 minutes
 from routes import (
     _multi_word_filter,
     media_url_filter,
-    _get_user_scope,
     require_login,
     _nav_back_ctx,
     _cnic_digits,
@@ -73,11 +74,15 @@ from routes import (
     _task_entry_record_in_user_scope,
     _task_entry_resolve_start_reading,
     _task_report_entry_scope_context,
+    _latest_vehicle_daily_task,
     _task_report_vehicle_period_detail_impl,
     _upload_attendance_image_bytes_with_fallback,
 )
 
-from models import AttendanceSettings
+from services.task_entry_filter import (
+    coerce_task_entry_location_locks as _coerce_task_entry_location_locks,
+    coerce_task_entry_vehicle_lock as _coerce_task_entry_vehicle_lock,
+)
 from forms import VehicleMileageUploadForm
 from models import project_district
 from collections import defaultdict
@@ -872,6 +877,13 @@ def task_report_logbook_view_all():
 @app.route('/api/task-entry-default-date')
 def api_task_entry_default_date():
     project_id = request.args.get('project_id', type=int)
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    sc = _task_report_entry_scope_context(user_context)
+    if project_id and not sc['is_master_or_admin']:
+        scoped = sc.get('scoped_project_ids')
+        if scoped is not None and project_id not in scoped:
+            project_id = None
     d = _default_task_entry_date_for_project(project_id)
     project = db.session.get(Project, project_id) if project_id else None
     return jsonify({
@@ -885,90 +897,45 @@ def api_task_entry_default_date():
     })
 
 
+@app.route('/api/task-entry/vehicles')
+def api_task_entry_vehicles():
+    """Vehicle dropdown for New Task Entry — live get_user_context + AND scope (not login session)."""
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    q = _vehicle_query_task_report_scope(
+        user_context.get('is_master_or_admin', False),
+        user_context.get('allowed_projects', set()),
+        user_context.get('allowed_districts', set()),
+        user_context.get('allowed_vehicles', set()),
+    )
+    project_id = request.args.get('project_id', type=int) or 0
+    district_id = request.args.get('district_id', type=int) or 0
+    if project_id:
+        q = q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        q = q.filter(Vehicle.district_id == district_id)
+    vehicles = q.order_by(*vehicle_order_by()).all()
+    resp = make_response(jsonify([
+        {'id': v.id, 'vehicle_no': v.vehicle_no}
+        for v in vehicles
+    ]))
+    resp.headers['Cache-Control'] = 'private, max-age=30'
+    return resp
+
+
 
 @app.route('/task-report/new', methods=['GET', 'POST'])
 def task_report_new():
-    from auth_utils import get_user_context
-
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
-    allowed_projects = user_context.get('allowed_projects', set())
-    allowed_districts = user_context.get('allowed_districts', set())
-    allowed_vehicles = user_context.get('allowed_vehicles', set())
-    is_master_or_admin = user_context.get('is_master_or_admin', False)
-
-    district_q = District.query
-    project_q_all = Project.query
-    if not is_master_or_admin:
-        ap, ad, av = allowed_projects, allowed_districts, allowed_vehicles
-        if not ap and not ad and not av:
-            district_q = district_q.filter(District.id.in_([-1]))
-            project_q_all = project_q_all.filter(Project.id.in_([-1]))
-        else:
-            if ad:
-                district_q = district_q.filter(District.id.in_(list(ad)))
-            elif ap:
-                district_q = (
-                    district_q.join(project_district, project_district.c.district_id == District.id)
-                    .filter(project_district.c.project_id.in_(list(ap)))
-                    .distinct()
-                )
-            elif av:
-                d_ids = [
-                    r[0] for r in db.session.query(Vehicle.district_id)
-                    .filter(Vehicle.id.in_(list(av)), Vehicle.district_id.isnot(None))
-                    .distinct().all()
-                ]
-                district_q = district_q.filter(District.id.in_(d_ids or [-1]))
-            if ap:
-                project_q_all = project_q_all.filter(Project.id.in_(list(ap)))
-            if ad:
-                project_q_all = (
-                    project_q_all.join(project_district, project_district.c.project_id == Project.id)
-                    .filter(project_district.c.district_id.in_(list(ad)))
-                    .distinct()
-                )
-            if not ap and not ad and av:
-                p_ids = [
-                    r[0] for r in db.session.query(Vehicle.project_id)
-                    .filter(Vehicle.id.in_(list(av)), Vehicle.project_id.isnot(None))
-                    .distinct().all()
-                ]
-                project_q_all = project_q_all.filter(Project.id.in_(p_ids or [-1]))
-
-    districts = district_q.order_by(District.name).all()
-    valid_district_ids = {d.id for d in districts}
-    scoped_project_ids = None
-    if not is_master_or_admin:
-        scoped_project_ids = {p.id for p in project_q_all.order_by(Project.name).all()}
-
-    lad = set(allowed_districts) if allowed_districts else set()
-    lap = set(allowed_projects) if allowed_projects else set()
-    lav = set(allowed_vehicles) if allowed_vehicles else set()
-
-    def apply_task_entry_assignment_locks(did, pid, vid=0):
-        """Non-admin: single district → fix district; single district+project+vehicle → fix project too."""
-        if is_master_or_admin:
-            return did, pid, vid, {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
-        tef = {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
-        if len(lad) == 1:
-            only_d = next(iter(lad))
-            did = only_d
-            tef['lock_district'] = True
-        if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
-            only_p = next(iter(lap))
-            if scoped_project_ids is None or only_p in scoped_project_ids:
-                pid = only_p
-                tef['lock_project'] = True
-        if len(lav) == 1:
-            only_v = next(iter(lav))
-            vid = only_v
-            tef['lock_vehicle'] = True
-        if did and valid_district_ids and did not in valid_district_ids:
-            did = 0
-        if pid and scoped_project_ids is not None and pid not in scoped_project_ids:
-            pid = 0
-        return did, pid, vid, tef
+    sc = _task_report_entry_scope_context(user_context)
+    allowed_projects = sc['allowed_projects']
+    allowed_districts = sc['allowed_districts']
+    allowed_vehicles = sc['allowed_vehicles']
+    is_master_or_admin = sc['is_master_or_admin']
+    districts = sc['districts']
+    valid_district_ids = sc['valid_district_ids']
+    scoped_project_ids = sc['scoped_project_ids']
 
     def _task_report_new_vehicles_ui(did, pid):
         q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
@@ -991,6 +958,23 @@ def task_report_new():
             q = q.filter(Vehicle.id == vid)
         return q.order_by(*vehicle_order_by())
 
+    def _apply_task_entry_locks(did, pid, vid=0):
+        did, pid, tef = _coerce_task_entry_location_locks(
+            did, pid,
+            is_master_or_admin=is_master_or_admin,
+            allowed_districts=allowed_districts,
+            allowed_projects=allowed_projects,
+            valid_district_ids=valid_district_ids,
+            scoped_project_ids=scoped_project_ids,
+        )
+        vid, tef = _coerce_task_entry_vehicle_lock(
+            vid, tef,
+            is_master_or_admin=is_master_or_admin,
+            allowed_vehicles=allowed_vehicles,
+            scoped_vehicle_ids=_task_report_new_scoped_vehicle_ids(did, pid),
+        )
+        return did, pid, vid, tef
+
     _explicit_task_date = parse_date(request.args.get('date') or request.form.get('task_date'))
     if request.method == 'POST':
         district_id = request.form.get('district_id', type=int) or request.args.get('district_id', type=int) or 0
@@ -1004,9 +988,7 @@ def task_report_new():
         district_id = 0
     if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
         project_id = 0
-    district_id, project_id, vehicle_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id, vehicle_id)
-    if vehicle_id and vehicle_id not in _task_report_new_scoped_vehicle_ids(district_id, project_id):
-        vehicle_id = 0
+    district_id, project_id, vehicle_id, task_entry_filter = _apply_task_entry_locks(district_id, project_id, vehicle_id)
 
     if _explicit_task_date:
         view_date = _explicit_task_date
@@ -1017,7 +999,6 @@ def task_report_new():
     _att_cfg = AttendanceSettings.query.first()
     max_km_setting = getattr(_att_cfg, 'daily_task_entry_max_kms_driven', None) if _att_cfg else None
     odom_required_setting = bool(getattr(_att_cfg, 'daily_task_odometer_photo_required', False) if _att_cfg else False)
-    from auth_utils import user_can_access
     _perms = session.get('permissions') or []
     can_edit_saved_task_rows = bool(session.get('is_master') or user_can_access(_perms, 'task_report_entry_edit'))
     can_delete_saved_task_rows = bool(session.get('is_master') or user_can_access(_perms, 'task_report_entry_delete'))
@@ -1087,13 +1068,13 @@ def task_report_new():
             district_id = 0
         if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
             project_id = 0
-        district_id, project_id, vehicle_id, task_entry_filter = apply_task_entry_assignment_locks(district_id, project_id, vehicle_id)
-        if vehicle_id and vehicle_id not in _task_report_new_scoped_vehicle_ids(district_id, project_id):
-            vehicle_id = 0
+        district_id, project_id, vehicle_id, task_entry_filter = _apply_task_entry_locks(district_id, project_id, vehicle_id)
         if not project_id:
             flash('Project select karna zaroori hai — baghair project ke save nahi ho sakta.', 'danger')
             view_date = task_date
-            return _task_report_new_render([], view_date)
+            vehicles = _task_report_new_vehicle_query(district_id, project_id, vehicle_id).all()
+            rows = _build_vehicle_rows(vehicles, task_date, request.form)
+            return _task_report_new_render(rows, view_date)
         _save_project = db.session.get(Project, project_id)
         ok_date, date_msg = _task_entry_date_save_ok(_save_project, task_date)
         if not ok_date:
@@ -1105,10 +1086,10 @@ def task_report_new():
             return _task_report_new_render(rows, view_date)
         q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
         vehicles = q.all()
-        missing = []
         to_save = []
+        skipped_empty = 0
         for v in vehicles:
-            existing = VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first()
+            existing = _latest_vehicle_daily_task(v.id, task_date)
             edit_mode = request.form.get('row_%s_edit_mode' % v.id, '1')
             if existing and str(edit_mode) != '1':
                 # Locked row: skip update unless explicitly switched to edit mode.
@@ -1120,20 +1101,23 @@ def task_report_new():
                 close_reading = float(close_val) if close_val not in (None, '') else None
             except (TypeError, ValueError):
                 close_reading = None
-            tasks_count = int(float(tasks_val)) if tasks_val not in (None, '') else 0
+            if tasks_val not in (None, ''):
+                try:
+                    tasks_count = int(float(tasks_val))
+                except (TypeError, ValueError):
+                    tasks_count = None
+            else:
+                tasks_count = None
             try:
                 user_start = float(start_val) if start_val not in (None, '') else None
             except (TypeError, ValueError):
                 user_start = None
             if close_reading is None:
-                missing.append(v.vehicle_no)
-            else:
-                to_save.append((v, existing, close_reading, tasks_count, user_start))
-        if missing:
-            flash('Sab vehicles ke liye Close Reading zaroori hai. Missing: ' + ', '.join(missing), 'danger')
-            view_date = task_date
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+                skipped_empty += 1
+                continue
+            start_eff = _task_entry_resolve_start_reading(v, task_date, request.form)
+            start_reading = user_start if user_start is not None else start_eff
+            to_save.append((v, existing, close_reading, tasks_count, start_reading))
         if not to_save:
             _all_already_saved = all(
                 VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first() is not None
@@ -1141,18 +1125,23 @@ def task_report_new():
             )
             if _all_already_saved:
                 flash('Task entries pehle se saved hain — duplicate save nahi hua.', 'info')
-                return redirect(url_for(
-                    'task_report_new',
-                    date=task_date.strftime('%d-%m-%Y'),
-                    district_id=district_id,
-                    project_id=project_id,
-                    batch_saved='1',
-                ))
-            flash(
-                'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
-                'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.',
-                'danger',
-            )
+                _dup_kwargs = {
+                    'date': task_date.strftime('%d-%m-%Y'),
+                    'district_id': district_id or None,
+                    'project_id': project_id or None,
+                    'batch_saved': '1',
+                }
+                if vehicle_id:
+                    _dup_kwargs['vehicle_id'] = vehicle_id
+                return redirect(url_for('task_report_new', **_dup_kwargs))
+            if skipped_empty:
+                flash('Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen.', 'danger')
+            else:
+                flash(
+                    'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
+                    'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.',
+                    'danger',
+                )
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
@@ -1161,14 +1150,13 @@ def task_report_new():
             max_km_cap = int(max_km_setting) if max_km_setting is not None else 0
         except (TypeError, ValueError):
             max_km_cap = 0
-        for v, existing, close_reading, tasks_count, user_start in to_save:
+        for v, existing, close_reading, tasks_count, start_reading in to_save:
             if existing and not can_edit_saved_task_rows:
                 validation_msgs.append(
                     '%s: pehle se saved row — Edit ki ijazat nahi (admin se "New Task Entry – Edit saved rows" mangwain).'
                     % (v.vehicle_no,)
                 )
-            start_eff = _task_entry_resolve_start_reading(v, task_date, request.form)
-            kms = float(close_reading) - float(start_eff)
+            kms = float(close_reading) - float(start_reading or 0)
             if kms < 0:
                 validation_msgs.append(
                     '%s: Close Reading Start Reading se kam nahi ho sakti (KM %.2f).' % (v.vehicle_no, kms)
@@ -1187,32 +1175,34 @@ def task_report_new():
             view_date = task_date
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
-        for v, existing, close_reading, tasks_count, user_start in to_save:
+        for v, existing, close_reading, tasks_count, start_reading in to_save:
             photo_url = _stored_odometer_photo_url(
                 request.form.get('vehicle_%s_odometer_photo_url' % v.id)
             )
             if existing:
                 existing.close_reading = close_reading
                 existing.tasks_count = tasks_count
-                if user_start is not None:
-                    existing.start_reading = user_start
+                existing.start_reading = start_reading
                 existing.odometer_photo_path = photo_url or None
             else:
                 db.session.add(VehicleDailyTask(
                     vehicle_id=v.id, project_id=project_id or None, district_id=district_id or None,
                     task_date=task_date, close_reading=close_reading, tasks_count=tasks_count,
-                    start_reading=user_start,
+                    start_reading=start_reading,
                     odometer_photo_path=photo_url or None,
                 ))
         try:
             db.session.commit()
             try:
                 from notification_service import notify_task_report_saved
-                for v, existing, close_reading, tasks_count, user_start in to_save:
+                for v, existing, close_reading, tasks_count, start_reading in to_save:
                     notify_task_report_saved(v, task_date)
             except Exception:
                 pass
-            flash('Task entries saved successfully.', 'success')
+            saved_msg = '%s vehicle(s) save ho gayi.' % len(to_save)
+            if skipped_empty:
+                saved_msg += ' %s khali Close wale rows skip kiye gaye.' % skipped_empty
+            flash(saved_msg, 'success')
             _redirect_kwargs = {
                 'date': task_date.strftime('%d-%m-%Y'),
                 'district_id': district_id or None,
@@ -1222,6 +1212,12 @@ def task_report_new():
             if vehicle_id:
                 _redirect_kwargs['vehicle_id'] = vehicle_id
             return redirect(url_for('task_report_new', **_redirect_kwargs))
+        except IntegrityError:
+            db.session.rollback()
+            flash('Duplicate save rok diya gaya — list Reload karke dubara try karein.', 'warning')
+            view_date = task_date
+            rows = _build_vehicle_rows(vehicles, task_date, request.form)
+            return _task_report_new_render(rows, view_date)
         except Exception as e:
             db.session.rollback()
             flash(f'Error: {str(e)}', 'danger')
@@ -1229,9 +1225,34 @@ def task_report_new():
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
 
+    if request.method == 'POST':
+        return redirect(url_for(
+            'task_report_new',
+            date=view_date.strftime('%d-%m-%Y') if view_date else None,
+            district_id=district_id or None,
+            project_id=project_id or None,
+            vehicle_id=vehicle_id or None,
+        ))
+
     rows = []
-    _has_filter = request.args.get('date') is not None
-    if _has_filter or district_id or project_id:
+    date_arg = request.args.get('date')
+    filter_submitted = date_arg is not None
+    parsed_submit_date = parse_date(date_arg) if filter_submitted else None
+    single_vehicle_land = (
+        not filter_submitted
+        and bool(task_entry_filter.get('lock_vehicle'))
+        and bool(vehicle_id)
+        and bool(project_id)
+    )
+    if filter_submitted:
+        if not parsed_submit_date:
+            flash('Sahi date select karein (dd-mm-yyyy).', 'danger')
+        elif not project_id:
+            flash('Project select karna zaroori hai — Load se pehle Project chunein.', 'danger')
+        else:
+            vehicles = _task_report_new_vehicle_query(district_id, project_id, vehicle_id).all()
+            rows = _build_vehicle_rows(vehicles, view_date, request.form)
+    elif single_vehicle_land:
         vehicles = _task_report_new_vehicle_query(district_id, project_id, vehicle_id).all()
         rows = _build_vehicle_rows(vehicles, view_date, request.form)
     return _task_report_new_render(rows, view_date)
@@ -1241,8 +1262,6 @@ def task_report_new():
 @app.route('/task-report/pending')
 def task_report_pending():
     """Vehicles with missing Close Reading and/or Task's after same filters as New Task Entry."""
-    from auth_utils import get_user_context
-
     user_id = session.get('user_id')
     user_context = get_user_context(user_id) if user_id else {}
     sc = _task_report_entry_scope_context(user_context)
@@ -1254,28 +1273,36 @@ def task_report_pending():
     valid_district_ids = sc['valid_district_ids']
     scoped_project_ids = sc['scoped_project_ids']
 
-    lad = set(allowed_districts) if allowed_districts else set()
-    lap = set(allowed_projects) if allowed_projects else set()
-    lav = set(allowed_vehicles) if allowed_vehicles else set()
-
     district_id = request.args.get('district_id', type=int) or 0
     project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
     if district_id and valid_district_ids and district_id not in valid_district_ids:
         district_id = 0
     if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
         project_id = 0
 
-    disable_project = False
-    disable_district = False
-    if not is_master_or_admin:
-        if len(lad) == 1:
-            district_id = district_id or next(iter(lad))
-            disable_district = True
-        if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
-            project_id = project_id or next(iter(lap))
-            disable_project = True
-
-    task_entry_filter = {'lock_district': disable_district, 'lock_project': disable_project}
+    district_id, project_id, task_entry_filter = _coerce_task_entry_location_locks(
+        district_id, project_id,
+        is_master_or_admin=is_master_or_admin,
+        allowed_districts=allowed_districts,
+        allowed_projects=allowed_projects,
+        valid_district_ids=valid_district_ids,
+        scoped_project_ids=scoped_project_ids,
+    )
+    pending_vehicle_q = _vehicle_query_task_report_scope(
+        is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles
+    )
+    if project_id:
+        pending_vehicle_q = pending_vehicle_q.filter(Vehicle.project_id == project_id)
+    if district_id:
+        pending_vehicle_q = pending_vehicle_q.filter(Vehicle.district_id == district_id)
+    scoped_vehicle_ids = {v.id for v in pending_vehicle_q.order_by(*vehicle_order_by()).all()}
+    vehicle_id, task_entry_filter = _coerce_task_entry_vehicle_lock(
+        vehicle_id, task_entry_filter,
+        is_master_or_admin=is_master_or_admin,
+        allowed_vehicles=allowed_vehicles,
+        scoped_vehicle_ids=scoped_vehicle_ids,
+    )
     _explicit_task_date = parse_date(request.args.get('date'))
     if _explicit_task_date:
         view_date = _explicit_task_date
@@ -1296,13 +1323,15 @@ def task_report_pending():
 
     all_rows = []
     pending_rows = []
-    _has_filter = request.args.get('date') is not None
+    _has_filter = parse_date(request.args.get('date')) is not None
     if _has_filter:
         q = _vehicle_query_task_report_scope(is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles)
         if project_id:
             q = q.filter(Vehicle.project_id == project_id)
         if district_id:
             q = q.filter(Vehicle.district_id == district_id)
+        if vehicle_id:
+            q = q.filter(Vehicle.id == vehicle_id)
         vehicles = q.order_by(*vehicle_order_by()).all()
         all_rows = _build_vehicle_rows(vehicles, view_date, None)
         pending_rows = _filter_pending_task_rows(all_rows)
@@ -1314,6 +1343,8 @@ def task_report_pending():
             pending_qs += '&district_id=' + str(district_id)
         if project_id:
             pending_qs += '&project_id=' + str(project_id)
+        if vehicle_id:
+            pending_qs += '&vehicle_id=' + str(vehicle_id)
 
     return render_template(
         'task_report_pending.html',
@@ -1322,6 +1353,7 @@ def task_report_pending():
         view_date=view_date,
         district_id=district_id,
         project_id=project_id,
+        vehicle_id=vehicle_id,
         districts=districts,
         projects=_projects_ui(district_id),
         task_entry_filter=task_entry_filter,
@@ -1399,9 +1431,18 @@ def api_task_report_odometer_photo_upload():
         _link_task_date = parse_date(body.get('task_date') or '')
         if _link_vehicle_id and _link_task_date:
             try:
-                _vdt = VehicleDailyTask.query.filter_by(
-                    vehicle_id=int(_link_vehicle_id), task_date=_link_task_date
-                ).first()
+                _vid = int(_link_vehicle_id)
+                user_id = session.get('user_id')
+                user_context = get_user_context(user_id) if user_id else {}
+                scoped_q = _vehicle_query_task_report_scope(
+                    user_context.get('is_master_or_admin', False),
+                    user_context.get('allowed_projects', set()),
+                    user_context.get('allowed_districts', set()),
+                    user_context.get('allowed_vehicles', set()),
+                )
+                if scoped_q.filter(Vehicle.id == _vid).first() is None:
+                    return jsonify({'ok': False, 'message': 'Is vehicle par photo lagane ki ijazat nahi.'}), 403
+                _vdt = _latest_vehicle_daily_task(_vid, _link_task_date)
                 if _vdt and not (_vdt.odometer_photo_path or '').strip():
                     _vdt.odometer_photo_path = url
                     db.session.commit()

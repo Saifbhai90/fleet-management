@@ -446,6 +446,22 @@ def safe_float(value, default: float = 0.0) -> float:
         return default
 
 
+def emg_amb_reg_matches_vehicle_no(amb_reg_no: Optional[str], vehicle_no: Optional[str]) -> bool:
+    """Python twin of emg_amb_reg_matches_vehicle — same exact / base / tagged rules."""
+    raw_v = (vehicle_no or '').strip()
+    if not raw_v:
+        return False
+    raw_e = (amb_reg_no or '').strip()
+    if not raw_e:
+        return False
+    base = strip_ufone_reg_tag(raw_v) or raw_v
+    ev = raw_e.lower()
+    bl = base.lower()
+    if ev == raw_v.lower() or ev == bl:
+        return True
+    return ev.startswith(bl + ' ') or ev.startswith(bl + '-')
+
+
 def emg_amb_reg_matches_vehicle(vehicle_no: Optional[str]):
     """SQLAlchemy OR filter: EmergencyTaskRecord.amb_reg_no ↔ fleet vehicle_no.
 

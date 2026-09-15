@@ -578,6 +578,9 @@ class DriverAttendance(db.Model):
 # ────────────────────────────────────────────────
 class VehicleDailyTask(db.Model):
     __tablename__ = 'vehicle_daily_task'
+    __table_args__ = (
+        db.UniqueConstraint('vehicle_id', 'task_date', name='uq_vehicle_daily_task_vehicle_date'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)

@@ -5125,9 +5125,12 @@
                     dateFormat: "d-m-Y",
                     allowInput: true,
                     clickOpens: true,
-                    // Native type=date swap breaks the mobile Add Fuel Expense form's
-                    // dd-mm-yyyy contract — keep the flatpickr calendar there.
-                    disableMobile: !!(document.body && document.body.classList.contains('fuel-mobile-preview-page'))
+                    // Native type=date swap breaks dd-mm-yyyy on Fuel mobile preview
+                    // and New Task Entry (web + Capacitor). Keep Flatpickr there.
+                    disableMobile: !!(document.body && (
+                        document.body.classList.contains('fuel-mobile-preview-page')
+                        || el.classList.contains('task-batch-date-input')
+                    ))
                 });
                 if (existingVal && fp) {
                     fp.setDate(existingVal, false);
@@ -5374,6 +5377,11 @@
                 // Move focus to the submit button but don't block
                 e.preventDefault();
                 e.stopImmediatePropagation();
+                var ep = document.body ? document.body.getAttribute('data-fleet-endpoint') : '';
+                if (form.id === 'filterForm' && ep === 'task_report_new') {
+                    try { nextEl.click(); } catch (errClick) {}
+                    return;
+                }
                 nextEl.focus();
                 return;
             }

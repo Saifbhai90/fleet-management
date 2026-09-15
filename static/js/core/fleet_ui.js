@@ -688,20 +688,6 @@ window._dtPrintCustomize = function(title, color, icon) {
 
 /* ── Section separator ── */
 
-(function fleetTaskEntryDisableLoadMoreGlobal() {
-  function run() {
-    var wrap = document.getElementById('taskEntryLoadMoreWrap');
-    if (wrap) wrap.remove();
-    document.querySelectorAll('#batchTable tbody tr.task-row[data-task-chunk-hidden="1"]').forEach(function(row) {
-      row.setAttribute('data-task-chunk-hidden', '0');
-    });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-
-/* ── Section separator ── */
-
 (function() {
   /* Skip inactivity timer on native Capacitor; web keeps 15-minute logout. */
   if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {

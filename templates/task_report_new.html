@@ -1,19 +1,6 @@
 {% extends "base.html" %}
 {% block title %}New Task Entry{% endblock %}
 {% block content %}
-<script>
-(function fleetTaskEntryDisableLoadMore() {
-  function run() {
-    var wrap = document.getElementById('taskEntryLoadMoreWrap');
-    if (wrap) wrap.remove();
-    document.querySelectorAll('#batchTable tbody tr.task-row[data-task-chunk-hidden="1"]').forEach(function(row) {
-      row.setAttribute('data-task-chunk-hidden', '0');
-    });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
-  else run();
-})();
-</script>
 {% set tef = task_entry_filter if task_entry_filter is defined else {} %}
 {% set vehicle_id = vehicle_id if vehicle_id is defined else 0 %}
 {% set filter_vehicles = filter_vehicles if filter_vehicles is defined else [] %}
@@ -2451,7 +2438,7 @@
         {{ nav_from_hidden() }}
         <div class="{% if all_locked %}col-7 col-md-2{% else %}col-6 col-md-2{% endif %}">
           <label class="form-label" for="taskEntryDateInput">Date <span class="text-danger">*</span></label>
-          <input type="text" name="date" id="taskEntryDateInput" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" autocomplete="off" inputmode="numeric" value="{{ view_date.strftime('%d-%m-%Y') }}">
+          <input type="text" name="date" id="taskEntryDateInput" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" autocomplete="off" required value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
         {% if lock_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
         {% if lock_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
@@ -2495,6 +2482,9 @@
           </button>
         </div>
       </form>
+      <div id="taskEntryFilterDirty" class="alert alert-warning border py-2 mt-2 mb-0 small d-none">
+        Filter change ho gaya hai. Save All purani loaded list par chalta hai — pehle <strong>Reload</strong> karein.
+      </div>
     </div>
   </div>
 
@@ -2507,7 +2497,7 @@
     <input type="hidden" name="project_id" value="{{ project_id }}">
     <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
 
-    {# overflow-hidden removed so Capacitor sticky Save bar (native-submit-sticky) works; rounded clip via card-body only #}
+    {# overflow-hidden removed so footer Save All stays visible; sticky bar is opted out via data-no-sticky. #}
     <div class="card shadow border-0 task-batch-card fm-no-card-press">
       <div class="card-header bg-success text-white py-3 rounded-top d-none d-md-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-between gap-2 task-batch-list-header border-0">
         <span class="fw-semibold"><span class="d-none d-md-inline">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span><span class="d-md-none">Sirf <strong>Close Reading</strong> aur <strong>Task's</strong> edit karein — baqi auto.</span></span>
@@ -2544,14 +2534,13 @@
               {% set s = row.saved %}
               {% set start_r = row.start_reading or 0 %}
               {% set close_r = row.close_reading %}
-              {% set close_calc = close_r if close_r is not none else 0 %}
-              {% set kms_driven = close_calc - start_r %}
+              {% set kms_driven = (close_r - start_r) if close_r is not none else none %}
               {% set tracker_km = row.tracker_km or 0 %}
               {% set emg_n = row.emg_tasks or 0 %}
-              {% set tasks_n = row.tasks_count if row.tasks_count is not none else 0 %}
-              {% set task_diff = tasks_n - emg_n %}
-              {% set kms_diff = kms_driven - tracker_km %}
-              {% set pct_diff = ((kms_diff / kms_driven) * 100)|round(1)|string ~ '%' if kms_driven != 0 else 'Driven KM Zero' %}
+              {% set tasks_n = row.tasks_count if row.tasks_count is not none else none %}
+              {% set task_diff = (tasks_n - emg_n) if tasks_n is not none else none %}
+              {% set kms_diff = (kms_driven - tracker_km) if kms_driven is not none else none %}
+              {% set pct_diff = ((kms_diff / kms_driven) * 100)|round(1)|string ~ '%' if kms_driven else ('—' if close_r is none else 'Driven KM Zero') %}
               <tr class="task-row{% if s %} table-info is-saved{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="Vehicle: {{ row.vehicle.vehicle_no | e }}" data-seq="{{ loop.index }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
@@ -2570,7 +2559,7 @@
                     <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                            class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}"
                            inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
-                           value="{% if row.start_reading is not none %}{{ "%.0f"|format(row.start_reading) }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
+                           value="{% if row.start_reading is not none %}{{ row.start_reading }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                   </div>
                 </td>
                 {% else %}
@@ -2580,6 +2569,9 @@
                     <span class="task-batch-start-field-title d-md-none">Start Reading</span>
                     <span class="start-reading">{{ fmt_num(row.start_reading) }}<span class="task-batch-km-unit d-md-none"> KM</span></span>
                   </div>
+                  {% if row.start_reading is not none %}
+                  <input type="hidden" name="vehicle_{{ row.vehicle.id }}_start_reading" value="{{ row.start_reading }}">
+                  {% endif %}
                 </td>
                 {% endif %}
                 <td class="text-end task-batch-input-priority task-batch-close-cell task-entry-tap-cell">
@@ -2611,12 +2603,12 @@
                     </div>
                   </div>
                 </td>
-                <td class="text-end kms-driven">{{ fmt_num(kms_driven) }}</td>
+                <td class="text-end kms-driven{% if kms_driven is none %} is-empty-metric{% endif %}">{% if kms_driven is none %}—{% else %}{{ fmt_num(kms_driven) }}{% endif %}</td>
                 <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first task-entry-tap-cell">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          inputmode="numeric" enterkeyhint="done" autocomplete="off" lang="en"
-                         value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="0" {% if s %}disabled{% endif %}>
+                         value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="Tasks" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
                   <a href="#" class="emg-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -2624,15 +2616,15 @@
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
                 </td>
-                <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{{ task_diff }}</span></td>
+                <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff is not none and task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{% if task_diff is none %}—{% else %}{{ task_diff }}{% endif %}</span></td>
                 <td class="text-end task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
                   <a href="#" class="tracker-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
                 </td>
-                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if kms_diff < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{{ fmt_num(kms_diff) }}</span></td>
-                <td class="text-end pct-diff task-batch-metric-cell{% if kms_driven != 0 and ((kms_diff / kms_driven) * 100) >= 10 %} text-danger fw-bold is-neg{% elif kms_driven != 0 and ((kms_diff / kms_driven) * 100) < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{{ pct_diff }}</span></td>
+                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if kms_diff is not none and kms_diff < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{% if kms_diff is none %}—{% else %}{{ fmt_num(kms_diff) }}{% endif %}</span></td>
+                <td class="text-end pct-diff task-batch-metric-cell{% if kms_driven and ((kms_diff / kms_driven) * 100) >= 10 %} text-danger fw-bold is-neg{% elif kms_driven and ((kms_diff / kms_driven) * 100) < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{{ pct_diff }}</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last{% if not s %} task-batch-actions-status-only{% endif %}">
                   {% if s %}
                     {% if can_edit_saved_task_rows or can_delete_saved_task_rows %}
@@ -2666,7 +2658,7 @@
             {% if show_batch_totals is defined and show_batch_totals %}
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
-                <td colspan="10" class="ps-4 text-end">Total</td>
+                <td colspan="9" class="ps-4 text-end">Total</td>
                 <td class="text-end" id="totalKmsDriven" data-mob-label="Total KMs driven">0</td>
                 <td class="text-center" id="totalTasks" data-mob-label="Total tasks">0</td>
                 <td class="text-center" id="totalEmg" data-mob-label="Total EMG">0</td>
@@ -2674,6 +2666,7 @@
                 <td class="text-end" id="totalTracker" data-mob-label="Total tracker">0</td>
                 <td class="text-end" id="totalKmsDiff" data-mob-label="Total KMs diff">0</td>
                 <td class="text-end" id="totalPctDiff" data-mob-label="Total % diff"></td>
+                <td></td>
               </tr>
             </tfoot>
             {% endif %}
@@ -2686,14 +2679,14 @@
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
           <i class="bi bi-save me-1"></i>Save All
         </button>
-          <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
+          <a href="{{ url_for('module_hub', hub_slug='task-logbook') }}" class="btn btn-outline-secondary px-4 py-2 align-self-stretch text-center">Cancel</a>
         </div>
       </div>
     </div>
   </form>
   {% else %}
   <div class="alert alert-info">
-    <i class="bi bi-info-circle me-2"></i>Date, District, Project{% if not tef.get('lock_vehicle') %} aur Vehicle (optional){% endif %} select karke <strong>Load Vehicles</strong> par click karein. Us ke baad saari vehicles ki list yahan aayegi, jahan aap Close Reading aur Task's enter karke ek hi baar Save kar sakte hain.
+    <i class="bi bi-info-circle me-2"></i>Date aur <strong>Project</strong> select karke <strong>Load Vehicles</strong> par click karein. District / Vehicle optional hain. Us ke baad list mein Close Reading aur Task's enter karke Save All karein.
   </div>
   {% endif %}
 </div>
@@ -2732,7 +2725,7 @@
       margin-right: 0;
     }
   }
-  @media (max-width: 768px) {
+  @media (max-width: 767.98px) {
     .fleet-task-float-panel,
     .fleet-task-float-panel--narrow {
       display: none !important;
@@ -2812,6 +2805,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
 <script>
 (function() {
   var lockDistrict = !!(window.TASK_REPORT_NEW_LOCK_DISTRICT);
+  var lockProject = !!(window.TASK_REPORT_NEW_LOCK_PROJECT);
   var lockVehicle = !!(window.TASK_REPORT_NEW_LOCK_VEHICLE);
   var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
@@ -2872,8 +2866,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     var map = window.TASK_ENTRY_PROJECTS_BY_DISTRICT || {};
     if (Object.prototype.hasOwnProperty.call(map, did)) return map[did] || [];
     if (Object.prototype.hasOwnProperty.call(map, String(did))) return map[String(did)] || [];
-    if (map && Object.keys(map).length) return [];
-    return null;
+    return window.TASK_ENTRY_ALL_PROJECTS || [];
   }
 
   function setFilterDate(value) {
@@ -2901,7 +2894,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     var keep = filterSelectValue(vehicleSelect);
     var token = ++vehFetchToken;
     if (typeof fleetBeginCascade === 'function') fleetBeginCascade(vehicleSelect);
-    var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
+    var url = '{{ url_for("api_task_entry_vehicles") }}?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
@@ -2919,33 +2912,17 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
   }
 
   function fillProjectsForDistrict(did) {
-    if (!projectSelect) return;
+    if (!projectSelect || lockProject) return;
     var token = ++projFetchToken;
     if (typeof fleetBeginCascade === 'function') fleetBeginCascade(projectSelect);
-    if (projectSelect.tomselect) {
-      try { projectSelect.tomselect.clear(true); } catch (e0) {}
-    } else {
-      projectSelect.value = '0';
+    var keep = filterSelectValue(projectSelect);
+    var local = projectsForDistrict(did) || [];
+    var selected = null;
+    if (keep && keep !== '0' && local.some(function(p) { return String(p.id) === String(keep); })) {
+      selected = keep;
     }
-    var local = projectsForDistrict(did);
-    if (local) {
-      fillFilterSelect(projectSelect, local, 'id', 'name', '-- All Projects --');
-      return;
-    }
-    if (did && did !== '0') {
-      fetch('/get_projects_by_district/' + encodeURIComponent(did))
-        .then(function(r) { return r.json(); })
-        .then(function(arr) {
-          if (token !== projFetchToken) return;
-          fillFilterSelect(projectSelect, arr, 'id', 'name', '-- All Projects --');
-        })
-        .catch(function() {
-          if (token !== projFetchToken) return;
-          fillFilterSelect(projectSelect, [], 'id', 'name', '-- All Projects --');
-        });
-      return;
-    }
-    fillFilterSelect(projectSelect, window.TASK_ENTRY_ALL_PROJECTS || [], 'id', 'name', '-- All Projects --');
+    fillFilterSelect(projectSelect, local, 'id', 'name', '-- All Projects --', selected);
+    if (token !== projFetchToken) return;
   }
 
   function isTaskEntryWebDesktop() {
@@ -3003,24 +2980,83 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
           && !document.getElementById('batchForm');
         if (canWrite && data.date) setFilterDate(data.date);
         if (hintEl) {
+          hintEl.replaceChildren();
           if (data.hint && !shouldHideTaskEntryDateHint()) {
-            hintEl.innerHTML = '<i class="bi bi-calendar-event me-1"></i>' + data.hint;
+            var icon = document.createElement('i');
+            icon.className = 'bi bi-calendar-event me-1';
+            hintEl.appendChild(icon);
+            hintEl.appendChild(document.createTextNode(data.hint));
             hintEl.classList.remove('d-none');
           } else {
             hintEl.classList.add('d-none');
-            hintEl.textContent = '';
           }
         }
       })
       .catch(function() {});
   }
   if (dateInp) {
-    dateInp.addEventListener('input', function() { dateUserTouched = true; });
-    dateInp.addEventListener('change', function() { dateUserTouched = true; });
+    var dateLoadedValue = dateInp.value || '';
+    dateInp.addEventListener('input', function() {
+      if (dateInp.value !== dateLoadedValue) dateUserTouched = true;
+    });
+    dateInp.addEventListener('change', function() {
+      if (dateInp.value !== dateLoadedValue) dateUserTouched = true;
+    });
   }
   if (filterForm) {
     filterForm.addEventListener('submit', syncFilterNativeValues);
   }
+
+  function loadedFilterSnapshot() {
+    var batch = document.getElementById('batchForm');
+    if (!batch) return null;
+    function hid(name) {
+      var el = batch.querySelector('input[type="hidden"][name="' + name + '"]');
+      return el ? String(el.value || '0') : '0';
+    }
+    return {
+      date: hid('task_date'),
+      district: hid('district_id') || '0',
+      project: hid('project_id') || '0',
+      vehicle: hid('vehicle_id') || '0'
+    };
+  }
+  function currentFilterSnapshot() {
+    return {
+      date: dateInp ? String(dateInp.value || '') : '',
+      district: String(filterFieldValue(districtSelect, 'district_id') || '0'),
+      project: String(filterFieldValue(projectSelect, 'project_id') || '0'),
+      vehicle: String(filterFieldValue(vehicleSelect, 'vehicle_id') || '0')
+    };
+  }
+  function taskEntryFiltersDirty() {
+    var loaded = loadedFilterSnapshot();
+    if (!loaded) return false;
+    var cur = currentFilterSnapshot();
+    return cur.date !== loaded.date
+      || cur.district !== loaded.district
+      || cur.project !== loaded.project
+      || cur.vehicle !== loaded.vehicle;
+  }
+  function refreshTaskEntryFilterDirty() {
+    var dirty = taskEntryFiltersDirty();
+    var banner = document.getElementById('taskEntryFilterDirty');
+    var saveBtn = document.getElementById('saveBtn');
+    if (banner) banner.classList.toggle('d-none', !dirty);
+    if (saveBtn) saveBtn.disabled = dirty;
+    return dirty;
+  }
+  [districtSelect, projectSelect, vehicleSelect].forEach(function(sel) {
+    if (!sel) return;
+    sel.addEventListener('change', refreshTaskEntryFilterDirty);
+  });
+  if (dateInp) {
+    dateInp.addEventListener('change', refreshTaskEntryFilterDirty);
+    dateInp.addEventListener('input', refreshTaskEntryFilterDirty);
+  }
+  refreshTaskEntryFilterDirty();
+  document.addEventListener('DOMContentLoaded', refreshTaskEntryFilterDirty);
+  window.addEventListener('load', refreshTaskEntryFilterDirty);
 
   if (projectSelect) {
     projectSelect.addEventListener('change', function() {
@@ -3064,13 +3100,24 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     var closeInp = row.querySelector('.close-input');
     var taskInp = row.querySelector('input[name*="_tasks_count"]');
     var closeRaw = closeInp ? closeInp.value.trim() : '';
-    var closeNum = closeRaw === '' || isNaN(parseFloat(closeRaw)) ? 0 : parseFloat(closeRaw);
+    var closeEmpty = closeRaw === '' || isNaN(parseFloat(closeRaw));
+    var closeNum = closeEmpty ? NaN : parseFloat(closeRaw);
     var kmsDrivenEl = row.querySelector('.kms-driven');
     var kmsTd = row.querySelector('.kms-diff');
     var kmsOut = kmsTd && (kmsTd.querySelector('.task-batch-metric-plain') || kmsTd);
     var pctTd = row.querySelector('.pct-diff');
     var pctOut = pctTd && (pctTd.querySelector('.task-batch-metric-plain') || pctTd);
 
+    if (closeEmpty) {
+      if (kmsDrivenEl) {
+        kmsDrivenEl.textContent = '—';
+        kmsDrivenEl.classList.add('is-empty-metric');
+      }
+      if (kmsOut) kmsOut.textContent = '—';
+      if (pctOut) pctOut.textContent = '—';
+      if (pctTd) pctTd.className = 'text-end pct-diff task-batch-metric-cell';
+      if (kmsTd) kmsTd.className = 'text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right';
+    } else {
     var kmsDriven = closeNum - start;
     var kmsDiff = kmsDriven - tracker;
     var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
@@ -3092,16 +3139,17 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
       kmsTd.className = 'text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right'
         + (pctRed ? ' text-danger fw-bold is-neg' : (kmsNeg ? ' text-warning is-neg' : ''));
     }
+    }
 
     var tasksRaw = taskInp ? taskInp.value.trim() : '';
     var tdCell = row.querySelector('.task-diff');
     var taskDiffOut = tdCell && (tdCell.querySelector('.task-batch-metric-plain') || tdCell);
-    var tasks = tasksRaw === '' || isNaN(parseInt(tasksRaw, 10)) ? 0 : parseInt(tasksRaw, 10);
-    var td = tasks - emg;
-    if (taskDiffOut) taskDiffOut.textContent = String(td);
+    var tasks = tasksRaw === '' || isNaN(parseInt(tasksRaw, 10)) ? NaN : parseInt(tasksRaw, 10);
+    var td = isNaN(tasks) ? NaN : (tasks - emg);
+    if (taskDiffOut) taskDiffOut.textContent = isNaN(td) ? '—' : String(td);
     if (tdCell && tdCell.classList.contains('task-batch-metric-cell')) {
       tdCell.className = 'text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right'
-        + (td !== 0 ? ' text-danger fw-bold' : '');
+        + (!isNaN(td) && td !== 0 ? ' text-danger fw-bold' : '');
     }
 
     updateRowStatus(row, closeRaw);
@@ -3196,7 +3244,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     sessionStorage.setItem('task_batch_skip_draft_reset', '1');
   }
 
-  function taskEntryUnlockRowForOdom(rowId) {
+  window.taskEntryUnlockRowForOdom = function(rowId) {
     if (!rowId) return;
     var editMode = document.getElementById('row_' + rowId + '_edit_mode');
     if (editMode) editMode.value = '1';
@@ -3306,20 +3354,24 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
         e.preventDefault();
         return false;
       }
-      var empty = [];
+      if (refreshTaskEntryFilterDirty()) {
+        e.preventDefault();
+        var dirtyMsg = 'Filter change ho gaya hai. Pehle Reload karein, phir Save All dabaen.';
+        if (typeof window.taskEntryNotice === 'function') {
+          window.taskEntryNotice('Reload zaroori hai', dirtyMsg);
+        } else {
+          alert(dirtyMsg);
+        }
+        return false;
+      }
+      var filled = 0;
       batchTable.querySelectorAll('.close-input').forEach(function(inp) {
         var rowId = inp.getAttribute('data-row');
         var mode = document.getElementById('row_' + rowId + '_edit_mode');
         if (mode && mode.value === '0') return;
-        if (!inp.value || inp.value.trim() === '') {
-          var tr = inp.closest('tr');
-          var dv = tr && tr.getAttribute('data-vehicle');
-          var vnoEl = tr && tr.querySelector('.fw-medium');
-          var label = (dv && dv.trim()) || (vnoEl && vnoEl.textContent.trim()) || '';
-          if (label) empty.push(label);
-        }
+        if (inp.value && inp.value.trim() !== '') filled += 1;
       });
-      if (empty.length > 0) {
+      if (filled === 0) {
         e.preventDefault();
         var firstMissing = null;
         batchTable.querySelectorAll('.close-input').forEach(function(inp) {
@@ -3334,9 +3386,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
           try { firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (err) {}
           try { firstMissing.focus(); } catch (err2) {}
         }
-        var msg = empty.length === 1
-          ? 'Is vehicle ki Close Reading khali hai. Pehle closing KM enter karein, phir Save All dabaen.'
-          : (empty.length + ' vehicles ki Close Reading khali hai. Pehle closing KM enter karein, phir Save All dabaen.');
+        var msg = 'Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen. Khali rows skip ho jati hain.';
         if (typeof window.taskEntryNotice === 'function') {
           window.taskEntryNotice('Close Reading zaroori hai', msg);
         } else {
@@ -3388,7 +3438,7 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
   var _emgData = [];
   function _useMobileTaskPanel() {
     return document.documentElement.classList.contains('capacitor-native')
-      || window.matchMedia('(max-width: 768px)').matches;
+      || window.matchMedia('(max-width: 767.98px)').matches;
   }
 
   document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
@@ -3615,10 +3665,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   captureBatchColLabels();
-  stampTaskBatchMobileLabels();
-  if (window.matchMedia('(min-width:768px)').matches && window.fleetTableEnhance) {
-    window.fleetTableEnhance('batchTable');
-  }
+    stampTaskBatchMobileLabels();
   window.addEventListener('resize', stampTaskBatchMobileLabels);
 });
 
@@ -3627,24 +3674,9 @@ document.addEventListener('click', function(e){
   if(!btn) return;
   var rowId = btn.getAttribute('data-row');
   if(!rowId) return;
-
-  var editMode = document.getElementById('row_' + rowId + '_edit_mode');
-  if(editMode) editMode.value = '1';
-
-  document.querySelectorAll('.task-editable-field[data-row="' + rowId + '"]').forEach(function(el){
-    el.disabled = false;
-  });
-  document.querySelectorAll('.odom-ctrl-wrap[data-row="' + rowId + '"]').forEach(function(w) {
-    w.classList.remove('odom-wrap-locked');
-    w.setAttribute('tabindex', '0');
-    w.style.opacity = '';
-    w.title = 'Paste (Ctrl+V) when focused, or click speedometer for file / mobile rear camera';
-  });
-
-  btn.classList.remove('btn-outline-primary');
-  btn.classList.add('btn-primary');
-  btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
-  btn.disabled = true;
+  if (typeof window.taskEntryUnlockRowForOdom === 'function') {
+    window.taskEntryUnlockRowForOdom(rowId);
+  }
 });
 
 document.addEventListener('click', function(e){
