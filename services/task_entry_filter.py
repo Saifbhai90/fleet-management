@@ -10,8 +10,9 @@ def coerce_task_entry_location_locks(
     allowed_projects,
     valid_district_ids,
     scoped_project_ids,
+    allowed_vehicles=None,
 ):
-    """Lock district/project only when the assigned id is still in the live scoped lists."""
+    """Lock district/project the same way as Vehicles Daily Task Report."""
     tef = {'lock_district': False, 'lock_project': False, 'lock_vehicle': False}
     did = int(district_id or 0)
     pid = int(project_id or 0)
@@ -25,12 +26,13 @@ def coerce_task_entry_location_locks(
 
     lad = set(allowed_districts or [])
     lap = set(allowed_projects or [])
+    lav = set(allowed_vehicles or [])
     if len(lad) == 1:
         only_d = next(iter(lad))
         if not valid_district_ids or only_d in valid_district_ids:
             did = only_d
             tef['lock_district'] = True
-    if len(lap) == 1:
+    if len(lad) == 1 and len(lap) == 1 and len(lav) == 1:
         only_p = next(iter(lap))
         if scoped_project_ids is None or only_p in scoped_project_ids:
             pid = only_p
@@ -75,3 +77,40 @@ def coerce_task_entry_vehicle_lock(
     elif vid and scoped_vehicle_ids and vid not in scoped_vehicle_ids:
         vid = 0
     return vid, tef
+
+
+def _metric_float(value):
+    if value is None or value == '':
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def live_task_entry_metrics(start, close, tasks, emg, tracker):
+    """Live New Task Entry row math. Missing close/tasks count as 0; negatives stay visible."""
+    start_n = _metric_float(start)
+    close_n = _metric_float(close)
+    emg_n = _metric_float(emg)
+    tracker_n = _metric_float(tracker)
+    if tasks is None or tasks == '':
+        tasks_n = 0
+    else:
+        try:
+            tasks_n = int(float(tasks))
+        except (TypeError, ValueError):
+            tasks_n = 0
+    kms_driven = close_n - start_n
+    kms_diff = kms_driven - tracker_n
+    task_diff = tasks_n - emg_n
+    pct_diff = None if kms_driven == 0 else round((kms_diff / kms_driven) * 100, 1)
+    return {
+        'kms_driven': kms_driven,
+        'kms_diff': kms_diff,
+        'task_diff': task_diff,
+        'pct_diff': pct_diff,
+        'tasks': tasks_n,
+        'emg': emg_n,
+        'tracker': tracker_n,
+    }

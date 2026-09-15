@@ -966,6 +966,7 @@ def task_report_new():
             allowed_projects=allowed_projects,
             valid_district_ids=valid_district_ids,
             scoped_project_ids=scoped_project_ids,
+            allowed_vehicles=allowed_vehicles,
         )
         vid, tef = _coerce_task_entry_vehicle_lock(
             vid, tef,
@@ -1021,18 +1022,6 @@ def task_report_new():
         _tef.setdefault('lock_project', False)
         _tef.setdefault('lock_vehicle', False)
         _all_p_ui = _task_report_new_projects_ui(0)
-        _all_filter_projects = [{'id': p.id, 'name': p.name} for p in _all_p_ui]
-        _projects_by_district = {}
-        _p_ids = [p.id for p in _all_p_ui]
-        if _p_ids:
-            for did, pid, pname in (
-                db.session.query(project_district.c.district_id, Project.id, Project.name)
-                .join(Project, Project.id == project_district.c.project_id)
-                .filter(Project.id.in_(_p_ids))
-                .order_by(Project.name)
-                .all()
-            ):
-                _projects_by_district.setdefault(str(did), []).append({'id': pid, 'name': pname})
         resp = make_response(render_template(
             'task_report_new.html',
             rows=rows_list,
@@ -1041,10 +1030,8 @@ def task_report_new():
             project_id=project_id or 0,
             vehicle_id=vehicle_id or 0,
             districts=districts,
-            projects=_task_report_new_projects_ui(district_id),
+            projects=_all_p_ui,
             filter_vehicles=_task_report_new_vehicles_ui(district_id, project_id),
-            task_entry_all_projects=_all_filter_projects,
-            task_entry_projects_by_district=_projects_by_district,
             show_batch_totals=_show_task_batch_totals(user_context, rows_list),
             task_entry_filter=_tef,
             can_edit_saved_task_rows=can_edit_saved_task_rows,
@@ -1288,6 +1275,7 @@ def task_report_pending():
         allowed_projects=allowed_projects,
         valid_district_ids=valid_district_ids,
         scoped_project_ids=scoped_project_ids,
+        allowed_vehicles=allowed_vehicles,
     )
     pending_vehicle_q = _vehicle_query_task_report_scope(
         is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles

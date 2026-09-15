@@ -12,6 +12,7 @@ from services.utils import emg_amb_reg_matches_vehicle_no  # noqa: E402
 from services.task_entry_filter import (  # noqa: E402
     coerce_task_entry_location_locks as _coerce_task_entry_location_locks,
     coerce_task_entry_vehicle_lock as _coerce_task_entry_vehicle_lock,
+    live_task_entry_metrics,
 )
 
 
@@ -33,6 +34,7 @@ def test_location_lock_only_when_id_in_scope():
         allowed_projects={3},
         valid_district_ids={7},
         scoped_project_ids={3, 9},
+        allowed_vehicles={10},
     )
     assert did == 7
     assert pid == 3
@@ -45,8 +47,23 @@ def test_location_lock_only_when_id_in_scope():
         is_master_or_admin=False,
         allowed_districts={7},
         allowed_projects={3},
+        valid_district_ids={7},
+        scoped_project_ids={3, 9},
+        allowed_vehicles={10, 11},
+    )
+    assert did == 7
+    assert pid == 0
+    assert tef['lock_district'] is True
+    assert tef['lock_project'] is False
+
+    did, pid, tef = _coerce_task_entry_location_locks(
+        0, 0,
+        is_master_or_admin=False,
+        allowed_districts={7},
+        allowed_projects={3},
         valid_district_ids={8},
         scoped_project_ids={9},
+        allowed_vehicles={10},
     )
     assert did == 0
     assert pid == 0
@@ -89,9 +106,30 @@ def test_admin_is_not_locked():
     assert tef['lock_project'] is False
 
 
+def test_live_metrics_empty_close_shows_negative_driven():
+    m = live_task_entry_metrics(start=1200, close=None, tasks=None, emg=4, tracker=50)
+    assert m['kms_driven'] == -1200
+    assert m['kms_diff'] == -1250
+    assert m['task_diff'] == -4
+    assert m['pct_diff'] == round((-1250 / -1200) * 100, 1)
+
+
+def test_live_metrics_typed_values_and_zero_driven():
+    m = live_task_entry_metrics(start=100, close=180, tasks=6, emg=6, tracker=70)
+    assert m['kms_driven'] == 80
+    assert m['kms_diff'] == 10
+    assert m['task_diff'] == 0
+    assert m['pct_diff'] == 12.5
+    z = live_task_entry_metrics(start=0, close='', tasks='', emg=0, tracker=0)
+    assert z['kms_driven'] == 0
+    assert z['pct_diff'] is None
+
+
 if __name__ == '__main__':
     test_emg_reg_match_exact_base_and_tag()
     test_location_lock_only_when_id_in_scope()
     test_vehicle_lock_clears_when_out_of_scoped_list()
     test_admin_is_not_locked()
+    test_live_metrics_empty_close_shows_negative_driven()
+    test_live_metrics_typed_values_and_zero_driven()
     print('test_task_report_new.py: ok')

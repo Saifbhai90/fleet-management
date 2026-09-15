@@ -2530,17 +2530,26 @@
               </tr>
             </thead>
             <tbody>
+              {% set tot = namespace(kms=0, tasks=0, emg=0, tdiff=0, tracker=0, kdiff=0) %}
               {% for row in rows %}
               {% set s = row.saved %}
               {% set start_r = row.start_reading or 0 %}
               {% set close_r = row.close_reading %}
-              {% set kms_driven = (close_r - start_r) if close_r is not none else none %}
+              {% set close_for_calc = close_r if close_r is not none else 0 %}
+              {% set kms_driven = close_for_calc - start_r %}
               {% set tracker_km = row.tracker_km or 0 %}
               {% set emg_n = row.emg_tasks or 0 %}
               {% set tasks_n = row.tasks_count if row.tasks_count is not none else none %}
-              {% set task_diff = (tasks_n - emg_n) if tasks_n is not none else none %}
-              {% set kms_diff = (kms_driven - tracker_km) if kms_driven is not none else none %}
-              {% set pct_diff = ((kms_diff / kms_driven) * 100)|round(1)|string ~ '%' if kms_driven else ('—' if close_r is none else 'Driven KM Zero') %}
+              {% set tasks_for_calc = tasks_n if tasks_n is not none else 0 %}
+              {% set task_diff = tasks_for_calc - emg_n %}
+              {% set kms_diff = kms_driven - tracker_km %}
+              {% set pct_diff = ((kms_diff / kms_driven) * 100)|round(1)|string ~ '%' if kms_driven else 'Driven KM Zero' %}
+              {% set tot.kms = tot.kms + kms_driven %}
+              {% set tot.tasks = tot.tasks + tasks_for_calc %}
+              {% set tot.emg = tot.emg + emg_n %}
+              {% set tot.tdiff = tot.tdiff + task_diff %}
+              {% set tot.tracker = tot.tracker + tracker_km %}
+              {% set tot.kdiff = tot.kdiff + kms_diff %}
               <tr class="task-row{% if s %} table-info is-saved{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="Vehicle: {{ row.vehicle.vehicle_no | e }}" data-seq="{{ loop.index }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
@@ -2559,6 +2568,9 @@
                     <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                            class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}"
                            inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
+                           oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                           onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                           onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                            value="{% if row.start_reading is not none %}{{ row.start_reading }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                   </div>
                 </td>
@@ -2579,6 +2591,9 @@
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
                          class="form-control form-control-sm text-end close-input task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
+                         oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                         onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                         onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Closing KM" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center align-middle odometer-cell task-batch-input-priority task-entry-tap-cell" style="min-width:72px;vertical-align:middle;">
@@ -2603,11 +2618,14 @@
                     </div>
                   </div>
                 </td>
-                <td class="text-end kms-driven{% if kms_driven is none %} is-empty-metric{% endif %}">{% if kms_driven is none %}—{% else %}{{ fmt_num(kms_driven) }}{% endif %}</td>
+                <td class="text-end kms-driven"><span class="task-batch-metric-plain">{{ fmt_num(kms_driven) }}</span></td>
                 <td class="text-center task-batch-input-priority task-batch-metric-cell task-batch-metric-cell--first task-entry-tap-cell">
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          inputmode="numeric" enterkeyhint="done" autocomplete="off" lang="en"
+                         oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                         onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
+                         onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="Tasks" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
@@ -2616,14 +2634,14 @@
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
                 </td>
-                <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff is not none and task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{% if task_diff is none %}—{% else %}{{ task_diff }}{% endif %}</span></td>
+                <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{{ task_diff }}</span></td>
                 <td class="text-end task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
                   <a href="#" class="tracker-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
                 </td>
-                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if kms_diff is not none and kms_diff < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{% if kms_diff is none %}—{% else %}{{ fmt_num(kms_diff) }}{% endif %}</span></td>
+                <td class="text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if kms_diff < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{{ fmt_num(kms_diff) }}</span></td>
                 <td class="text-end pct-diff task-batch-metric-cell{% if kms_driven and ((kms_diff / kms_driven) * 100) >= 10 %} text-danger fw-bold is-neg{% elif kms_driven and ((kms_diff / kms_driven) * 100) < 0 %} text-warning is-neg{% endif %}"><span class="task-batch-metric-plain">{{ pct_diff }}</span></td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-cell--last{% if not s %} task-batch-actions-status-only{% endif %}">
                   {% if s %}
@@ -2655,21 +2673,19 @@
               </tr>
               {% endfor %}
             </tbody>
-            {% if show_batch_totals is defined and show_batch_totals %}
             <tfoot class="table-light fw-bold" id="batchTotals">
               <tr>
                 <td colspan="9" class="ps-4 text-end">Total</td>
-                <td class="text-end" id="totalKmsDriven" data-mob-label="Total KMs driven">0</td>
-                <td class="text-center" id="totalTasks" data-mob-label="Total tasks">0</td>
-                <td class="text-center" id="totalEmg" data-mob-label="Total EMG">0</td>
-                <td class="text-center" id="totalTaskDiff" data-mob-label="Total task diff">0</td>
-                <td class="text-end" id="totalTracker" data-mob-label="Total tracker">0</td>
-                <td class="text-end" id="totalKmsDiff" data-mob-label="Total KMs diff">0</td>
-                <td class="text-end" id="totalPctDiff" data-mob-label="Total % diff"></td>
+                <td class="text-end" id="totalKmsDriven" data-mob-label="Total KMs driven"><span class="task-batch-metric-plain">{{ fmt_num(tot.kms) }}</span></td>
+                <td class="text-center" id="totalTasks" data-mob-label="Total tasks"><span class="task-batch-metric-plain">{{ tot.tasks }}</span></td>
+                <td class="text-center" id="totalEmg" data-mob-label="Total EMG"><span class="task-batch-metric-plain">{{ tot.emg }}</span></td>
+                <td class="text-center{% if tot.tdiff != 0 %} text-danger fw-bold{% endif %}" id="totalTaskDiff" data-mob-label="Total task diff"><span class="task-batch-metric-plain">{{ tot.tdiff }}</span></td>
+                <td class="text-end" id="totalTracker" data-mob-label="Total tracker"><span class="task-batch-metric-plain">{{ fmt_num(tot.tracker) }}</span></td>
+                <td class="text-end" id="totalKmsDiff" data-mob-label="Total KMs diff"><span class="task-batch-metric-plain">{{ fmt_num(tot.kdiff) }}</span></td>
+                <td class="text-end" id="totalPctDiff" data-mob-label="Total % diff"><span class="task-batch-metric-plain">{% if tot.kms %}{{ ((tot.kdiff / tot.kms) * 100)|round(1) }}%{% else %}Driven KM Zero{% endif %}</span></td>
                 <td></td>
               </tr>
             </tfoot>
-            {% endif %}
           </table>
         </div>
       </div>
@@ -2796,17 +2812,7 @@
 </div>
 
 <script>
-window.TASK_REPORT_NEW_LOCK_DISTRICT = {{ tef.get('lock_district', false)|tojson }};
-window.TASK_REPORT_NEW_LOCK_PROJECT = {{ tef.get('lock_project', false)|tojson }};
-window.TASK_REPORT_NEW_LOCK_VEHICLE = {{ tef.get('lock_vehicle', false)|tojson }};
-window.TASK_ENTRY_ALL_PROJECTS = {{ (task_entry_all_projects if task_entry_all_projects is defined else [])|tojson }};
-window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if task_entry_projects_by_district is defined else {})|tojson }};
-</script>
-<script>
 (function() {
-  var lockDistrict = !!(window.TASK_REPORT_NEW_LOCK_DISTRICT);
-  var lockProject = !!(window.TASK_REPORT_NEW_LOCK_PROJECT);
-  var lockVehicle = !!(window.TASK_REPORT_NEW_LOCK_VEHICLE);
   var projectSelect = document.getElementById('projectSelect');
   var districtSelect = document.getElementById('districtSelect');
   var vehicleSelect = document.getElementById('vehicleSelect');
@@ -2814,8 +2820,6 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
   var dateInp = document.getElementById('taskEntryDateInput')
     || document.querySelector('#filterForm input[name="date"]');
   var dateUserTouched = false;
-  var vehFetchToken = 0;
-  var projFetchToken = 0;
 
   function filterSelectValue(sel) {
     if (!sel) return '';
@@ -2830,43 +2834,6 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     }
     var hidden = filterForm && filterForm.querySelector('input[type="hidden"][name="' + name + '"]');
     return hidden ? String(hidden.value || '0') : '0';
-  }
-
-  function keepFilterAllOption(sel, placeholder) {
-    if (!sel) return;
-    var ph = placeholder || '-- All --';
-    if (sel.tomselect) {
-      try { sel.tomselect.addOption({ value: '0', text: ph }); } catch (e) {}
-      return;
-    }
-    var hasAll = false;
-    Array.prototype.forEach.call(sel.options || [], function(opt) {
-      if (String(opt.value) === '0') hasAll = true;
-    });
-    if (!hasAll) {
-      var o = document.createElement('option');
-      o.value = '0';
-      o.textContent = ph;
-      sel.insertBefore(o, sel.firstChild);
-    }
-  }
-
-  function fillFilterSelect(sel, rows, valueKey, textKey, placeholder, selected) {
-    if (!sel || typeof fleetFillSelectRows !== 'function') return;
-    fleetFillSelectRows(sel, rows || [], valueKey, textKey, {
-      placeholder: placeholder,
-      placeholderValue: '0',
-      selected: selected || null
-    });
-    keepFilterAllOption(sel, placeholder);
-  }
-
-  function projectsForDistrict(did) {
-    if (!did || did === '0') return window.TASK_ENTRY_ALL_PROJECTS || [];
-    var map = window.TASK_ENTRY_PROJECTS_BY_DISTRICT || {};
-    if (Object.prototype.hasOwnProperty.call(map, did)) return map[did] || [];
-    if (Object.prototype.hasOwnProperty.call(map, String(did))) return map[String(did)] || [];
-    return window.TASK_ENTRY_ALL_PROJECTS || [];
   }
 
   function setFilterDate(value) {
@@ -2885,65 +2852,6 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
     if (dateInp && dateInp._flatpickr && dateInp.value) {
       try { dateInp._flatpickr.setDate(dateInp.value, false); } catch (e2) {}
     }
-  }
-
-  function reloadTaskEntryVehicles() {
-    if (!vehicleSelect || vehicleSelect.tagName !== 'SELECT' || lockVehicle) return;
-    var pid = filterFieldValue(projectSelect, 'project_id') || '0';
-    var did = filterFieldValue(districtSelect, 'district_id') || '0';
-    var keep = filterSelectValue(vehicleSelect);
-    var token = ++vehFetchToken;
-    if (typeof fleetBeginCascade === 'function') fleetBeginCascade(vehicleSelect);
-    var url = '{{ url_for("api_task_entry_vehicles") }}?project_id=' + encodeURIComponent(pid || 0) + '&district_id=' + encodeURIComponent(did || 0);
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(arr) {
-        if (token !== vehFetchToken) return;
-        var selected = null;
-        if (keep && keep !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keep); })) {
-          selected = keep;
-        }
-        fillFilterSelect(vehicleSelect, arr, 'id', 'vehicle_no', '-- All Vehicles --', selected);
-      })
-      .catch(function() {
-        if (token !== vehFetchToken) return;
-        fillFilterSelect(vehicleSelect, [], 'id', 'vehicle_no', '-- All Vehicles --');
-      });
-  }
-
-  function fillProjectsForDistrict(did) {
-    if (!projectSelect || lockProject) return;
-    var token = ++projFetchToken;
-    if (typeof fleetBeginCascade === 'function') fleetBeginCascade(projectSelect);
-    var keep = filterSelectValue(projectSelect);
-    var local = projectsForDistrict(did) || [];
-    var selected = null;
-    if (keep && keep !== '0' && local.some(function(p) { return String(p.id) === String(keep); })) {
-      selected = keep;
-    }
-    fillFilterSelect(projectSelect, local, 'id', 'name', '-- All Projects --', selected);
-    if (token !== projFetchToken) return;
-  }
-
-  function isTaskEntryWebDesktop() {
-    try {
-      if (document.documentElement.classList.contains('capacitor-native')) return false;
-      if (window.matchMedia && window.matchMedia('(max-width: 767.98px)').matches) return false;
-      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return false;
-    } catch (e) {}
-    return true;
-  }
-
-  if (districtSelect && !lockDistrict) {
-    districtSelect.addEventListener('change', function() {
-      var did = filterSelectValue(districtSelect);
-      if (did === '') return;
-      fillProjectsForDistrict(did);
-      reloadTaskEntryVehicles();
-      if (projectSelect && isTaskEntryWebDesktop() && typeof fleetWaitFocusSelect === 'function') {
-        fleetWaitFocusSelect(projectSelect);
-      }
-    });
   }
 
   var filterCard = document.getElementById('taskEntryFilterCard');
@@ -3063,7 +2971,6 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
       var pid = filterSelectValue(projectSelect);
       if (pid === '') return;
       applyTaskEntryDefaultDate(pid);
-      reloadTaskEntryVehicles();
     });
     var initPid = filterFieldValue(projectSelect, 'project_id');
     if (initPid && initPid !== '0') {
@@ -3081,55 +2988,68 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
       : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function parseCellNum(text) {
-    var s = String(text == null ? '' : text)
-      .replace(/,/g, '')
-      .replace(/[−–—]/g, '-')
-      .replace(/%/g, '')
-      .trim();
-    if (!s || s === '-') return NaN;
-    return parseFloat(s);
+  function setMetricText(el, text) {
+    if (!el) return;
+    var out = el.querySelector('.task-batch-metric-plain');
+    if (out) out.textContent = text;
+    else el.textContent = text;
   }
 
-  function updateRow(row) {
+  function readRowMetrics(row) {
     var startInp = row.querySelector('.start-input');
-    var start = startInp ? (startInp.value.trim() === '' ? 0 : parseFloat(startInp.value)) : (parseFloat(row.dataset.start) || 0);
+    var start = NaN;
+    if (startInp && startInp.value.trim() !== '') start = parseFloat(startInp.value);
+    if (isNaN(start)) start = parseFloat(row.dataset.start);
+    if (isNaN(start)) {
+      var startTxt = row.querySelector('.start-reading');
+      if (startTxt) start = parseFloat(String(startTxt.textContent || '').replace(/[^0-9.-]/g, ''));
+    }
+    if (isNaN(start)) start = 0;
     if (startInp) row.dataset.start = start;
     var tracker = parseFloat(row.dataset.tracker) || 0;
     var emg = parseFloat(row.dataset.emg) || 0;
     var closeInp = row.querySelector('.close-input');
     var taskInp = row.querySelector('input[name*="_tasks_count"]');
     var closeRaw = closeInp ? closeInp.value.trim() : '';
-    var closeEmpty = closeRaw === '' || isNaN(parseFloat(closeRaw));
-    var closeNum = closeEmpty ? NaN : parseFloat(closeRaw);
-    var kmsDrivenEl = row.querySelector('.kms-driven');
-    var kmsTd = row.querySelector('.kms-diff');
-    var kmsOut = kmsTd && (kmsTd.querySelector('.task-batch-metric-plain') || kmsTd);
-    var pctTd = row.querySelector('.pct-diff');
-    var pctOut = pctTd && (pctTd.querySelector('.task-batch-metric-plain') || pctTd);
-
-    if (closeEmpty) {
-      if (kmsDrivenEl) {
-        kmsDrivenEl.textContent = '—';
-        kmsDrivenEl.classList.add('is-empty-metric');
-      }
-      if (kmsOut) kmsOut.textContent = '—';
-      if (pctOut) pctOut.textContent = '—';
-      if (pctTd) pctTd.className = 'text-end pct-diff task-batch-metric-cell';
-      if (kmsTd) kmsTd.className = 'text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right';
-    } else {
+    var closeNum = closeRaw === '' || isNaN(parseFloat(closeRaw)) ? 0 : parseFloat(closeRaw);
+    var tasksRaw = taskInp ? taskInp.value.trim() : '';
+    var tasks = tasksRaw === '' || isNaN(parseInt(tasksRaw, 10)) ? 0 : parseInt(tasksRaw, 10);
     var kmsDriven = closeNum - start;
     var kmsDiff = kmsDriven - tracker;
-    var pctDiff = (kmsDriven !== 0) ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%' : 'Driven KM Zero';
-    if (kmsDrivenEl) {
-      kmsDrivenEl.textContent = fmtNum(kmsDriven);
-      kmsDrivenEl.classList.remove('is-empty-metric');
-    }
-    if (kmsOut) kmsOut.textContent = fmtNum(kmsDiff);
-    if (pctOut) pctOut.textContent = pctDiff;
-    var pctVal = (pctDiff !== 'Driven KM Zero') ? parseFloat(pctDiff) : NaN;
+    var taskDiff = tasks - emg;
+    var pctDiff = (kmsDriven !== 0)
+      ? ((kmsDiff / kmsDriven) * 100).toFixed(1) + '%'
+      : 'Driven KM Zero';
+    return {
+      start: start,
+      closeRaw: closeRaw,
+      closeNum: closeNum,
+      tasks: tasks,
+      emg: emg,
+      tracker: tracker,
+      kmsDriven: kmsDriven,
+      kmsDiff: kmsDiff,
+      taskDiff: taskDiff,
+      pctDiff: pctDiff
+    };
+  }
+
+  function updateRow(row) {
+    var m = readRowMetrics(row);
+    var kmsDrivenEl = row.querySelector('.kms-driven');
+    var kmsTd = row.querySelector('.kms-diff');
+    var pctTd = row.querySelector('.pct-diff');
+    var tdCell = row.querySelector('.task-diff');
+
+    setMetricText(kmsDrivenEl, fmtNum(m.kmsDriven));
+    if (kmsDrivenEl) kmsDrivenEl.classList.remove('is-empty-metric');
+    setMetricText(kmsTd, fmtNum(m.kmsDiff));
+    setMetricText(pctTd, m.pctDiff);
+    setMetricText(tdCell, String(m.taskDiff));
+
+    var pctVal = (m.pctDiff !== 'Driven KM Zero') ? parseFloat(m.pctDiff) : NaN;
     var pctRed = !isNaN(pctVal) && pctVal >= 10;
-    var kmsNeg = !isNaN(kmsDiff) && kmsDiff < 0;
+    var kmsNeg = m.kmsDiff < 0;
     var pctNeg = !isNaN(pctVal) && pctVal < 0;
     if (pctTd && pctTd.classList.contains('task-batch-metric-cell')) {
       pctTd.className = 'text-end pct-diff task-batch-metric-cell'
@@ -3139,20 +3059,13 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
       kmsTd.className = 'text-end kms-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right'
         + (pctRed ? ' text-danger fw-bold is-neg' : (kmsNeg ? ' text-warning is-neg' : ''));
     }
-    }
-
-    var tasksRaw = taskInp ? taskInp.value.trim() : '';
-    var tdCell = row.querySelector('.task-diff');
-    var taskDiffOut = tdCell && (tdCell.querySelector('.task-batch-metric-plain') || tdCell);
-    var tasks = tasksRaw === '' || isNaN(parseInt(tasksRaw, 10)) ? NaN : parseInt(tasksRaw, 10);
-    var td = isNaN(tasks) ? NaN : (tasks - emg);
-    if (taskDiffOut) taskDiffOut.textContent = isNaN(td) ? '—' : String(td);
     if (tdCell && tdCell.classList.contains('task-batch-metric-cell')) {
       tdCell.className = 'text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right'
-        + (!isNaN(td) && td !== 0 ? ' text-danger fw-bold' : '');
+        + (m.taskDiff !== 0 ? ' text-danger fw-bold' : '');
     }
 
-    updateRowStatus(row, closeRaw);
+    updateRowStatus(row, m.closeRaw);
+    if (!row._skipTotals) updateTotals();
   }
 
   // Card header chip doubles as the "is this row done?" scan cue.
@@ -3170,32 +3083,90 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
 
   var batchTable = document.getElementById('batchTable');
 
+  function setTotalText(id, v) {
+    var e = document.getElementById(id);
+    if (!e) return;
+    var out = e.querySelector('.task-batch-metric-plain') || e;
+    out.textContent = v;
+  }
+
   function updateTotals() {
     var allRows = batchTable ? batchTable.querySelectorAll('.task-row') : [];
-    var rows = [];
-    allRows.forEach(function(r) { if (taskEntryRowIsVisible(r)) rows.push(r); });
-    var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0, validKms = 0;
-    rows.forEach(function(r) {
-      var kd = parseCellNum(r.querySelector('.kms-driven').textContent);
-      if (!isNaN(kd)) { tKms += kd; validKms += kd; }
-      var ti = r.querySelector('input[name*="_tasks_count"]');
-      if (ti && ti.value) tTasks += parseInt(ti.value) || 0;
-      tEmg += parseFloat(r.dataset.emg) || 0;
-      var tdVal = parseCellNum(r.querySelector('.task-diff').textContent);
-      if (!isNaN(tdVal)) tTaskDiff += tdVal;
-      tTracker += parseFloat(r.dataset.tracker) || 0;
-      var df = parseCellNum(r.querySelector('.kms-diff').textContent);
-      if (!isNaN(df)) tDiff += df;
+    var tKms = 0, tTasks = 0, tEmg = 0, tTaskDiff = 0, tTracker = 0, tDiff = 0;
+    allRows.forEach(function(r) {
+      if (!taskEntryRowIsVisible(r)) return;
+      var m = readRowMetrics(r);
+      tKms += m.kmsDriven;
+      tTasks += m.tasks;
+      tEmg += m.emg;
+      tTaskDiff += m.taskDiff;
+      tTracker += m.tracker;
+      tDiff += m.kmsDiff;
     });
-    var el = function(id, v, cls) { var e = document.getElementById(id); if (e) { e.textContent = v; if (cls !== undefined) e.className = cls; } };
-    el('totalKmsDriven', fmtNum(tKms) || '0');
-    el('totalTasks', String(tTasks));
-    el('totalEmg', String(tEmg));
-    el('totalTaskDiff', String(tTaskDiff), 'text-center' + (tTaskDiff !== 0 ? ' text-danger fw-bold' : ''));
-    el('totalTracker', fmtNum(tTracker) || '0');
-    el('totalKmsDiff', fmtNum(tDiff) || '0');
-    el('totalPctDiff', validKms ? ((tDiff / validKms) * 100).toFixed(1) + '%' : '');
+    setTotalText('totalKmsDriven', fmtNum(tKms) || '0');
+    setTotalText('totalTasks', String(tTasks));
+    setTotalText('totalEmg', String(tEmg));
+    setTotalText('totalTaskDiff', String(tTaskDiff));
+    setTotalText('totalTracker', fmtNum(tTracker) || '0');
+    setTotalText('totalKmsDiff', fmtNum(tDiff) || '0');
+    setTotalText('totalPctDiff', tKms ? ((tDiff / tKms) * 100).toFixed(1) + '%' : 'Driven KM Zero');
+    var tdEl = document.getElementById('totalTaskDiff');
+    if (tdEl) tdEl.classList.toggle('text-danger', tTaskDiff !== 0);
+    if (tdEl) tdEl.classList.toggle('fw-bold', tTaskDiff !== 0);
   }
+  window.updateTaskEntryRow = updateRow;
+  window.updateTotals = updateTotals;
+
+  function findTaskEntryRow(el) {
+    if (!el) return null;
+    var id = el.getAttribute && el.getAttribute('data-row');
+    if (id) {
+      var byId = document.querySelector('#batchTable tr.task-row[data-vehicle-id="' + id + '"]');
+      if (byId) return byId;
+    }
+    if (el.closest) return el.closest('#batchTable tr.task-row') || el.closest('tr.task-row');
+    return null;
+  }
+
+  function updateTaskEntryFromInput(el) {
+    var row = findTaskEntryRow(el);
+    if (row) updateRow(row);
+  }
+  window.updateTaskEntryFromInput = updateTaskEntryFromInput;
+
+  function onTaskEntryMetricEdit(e) {
+    var t = e && e.target;
+    if (!t || !t.getAttribute) return;
+    var name = t.getAttribute('name') || '';
+    var isMetric = (t.classList && (t.classList.contains('close-input') || t.classList.contains('start-input')))
+      || name.indexOf('_close_reading') !== -1
+      || name.indexOf('_start_reading') !== -1
+      || name.indexOf('_tasks_count') !== -1;
+    if (!isMetric) return;
+    updateTaskEntryFromInput(t);
+  }
+
+  document.addEventListener('input', onTaskEntryMetricEdit, true);
+  document.addEventListener('change', onTaskEntryMetricEdit, true);
+  document.addEventListener('keyup', onTaskEntryMetricEdit, true);
+  document.addEventListener('paste', function(e) {
+    var t = e.target;
+    window.setTimeout(function() { onTaskEntryMetricEdit({ target: t }); }, 0);
+  }, true);
+
+  function bindTaskEntryMetricInputs(root) {
+    var scope = root || document;
+    if (!scope.querySelectorAll) return;
+    var nodes = scope.querySelectorAll('.close-input, .start-input, input[name*="_close_reading"], input[name*="_start_reading"], input[name*="_tasks_count"]');
+    Array.prototype.forEach.call(nodes, function(inp) {
+      if (inp._taskEntryMetricBound) return;
+      inp._taskEntryMetricBound = true;
+      ['input', 'change', 'keyup'].forEach(function(evt) {
+        inp.addEventListener(evt, function() { updateTaskEntryFromInput(inp); });
+      });
+    });
+  }
+  bindTaskEntryMetricInputs(document);
 
   function taskEntryRestoreOdomUi(rowId, url) {
     if (typeof window.taskEntrySetRowPhotoUi === 'function') {
@@ -3317,21 +3288,11 @@ window.TASK_ENTRY_PROJECTS_BY_DISTRICT = {{ (task_entry_projects_by_district if 
         e.preventDefault();
       }
     }, { passive: false });
-    batchTable.addEventListener('input', function(e) {
-      if (e.target && e.target.classList && e.target.classList.contains('close-input')) {
-        e.target.classList.remove('is-missing');
-      }
-      var row = e.target.closest('tr.task-row');
-      if (row) updateRow(row);
-      updateTotals();
-    });
-    batchTable.addEventListener('change', function(e) {
-      var row = e.target.closest('tr.task-row');
-      if (row) updateRow(row);
-      updateTotals();
-    });
+    bindTaskEntryMetricInputs(batchTable);
     batchTable.querySelectorAll('.task-row').forEach(function(row) {
+      row._skipTotals = true;
       updateRow(row);
+      row._skipTotals = false;
     });
     updateTotals();
 
