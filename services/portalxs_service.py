@@ -3,7 +3,8 @@ PortalXS Service Layer
 ======================
 Wraps the SOAP client with:
 - Fernet password encryption (reuse tracker_automation crypto)
-- Thread-safe in-memory cache for live positions
+- Thread-safe in-memory cache for live positions, hydrated from DB mappings
+  so Render workers share last SOAP snapshot without Redis
 - Background polling thread (15s interval)
 - DB persistence for vehicle mappings + alerts
 - Auto-relogin on session expiry
@@ -473,8 +474,73 @@ _live_fetch_futures_lock = threading.Lock()
 
 
 def get_cached_positions(account_id: int) -> list[dict]:
+    key = str(account_id)
     with _live_cache_lock:
-        return _live_cache.get(str(account_id), [])
+        if key in _live_cache:
+            return _live_cache.get(key) or []
+    try:
+        db_vehicles = _positions_from_db_mappings(account_id)
+    except Exception:
+        return []
+    if not db_vehicles:
+        return []
+    _hydrate_memory_cache_from_db(account_id, db_vehicles)
+    with _live_cache_lock:
+        return _live_cache.get(key) or db_vehicles
+
+
+def _live_meta_setting_key(account_id: int) -> str:
+    return f'portalxs_live_meta_{account_id}'
+
+
+def _persist_live_feed_meta(account_id: int, meta: dict) -> None:
+    """Share last SOAP health across workers without Redis."""
+    try:
+        from models import SystemSetting
+        payload = {
+            'source': meta.get('source'),
+            'soap_ok': bool(meta.get('soap_ok')),
+            'fetched_at': meta.get('fetched_at'),
+            'fetched_at_pk': meta.get('fetched_at_pk'),
+        }
+        SystemSetting.set(_live_meta_setting_key(account_id), json.dumps(payload))
+    except Exception:
+        pass
+
+
+def _load_persisted_live_feed_meta(account_id: int) -> dict:
+    try:
+        from models import SystemSetting
+        raw = SystemSetting.get(_live_meta_setting_key(account_id))
+        if not raw:
+            return {}
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _hydrate_memory_cache_from_db(account_id: int, vehicles: list[dict]) -> None:
+    """Fill this process from last-saved mappings so other workers can serve the map."""
+    key = str(account_id)
+    now = time.time()
+    persisted = _load_persisted_live_feed_meta(account_id)
+    with _live_cache_lock:
+        if key in _live_cache:
+            return
+        _live_cache[key] = vehicles
+        meta = dict(_live_cache_meta.get(key) or {})
+        meta['source'] = persisted.get('source') or 'db'
+        meta['served_from'] = persisted.get('source') or 'db'
+        meta['served_at'] = now
+        meta['soap_ok'] = bool(persisted.get('soap_ok'))
+        fetched_at = persisted.get('fetched_at')
+        if isinstance(fetched_at, (int, float)):
+            meta['fetched_at'] = fetched_at
+            _live_cache_ts[key] = fetched_at
+        if persisted.get('fetched_at_pk'):
+            meta['fetched_at_pk'] = persisted['fetched_at_pk']
+        _live_cache_meta[key] = meta
 
 
 def get_cache_age(account_id: int) -> Optional[float]:
@@ -884,6 +950,9 @@ def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
             db.session.commit()
             with _POSITION_WARNING_LOCK:
                 _POSITION_FETCH_WARNINGS.pop(account_id, None)
+            with _live_cache_lock:
+                meta = dict(_live_cache_meta.get(str(account_id)) or {})
+            _persist_live_feed_meta(account_id, meta)
             return vehicles
 
         except Exception as e:

@@ -33,6 +33,7 @@ from services.portalxs_service import (  # noqa: E402
     classify_live_status,
     consume_position_warning,
     fetch_live_positions,
+    get_cached_positions,
     get_live_feed_meta,
     get_position_warning,
     gps_age_sec,
@@ -269,6 +270,20 @@ def test_inflight_live_soap_is_shared():
     _clear_live_state(acct)
 
 
+def test_empty_memory_hydrates_from_db_mappings():
+    acct = 91016
+    _clear_live_state(acct)
+    rows = [_sample_vehicle()]
+    with patch('services.portalxs_service._positions_from_db_mappings', return_value=rows):
+        out = get_cached_positions(acct)
+    assert out[0]['RegNo'] == 'LEG-18-2874'
+    with patch('services.portalxs_service._positions_from_db_mappings',
+               side_effect=AssertionError('memory cache should already be warm')):
+        out2 = get_cached_positions(acct)
+    assert out2[0]['RegNo'] == 'LEG-18-2874'
+    _clear_live_state(acct)
+
+
 if __name__ == '__main__':
     test_parse_rdt_real_formats()
     test_gps_status_thresholds()
@@ -284,4 +299,5 @@ if __name__ == '__main__':
     test_live_lock_collision_is_silent()
     test_real_bulk_lock_sets_warning()
     test_inflight_live_soap_is_shared()
+    test_empty_memory_hydrates_from_db_mappings()
     print('tracker freshness tests OK')
