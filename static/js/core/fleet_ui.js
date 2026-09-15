@@ -703,8 +703,10 @@ window._dtPrintCustomize = function(title, color, icon) {
 /* ── Section separator ── */
 
 (function() {
-  /* Skip inactivity timer entirely on Capacitor mobile app */
-  if (typeof window.Capacitor !== 'undefined') { return; }
+  /* Skip inactivity timer on native Capacitor; web keeps 15-minute logout. */
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+    return;
+  }
 
   var TIMEOUT_MS = 15 * 60 * 1000;   // 15 minutes total
   var WARNING_MS = 14 * 60 * 1000;   // show warning at 14 minutes
@@ -716,7 +718,8 @@ window._dtPrintCustomize = function(title, color, icon) {
     _lastActivity = Date.now();
     if (_warningShown) {
       _warningShown = false;
-      document.getElementById('inactivity-warning').style.display = 'none';
+      var warnBox = document.getElementById('inactivity-warning');
+      if (warnBox) warnBox.style.display = 'none';
       if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
     }
   }
@@ -727,10 +730,11 @@ window._dtPrintCustomize = function(title, color, icon) {
   });
 
   function _showWarning(secsLeft) {
-    _warningShown = true;
     var box = document.getElementById('inactivity-warning');
-    box.style.display = 'flex';
     var cd = document.getElementById('inactivity-countdown');
+    if (!box || !cd) return;
+    _warningShown = true;
+    box.style.display = 'flex';
     cd.textContent = secsLeft;
     if (_countdownInterval) clearInterval(_countdownInterval);
     _countdownInterval = setInterval(function() {

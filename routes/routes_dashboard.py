@@ -69,7 +69,6 @@ from routes_misc import (
     _safe_mobile_resume_path,
     _login_next_path,
     _safe_login_next,
-    _do_login_session,
     _biometric_hmac_token,
     _ensure_user_biometric_version_column,
     _user_profile_avatar_path,

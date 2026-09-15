@@ -5,6 +5,8 @@ User login & role-based access control.
 - Seed default permissions, Admin role, and admin user.
 """
 import logging
+import re
+from urllib.parse import urlparse
 
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -1123,38 +1125,133 @@ def check_password(user, password):
     return check_password_hash(user.password_hash, password)
 
 
-# ── Trusted Device cookie (web 30-day auto-login) ──────────────────────────
-TRUSTED_DEVICE_COOKIE = 'fleet_trusted_device'
-TRUSTED_DEVICE_DAYS   = 30
-
-def make_trusted_device_token(username, secret_key):
-    """Return a signed token: base64(username).HMAC-SHA256 for trusted-device cookie."""
-    import hmac as _hmac, hashlib, base64
-    sig = _hmac.new(
-        secret_key.encode('utf-8'),
-        f"{username}:trusted-device-v1".encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    user_b64 = base64.urlsafe_b64encode(username.encode('utf-8')).decode('ascii')
-    return f"{user_b64}.{sig}"
+LOGIN_LOCKOUT_MINUTES = 15
+LOGIN_MAX_FAILURES = 5
+_WEBVIEW_HOSTS = frozenset(('localhost', '127.0.0.1', '10.0.2.2'))
 
 
-def verify_trusted_device_token(token, secret_key):
-    """Return username if token is valid, else None."""
-    import hmac as _hmac, hashlib, base64
-    try:
-        user_b64, sig = token.rsplit('.', 1)
-        username = base64.urlsafe_b64decode(user_b64.encode('ascii')).decode('utf-8')
-        expected = _hmac.new(
-            secret_key.encode('utf-8'),
-            f"{username}:trusted-device-v1".encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
-        if _hmac.compare_digest(sig, expected):
-            return username
-    except Exception:
-        pass
+def normalize_login_username(username):
+    """Strip CNIC hyphens/spaces so 32304-0907226-5 and 3230409072265 match."""
+    username = (username or '').strip()
+    if username and re.match(r'^[\d\-]+$', username):
+        return re.sub(r'\D', '', username)
+    return username
+
+
+def login_username_variants(username):
+    """Original, digit-only, and hyphenated CNIC forms for user/employee lookup."""
+    raw = (username or '').strip()
+    variants = []
+    seen = set()
+
+    def _add(value):
+        text = (value or '').strip()
+        key = text.lower()
+        if not text or key in seen:
+            return
+        seen.add(key)
+        variants.append(text)
+
+    _add(raw)
+    digits = re.sub(r'\D', '', raw) if raw and re.match(r'^[\d\-]+$', raw) else ''
+    if digits:
+        _add(digits)
+        if len(digits) == 13:
+            _add(digits[:5] + '-' + digits[5:12] + '-' + digits[12:])
+    return variants
+
+
+def login_lockout_key(username):
+    return (normalize_login_username(username) or '').lower()
+
+
+def find_user_by_login_username(username):
+    from models import User
+    from sqlalchemy import func
+    for variant in login_username_variants(username):
+        user = User.query.filter(func.lower(User.username) == variant.lower()).first()
+        if user:
+            return user
     return None
+
+
+def user_effective_active(user):
+    """User.is_active plus Employee/Driver Active when the username is a CNIC."""
+    from models import Employee, Driver
+    from sqlalchemy import func
+    if not user or not user.is_active:
+        return False
+    username = (user.username or '').strip()
+    if len(username) < 5:
+        return True
+    for variant in login_username_variants(username):
+        emp = Employee.query.filter(func.lower(Employee.cnic_no) == variant.lower()).first()
+        if emp:
+            return (emp.status or '').strip() == 'Active'
+        driver = Driver.query.filter(func.lower(Driver.cnic_no) == variant.lower()).first()
+        if driver:
+            return (driver.status or '').strip() == 'Active'
+    return True
+
+
+def login_lockout_remaining_seconds(username):
+    from datetime import timedelta
+    from models import LoginAttempt
+    from utils import pk_now
+    try:
+        recent = LoginAttempt.query.filter(
+            LoginAttempt.username == login_lockout_key(username),
+            LoginAttempt.success == False,
+        ).order_by(LoginAttempt.created_at.desc()).limit(LOGIN_MAX_FAILURES).all()
+        if len(recent) < LOGIN_MAX_FAILURES:
+            return 0
+        unlock_at = recent[-1].created_at + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+        remaining = int((unlock_at - pk_now()).total_seconds())
+        return remaining if remaining > 0 else 0
+    except Exception:
+        return 0
+
+
+def csrf_exempt_origin_is_allowed(origin, referer, host_url):
+    """Same-origin or native WebView only. Missing Origin and Referer is blocked."""
+    host = (host_url or '').rstrip('/')
+
+    def _canonical(url):
+        text = (url or '').strip()
+        if not text:
+            return ''
+        parsed = urlparse(text)
+        if not parsed.scheme:
+            return text.rstrip('/')
+        netloc = parsed.netloc or (parsed.path.split('/')[0] if parsed.path else '')
+        if not netloc:
+            return ''
+        return f'{parsed.scheme}://{netloc}'.rstrip('/')
+
+    def _is_allowed(url):
+        canon = _canonical(url)
+        if not canon:
+            return False
+        if host and canon == host:
+            return True
+        parsed = urlparse(canon)
+        scheme = (parsed.scheme or '').lower()
+        hostname = (parsed.hostname or '').lower()
+        if scheme in ('capacitor', 'ionic') and hostname in ('localhost', ''):
+            return True
+        if scheme in ('http', 'https') and hostname in _WEBVIEW_HOSTS:
+            return True
+        return False
+
+    if origin:
+        return _is_allowed(origin)
+    if referer:
+        return _is_allowed(referer)
+    return False
+
+
+# Cookie name kept so logout still clears leftovers from the unused 30-day auto-login path.
+TRUSTED_DEVICE_COOKIE = 'fleet_trusted_device'
 
 
 # ── Data Context & Auto-Fill Policy ────────────────────────────────────────

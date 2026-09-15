@@ -7101,60 +7101,6 @@
     //  NATIVE MOBILE FEATURES  (all guarded by Capacitor.isNativePlatform)
     // ══════════════════════════════════════════════════════════════════════
 
-    // ── 0. Banking-Style Biometric T&C Setup (after first manual login) ────
-    (function() {
-        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-        if (sessionStorage.getItem('fleet_bio_setup') !== '1') return;
-        sessionStorage.removeItem('fleet_bio_setup');
-
-        var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
-        if (!bioPlugin) return;
-
-        /* Only show T&C if biometrics are actually available on this device */
-        bioPlugin.checkBiometry().then(function(info) {
-            var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-            if (!avail) return;
-
-            var overlay = document.getElementById('bioSetupOverlay');
-            if (!overlay) return;
-            overlay.style.display = 'flex';
-
-            document.getElementById('bioSetupAccept').addEventListener('click', function() {
-                var btn = document.getElementById('bioSetupAccept');
-                if (btn) { btn.disabled = true; btn.textContent = 'Setting up…'; }
-
-                /* Step 1: Get HMAC token from server */
-                fetch('/auth/biometric-token', { credentials: 'same-origin' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        if (!d.ok) throw new Error('token_failed');
-                        /* Step 2: Verify fingerprint (triggers Android dialog) */
-                        return bioPlugin.authenticate({
-                            reason: 'Confirm your fingerprint to enable biometric login',
-                            cancelTitle: 'Cancel',
-                            allowDeviceCredential: false,
-                            iosFallbackTitle: 'Cancel'
-                        }).then(function() {
-                            /* Fingerprint confirmed — store all credentials */
-                            localStorage.setItem('fleet_bio_enabled', '1');
-                            localStorage.setItem('fleet_bio_token',   d.token);
-                            localStorage.setItem('fleet_bio_user',    d.username);
-                            localStorage.setItem('fleet_bio_name',    d.display_name || d.username);
-                            overlay.style.display = 'none';
-                        });
-                    }).catch(function() {
-                        /* Fingerprint cancelled or failed — still hide overlay */
-                        overlay.style.display = 'none';
-                        if (btn) { btn.disabled = false; btn.textContent = 'Accept & Enable Biometric Login'; }
-                    });
-            });
-
-            document.getElementById('bioSetupSkip').addEventListener('click', function() {
-                overlay.style.display = 'none';
-            });
-        }).catch(function() {});
-    })();
-
     // ── 1. Status Bar color to match app theme ────────────────────────────
     (function() {
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
@@ -7342,43 +7288,7 @@
         });
     })();
 
-    // ── 5a. WEB: 30-min Inactivity Auto-Logout ────────────────────────────
-    (function() {
-        if (window.Capacitor && window.Capacitor.isNativePlatform()) return; // mobile handles its own lock
-        var TIMEOUT_MS   = 30 * 60 * 1000; // 30 min
-        var WARN_MS      = 28 * 60 * 1000; // warn 2 min before
-        var warned       = false;
-        var warnTimer    = null;
-        var logoutTimer  = null;
-
-        function resetTimer() {
-            clearTimeout(warnTimer);
-            clearTimeout(logoutTimer);
-            warned = false;
-            var existingWarn = document.getElementById('inactivityWarnBanner');
-            if (existingWarn) existingWarn.remove();
-
-            warnTimer = setTimeout(function() {
-                if (warned) return;
-                warned = true;
-                // Show 2-min warning banner
-                var b = document.createElement('div');
-                b.id = 'inactivityWarnBanner';
-                b.innerHTML = '<i class="bi bi-clock" style="font-size:1rem;"></i> Aap 2 minute mein automatically logout ho jaenge. Koi bhi button dabayein.';
-                b.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#1c1917;padding:10px 20px;border-radius:12px;font-size:0.8rem;font-weight:700;z-index:8888;box-shadow:0 4px 16px rgba(0,0,0,0.2);white-space:nowrap;pointer-events:none;';
-                document.body.appendChild(b);
-            }, WARN_MS);
-
-            logoutTimer = setTimeout(function() {
-                window.location.href = '/logout?inactivity=1';
-            }, TIMEOUT_MS);
-        }
-
-        ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(function(ev) {
-            document.addEventListener(ev, resetTimer, { passive: true });
-        });
-        resetTimer();
-    })();
+    // ── 5a. WEB: inactivity auto-logout lives in fleet_ui.js (15 min) ────
 
     // ── 5a2. Post-Camera Dropdown Lock — prevents ghost-focus auto-open ──
     window._isReturningFromCamera = false;
@@ -7458,12 +7368,13 @@
         if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
 
         var AppPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-        var bioPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.BiometricAuth;
+        var capPlugins = (window.Capacitor.Plugins) || {};
+        var bioPlugin = capPlugins.BiometricAuth || capPlugins.BiometricAuthNative || null;
         if (!AppPlugin) return;
 
-        var BIO_KEY   = 'fleet_bio_enabled';
         var TOKEN_KEY = 'fleet_bio_token';
         var USER_KEY  = 'fleet_bio_user';
+        var SAVED_USER_KEY = 'fleet_saved_username';
         var PIN_KEY   = 'fleet_pin_hash';
         var PIN_SET_KEY = 'fleet_pin_set';
 
@@ -7573,9 +7484,40 @@
             });
         }
 
-        /* ── Show/Hide helpers ── */
+        function hasPinSet() {
+            return localStorage.getItem(PIN_SET_KEY) === '1' && !!localStorage.getItem(PIN_KEY);
+        }
+
+        function isBioEnrolled() {
+            var token = localStorage.getItem(TOKEN_KEY);
+            var user = localStorage.getItem(SAVED_USER_KEY) || localStorage.getItem(USER_KEY);
+            return !!(token && user);
+        }
+
+        function runLockAuth(options) {
+            if (!bioPlugin) return Promise.reject(new Error('no plugin'));
+            if (typeof bioPlugin.internalAuthenticate === 'function') return bioPlugin.internalAuthenticate(options);
+            if (typeof bioPlugin.authenticate === 'function') return bioPlugin.authenticate(options);
+            if (typeof bioPlugin.verifyIdentity === 'function') return bioPlugin.verifyIdentity(options);
+            return Promise.reject(new Error('no authenticate'));
+        }
+
+        function lockAuthOptions(cancelTitle) {
+            return {
+                androidTitle: 'FleetManager',
+                reason: 'Verify your identity to open Fleet Manager',
+                cancelTitle: cancelTitle || 'Cancel',
+                allowDeviceCredential: false,
+                iosFallbackTitle: cancelTitle || 'Cancel',
+            };
+        }
+
+        function updatePinFallbackVisibility() {
+            if (bioUsePIN) bioUsePIN.style.display = hasPinSet() ? '' : 'none';
+        }
         function showBioOverlay() {
             isLocked = true;
+            updatePinFallbackVisibility();
             if (bioOverlay) bioOverlay.style.display = 'flex';
         }
         function hideBioOverlay() {
@@ -7591,15 +7533,8 @@
             var sub   = document.getElementById('pinLockSub');
             var err   = document.getElementById('pinErrMsg');
             if (err) err.textContent = '';
-            if (mode === 'set') {
-                if (title) title.textContent = 'Set a 4-digit PIN';
-                if (sub)   sub.textContent   = 'Choose a PIN to unlock the app';
-                var biobtn = document.getElementById('pinKeyBio');
-                if (biobtn) biobtn.style.display = 'none';
-            } else {
-                if (title) title.textContent = 'Enter PIN';
-                if (sub)   sub.textContent   = 'Enter your 4-digit PIN to unlock';
-            }
+            if (title) title.textContent = 'Enter PIN';
+            if (sub)   sub.textContent   = 'Enter your 4-digit PIN to unlock';
             if (pinOverlay) pinOverlay.style.display = 'flex';
         }
         function hidePINOverlay() {
@@ -7609,35 +7544,27 @@
         /* ── Core: trigger biometric auth ── */
         function triggerBioLock() {
             if (!bioPlugin) { fallbackToPin(); return; }
-            bioPlugin.checkBiometry().then(function(info) {
+            var check = (typeof bioPlugin.checkBiometry === 'function')
+                ? bioPlugin.checkBiometry()
+                : Promise.resolve({ isAvailable: true });
+            check.then(function(info) {
                 var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
                 if (!avail) { fallbackToPin(); return; }
                 showBioOverlay();
-                bioPlugin.authenticate({
-                    reason: 'Verify your identity to open Fleet Manager',
-                    cancelTitle: 'Use PIN',
-                    allowDeviceCredential: false,
-                    iosFallbackTitle: 'Use PIN'
-                }).then(function() {
+                runLockAuth(lockAuthOptions(hasPinSet() ? 'Use PIN' : 'Cancel')).then(function() {
                     hideBioOverlay();
-                }).catch(function(err) {
-                    if (err && (err.code === 'biometricCanceled' || err.code === 10)) {
-                        /* User tapped "Use PIN" */
-                        fallbackToPin();
-                    } else {
-                        fallbackToPin();
-                    }
+                }).catch(function() {
+                    fallbackToPin();
                 });
             }).catch(function() { fallbackToPin(); });
         }
 
         function fallbackToPin() {
-            var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
-            if (pinSet) {
+            if (hasPinSet()) {
                 showPINOverlay('verify');
-            } else {
-                showPINOverlay('set');
+                return;
             }
+            showBioOverlay();
         }
 
         /* "Use PIN instead" link on bio overlay */
@@ -7652,12 +7579,7 @@
         if (bioLockBtn) {
             bioLockBtn.addEventListener('click', function() {
                 if (!bioPlugin) { fallbackToPin(); return; }
-                bioPlugin.authenticate({
-                    reason: 'Verify your identity to open Fleet Manager',
-                    cancelTitle: 'Use PIN',
-                    allowDeviceCredential: false,
-                    iosFallbackTitle: 'Use PIN'
-                }).then(function() {
+                runLockAuth(lockAuthOptions(hasPinSet() ? 'Use PIN' : 'Cancel')).then(function() {
                     hideBioOverlay();
                 }).catch(function() { fallbackToPin(); });
             });
@@ -7677,12 +7599,11 @@
 
             if (_firstActivation) { _firstActivation = false; return; }
 
-            var hasBio = localStorage.getItem(BIO_KEY) === '1' && localStorage.getItem(TOKEN_KEY);
+            var hasBio = isBioEnrolled();
             if (hasBio) {
                 triggerBioLock();
             } else {
-                var pinSet = localStorage.getItem(PIN_SET_KEY) === '1';
-                if (pinSet) { isLocked = true; fallbackToPin(); }
+                if (hasPinSet()) { isLocked = true; fallbackToPin(); }
             }
         });
 
@@ -7692,33 +7613,6 @@
         document.head.appendChild(style);
     })();
 
-    // ── 5c. MOBILE: Back Button must NOT dismiss lock overlays ────────────
-    // (This guard is injected AFTER section 2's AppPlugin listener; the
-    //  tryCloseOverlay() fn above is patched to return true for lock overlays)
-    (function() {
-        if (!window.Capacitor || !window.Capacitor.isNativePlatform()) return;
-        var _orig = window._tryCloseOverlay || null;
-        /* Override: if lock overlay visible → swallow back press */
-        var bioO = document.getElementById('bioLockOverlay');
-        var pinO = document.getElementById('pinLockOverlay');
-        document.addEventListener('__backButton__', function() {}, false);
-        // Patch the existing tryCloseOverlay by hooking into it via a sentinel DOM check
-        // The back button handler in section 2 calls tryCloseOverlay().
-        // We add a check at the START of tryCloseOverlay by injecting a <meta> flag.
-        // Simpler approach: add the lock overlay check via the existing section-2 tryCloseOverlay.
-        // Since we can't easily monkey-patch it, we rely on the overlay z-index > 9999
-        // and the handler below that runs FIRST by being added to the same event stream.
-        var AppPlugin = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-        if (!AppPlugin) return;
-        AppPlugin.addListener('backButton', function(ev) {
-            var bioVisible = bioO && bioO.style.display === 'flex';
-            var pinVisible = pinO && pinO.style.display === 'flex';
-            if (bioVisible || pinVisible) {
-                /* Swallow — user MUST authenticate, cannot back out of the lock */
-                return;
-            }
-        });
-    })();
 
     // ── 5. Native Sticky Submit Buttons (Thumb Zone) ─────────────────────
     (function() {

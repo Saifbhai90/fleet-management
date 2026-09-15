@@ -82,7 +82,10 @@ from utils import (
     emg_amb_reg_matches_vehicle,
 )
 from services.driver_job_history import build_driver_job_history, job_history_counts
-from auth_utils import get_required_permission, user_has_permission, user_can_access, check_password, is_endpoint_allowed_for_any_authed
+from auth_utils import (
+    get_required_permission, user_has_permission, user_can_access, check_password,
+    is_endpoint_allowed_for_any_authed, csrf_exempt_origin_is_allowed,
+)
 from emg_tasks import upsert_emergency_from_excel
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
@@ -2793,15 +2796,11 @@ def _validate_csrf_exempt_origin():
     """Validate Origin/Referer on CSRF-exempt endpoints to prevent cross-site attacks.
     Allows same-origin and Capacitor WebView (https://localhost) requests.
     Returns True if safe, False if cross-origin."""
-    origin = (request.headers.get('Origin') or '').rstrip('/')
-    referer = (request.headers.get('Referer') or '').rstrip('/')
-    expected = request.host_url.rstrip('/')
-    allowed_prefixes = [expected, 'https://localhost', 'http://localhost']
-    if origin:
-        return any(origin.startswith(p) for p in allowed_prefixes)
-    if referer:
-        return any(referer.startswith(p) for p in allowed_prefixes)
-    return True
+    return csrf_exempt_origin_is_allowed(
+        request.headers.get('Origin'),
+        request.headers.get('Referer'),
+        request.host_url,
+    )
 
 
 

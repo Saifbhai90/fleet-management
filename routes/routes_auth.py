@@ -11,7 +11,7 @@ from flask import (
 from app import app, db, csrf
 from models import (
     User, Role, Permission, role_permissions, LoginLog, ActivityLog,
-    ClientActivityLog, ClientDiagnosticLog, LoginAttempt,
+    ClientActivityLog, ClientDiagnosticLog,
     Employee, EmployeePost, Driver, SystemSetting,
     AttendanceTimeControl, AttendanceTimeOverride, DeviceFCMToken,
     AppRelease,
@@ -25,6 +25,8 @@ from sqlalchemy import func, text
 from werkzeug.security import generate_password_hash
 from auth_utils import (
     get_required_permission, user_has_permission, user_can_access, check_password,
+    TRUSTED_DEVICE_COOKIE, user_effective_active, find_user_by_login_username,
+    normalize_login_username, login_lockout_remaining_seconds, LOGIN_MAX_FAILURES,
 )
 from utils import pk_now, pk_date
 from permissions_config import (
@@ -71,7 +73,8 @@ from routes_misc import (
     _login_next_path,
     _safe_login_next,
     _is_capacitor_browser,
-    _do_login_session,
+    _complete_authenticated_login,
+    _record_login_attempt,
     _safe_mobile_resume_path,
     _user_profile_avatar_path,
 )
@@ -106,10 +109,6 @@ def _ensure_project_ufone_close_reminder_column():
         db.session.rollback()
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    from auth_utils import (
-        make_trusted_device_token, verify_trusted_device_token,
-        TRUSTED_DEVICE_COOKIE, TRUSTED_DEVICE_DAYS
-    )
     # GET /login: never wipe an active session (mobile-init clears before redirect here).
     # Auth redirects use ?next= so a still-valid session returns to the intended page.
     if request.method == 'GET':
@@ -149,119 +148,49 @@ def login():
     def _login_json(**payload):
         return jsonify(payload)
 
-    # Show "no access" message at most once when redirected due to permission failure
-    if session.pop('show_no_access', None):
-        flash('You do not have access to this page.', 'danger')
     if form.validate_on_submit():
-        username = (form.username.data or '').strip()
-        # CNIC: normalize digits+hyphens to digits-only; login accept kare 3230409072265 ya 32304-0907226-5 dono
-        if username and re.match(r'^[\d\-]+$', username):
-            username = re.sub(r'\D', '', username)
+        username = normalize_login_username((form.username.data or '').strip())
         password = (form.password.data or '').strip()
 
-        _lockout_minutes = 15
-        _max_failures = 5
-
-        def _compute_lockout_seconds(uname):
-            try:
-                recent = LoginAttempt.query.filter(
-                    LoginAttempt.username == (uname or '').lower(),
-                    LoginAttempt.success == False,
-                ).order_by(LoginAttempt.created_at.desc()).limit(_max_failures).all()
-                if len(recent) < _max_failures:
-                    return 0
-                oldest_in_top = recent[-1].created_at
-                unlock_at = oldest_in_top + timedelta(minutes=_lockout_minutes)
-                remaining = int((unlock_at - pk_now()).total_seconds())
-                return remaining if remaining > 0 else 0
-            except Exception:
-                return 0
+        def _lock_response(remaining):
+            lock_msg = (
+                f'Account temporarily locked due to {LOGIN_MAX_FAILURES} failed attempts. '
+                f'Try again in {max(1, (remaining + 59) // 60)} minute(s).'
+            )
+            if _login_wants_json():
+                return _login_json(
+                    ok=False,
+                    error=lock_msg,
+                    lockout_remaining_seconds=remaining,
+                )
+            flash(lock_msg, 'danger')
+            return render_template(
+                'login.html',
+                form=form,
+                lockout_remaining_seconds=remaining,
+            )
 
         try:
-            lockout_remaining_seconds = _compute_lockout_seconds(username)
+            lockout_remaining_seconds = login_lockout_remaining_seconds(username)
             if lockout_remaining_seconds > 0:
-                lock_msg = (
-                    f'Account temporarily locked due to {_max_failures} failed attempts. '
-                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).'
-                )
-                if _login_wants_json():
-                    return _login_json(
-                        ok=False,
-                        error=lock_msg,
-                        lockout_remaining_seconds=lockout_remaining_seconds,
-                    )
-                flash(lock_msg, 'danger')
-                return render_template(
-                    'login.html',
-                    form=form,
-                    lockout_remaining_seconds=lockout_remaining_seconds
-                )
+                return _lock_response(lockout_remaining_seconds)
         except Exception:
             pass
 
-        user = User.query.filter(func.lower(User.username) == username.lower()).first()
-        # Agar 13 digits mein user na mila to hyphen wala format try karein (DB mein 32304-0907226-5 ho sakta hai)
-        if not user and len(username) == 13 and username.isdigit():
-            username_formatted = username[:5] + '-' + username[5:12] + '-' + username[12:]
-            user = User.query.filter(func.lower(User.username) == username_formatted.lower()).first()
-        # CNIC dono format se match (3230409072265 ya 32304-0907226-5) Employee/Driver ke liye
-        cnic_variants = [username]
-        if len(username) == 13 and username.isdigit():
-            cnic_variants.append(username[:5] + '-' + username[5:12] + '-' + username[12:])
-        if user and _user_effective_active(user):
-            # Auto-fix: agar user ke paas role_id nahi, to Employee/Driver ke post se role assign kar dein
-            try:
-                role_fixed = False
-                if not user.role_id:
-                    # 1) Agar user.employee_post_id set hai to uske linked role se bind karein
-                    if user.employee_post_id:
-                        emp_post = db.session.get(EmployeePost, user.employee_post_id)
-                        if emp_post and emp_post.role_id:
-                            user.role_id = emp_post.role_id
-                            role_fixed = True
-                    # 2) Agar employee_post_id nahi, to Employee record (CNIC=username) se post/role lein
-                    if not role_fixed:
-                        emp = None
-                        for c in cnic_variants:
-                            emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
-                            if emp:
-                                break
-                    if emp and emp.post_id:
-                        user.employee_post_id = emp.post_id
-                        emp_post = db.session.get(EmployeePost, emp.post_id)
-                        if emp_post and emp_post.role_id:
-                            user.role_id = emp_post.role_id
-                            role_fixed = True
-                    # 3) Agar phir bhi nahi mila, to Driver record se post (full_name) match karke role lein
-                    if not role_fixed:
-                        drv = None
-                        for c in cnic_variants:
-                            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
-                            if drv:
-                                break
-                    if drv and drv.post:
-                        emp_post = EmployeePost.query.filter(EmployeePost.full_name == (drv.post or '').strip()).first()
-                        if emp_post:
-                            user.employee_post_id = emp_post.id
-                            user.role_id = emp_post.role_id
-                            role_fixed = True
-                if role_fixed:
-                    db.session.commit()
-            except Exception:
-                db.session.rollback()
-            if password == DEFAULT_FIRST_PASSWORD and getattr(user, 'force_password_change', None):
-                if check_password(user, DEFAULT_FIRST_PASSWORD):
-                    session['must_set_password_user_id'] = user.id
-                    if _login_wants_json():
-                        return _login_json(
-                            ok=True,
-                            redirect=url_for('set_new_password'),
-                            username=user.username,
-                            display_name=(user.full_name or user.username or '').strip(),
-                        )
-                    return redirect(url_for('set_new_password'))
-                # else wrong password
-            elif password == DEFAULT_FIRST_PASSWORD and not getattr(user, 'force_password_change', None):
+        user = find_user_by_login_username(username)
+        authenticated = False
+        if user and user_effective_active(user):
+            if getattr(user, 'force_password_change', None) and check_password(user, password):
+                session['must_set_password_user_id'] = user.id
+                if _login_wants_json():
+                    return _login_json(
+                        ok=True,
+                        redirect=url_for('set_new_password'),
+                        username=user.username,
+                        display_name=(user.full_name or user.username or '').strip(),
+                    )
+                return redirect(url_for('set_new_password'))
+            if password == DEFAULT_FIRST_PASSWORD and not getattr(user, 'force_password_change', None):
                 first_pw_msg = (
                     'Invalid user ID or password. Pehli dafa login ke baad naya password set karein; '
                     'ab 123 kaam nahi karega.'
@@ -270,141 +199,21 @@ def login():
                     return _login_json(ok=False, error=first_pw_msg)
                 flash(first_pw_msg, 'danger')
                 return redirect(url_for('login'))
-            elif check_password(user, password):
-                session['user_id'] = user.id
-                session['user'] = user.full_name or user.username
-                role_name = (user.role.name if user.role else '').strip()
-                is_master = bool(role_name == 'Master')
-                is_admin = bool(role_name == 'Admin')
-                session['is_master'] = is_master
-                session['is_admin'] = is_admin
-                # Master ke liye role ki value nahi: hamesha saari permissions (DB se sab codes), taake koi cheez miss na ho
-                if is_master:
-                    perms = [p.code for p in Permission.query.all()]
-                else:
-                    perms = user.permission_codes()
-                try:
-                    from permissions_config import expand_login_permissions
-                    perms = expand_login_permissions(perms)
-                except Exception:
-                    pass
-                session['permissions'] = perms
-                session.permanent = True  # Always persistent (30 days); inactivity timer handles web security
-
-                # ── User scope: projects/districts/vehicles/shifts ───────────────────────────────
-                allowed_projects = set()
-                allowed_districts = set()
-                allowed_vehicles = set()
-                allowed_shifts = set()
-                if not (is_master or is_admin):
-                    # Employee assignments (projects/districts) via CNIC
-                    try:
-                        emp = None
-                        for c in cnic_variants:
-                            emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
-                            if emp:
-                                break
-                    except Exception:
-                        emp = None
-                    if emp:
-                        for p in emp.projects:
-                            if p and p.id:
-                                allowed_projects.add(p.id)
-                        for d in emp.districts:
-                            if d and d.id:
-                                allowed_districts.add(d.id)
-                    # Driver assignment (project/vehicle/shift) via CNIC
-                    try:
-                        drv = None
-                        for c in cnic_variants:
-                            drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
-                            if drv:
-                                break
-                    except Exception:
-                        drv = None
-                    if drv:
-                        if getattr(drv, 'project_id', None):
-                            allowed_projects.add(drv.project_id)
-                        if getattr(drv, 'vehicle_id', None):
-                            allowed_vehicles.add(drv.vehicle_id)
-                        if getattr(drv, 'district_id', None):
-                            allowed_districts.add(drv.district_id)
-                        if (drv.shift or '').strip():
-                            allowed_shifts.add((drv.shift or '').strip())
-                    # Agar kisi bhi cheez ka assignment nahi mila to login block karein
-                    if not (allowed_projects or allowed_districts or allowed_vehicles or allowed_shifts):
-                        scope_msg = (
-                            'Aap ke liye koi Project / District / Vehicle / Shift assign nahi hai. '
-                            'Admin se contact karein.'
-                        )
-                        session.clear()
-                        if _login_wants_json():
-                            return _login_json(ok=False, error=scope_msg)
-                        flash(scope_msg, 'danger')
-                        return redirect(url_for('login'))
-
-                session['allowed_projects'] = list(allowed_projects)
-                session['allowed_districts'] = list(allowed_districts)
-                session['allowed_vehicles'] = list(allowed_vehicles)
-                session['allowed_shifts'] = list(allowed_shifts)
-                try:
-                    login_log = LoginLog(
-                        user_id=user.id,
-                        ip_address=request.remote_addr,
-                        user_agent=(request.headers.get('User-Agent') or '')[:500],
-                    )
-                    db.session.add(login_log)
-                    db.session.add(LoginAttempt(
-                        username=username.lower(), ip_address=request.remote_addr,
-                        user_agent=(request.headers.get('User-Agent') or '')[:500],
-                        success=True,
-                    ))
-                    db.session.commit()
-                    session['login_log_id'] = login_log.id
-                except Exception:
-                    db.session.rollback()
-                # Login ke baad default landing page:
-                # 1) Agar dashboard ki access hai (full ya koi bhi card/feature) to Dashboard pe le jao.
-                # 2) Agar dashboard nahi hai lekin Attendance hai to Attendance pages pe.
-                # 3) Warna bhi fallback Dashboard hi hai (permission check before_request mein ho jayega).
-                target_endpoint = None
-                codes = set(perms or [])
-                # Smart dashboard access check (same as route guard logic)
-                has_dashboard_access = (
-                    'dashboard' in codes
-                    or any(p.startswith('dashboard_card_') for p in codes)
-                    or 'view_fleet_map' in codes
-                    or 'global_search' in codes
-                )
-                if has_dashboard_access:
-                    target_endpoint = 'dashboard'
-                elif 'driver_attendance' in codes:
-                    target_endpoint = 'driver_attendance_list'
-                elif 'driver_attendance_report' in codes:
-                    target_endpoint = 'driver_attendance_report'
-                else:
-                    # User has no dashboard access and no attendance permissions.
-                    # Block login instead of falling back to dashboard (which causes redirect loop).
-                    no_access_msg = (
-                        'Aap ko Dashboard ya kisi bhi module ki access nahi hai. '
-                        'Admin se apni permissions check karwayein.'
-                    )
-                    session.clear()
+            if check_password(user, password):
+                authenticated = True
+                result = _complete_authenticated_login(user, request)
+                if not result.get('ok'):
                     if _login_wants_json():
-                        return _login_json(ok=False, error=no_access_msg)
-                    flash(no_access_msg, 'danger')
+                        return _login_json(ok=False, error=result.get('error') or 'Login failed')
+                    flash(result.get('error') or 'Login failed', 'danger')
                     return redirect(url_for('login'))
-                session['play_login_sound'] = 1
-                flash(f'Welcome, {session["user"]}!', 'success')
-                # Always land on the dashboard (or role landing) after login. We deliberately do NOT
-                # restore a previous screen such as an unfinished Task Report. Clear any stale resume cookie.
-                resp_target = url_for('dashboard', from_login=1) if target_endpoint == 'dashboard' else url_for(target_endpoint)
+                resp_target = result['redirect']
                 if _login_wants_json():
                     payload = {
                         'ok': True,
                         'redirect': resp_target,
-                        'username': user.username,
-                        'display_name': (user.full_name or user.username or '').strip(),
+                        'username': result.get('username') or user.username,
+                        'display_name': result.get('display_name') or (user.full_name or user.username or '').strip(),
                     }
                     if request.form.get('_fleet_bio_link') == '1':
                         _ensure_user_biometric_version_column()
@@ -414,33 +223,11 @@ def login():
                 resp = make_response(redirect(resp_target))
                 resp.set_cookie('fleet_resume_path', '', max_age=0, path='/')
                 return resp
-        try:
-            db.session.add(LoginAttempt(
-                username=username.lower(), ip_address=request.remote_addr,
-                user_agent=(request.headers.get('User-Agent') or '')[:500],
-                success=False,
-            ))
-            db.session.commit()
-            lockout_remaining_seconds = _compute_lockout_seconds(username)
+        if not authenticated:
+            _record_login_attempt(username, False, request)
+            lockout_remaining_seconds = login_lockout_remaining_seconds(username)
             if lockout_remaining_seconds > 0:
-                lock_msg = (
-                    f'Account temporarily locked due to {_max_failures} failed attempts. '
-                    f'Try again in {max(1, (lockout_remaining_seconds + 59) // 60)} minute(s).'
-                )
-                if _login_wants_json():
-                    return _login_json(
-                        ok=False,
-                        error=lock_msg,
-                        lockout_remaining_seconds=lockout_remaining_seconds,
-                    )
-                flash(lock_msg, 'danger')
-                return render_template(
-                    'login.html',
-                    form=form,
-                    lockout_remaining_seconds=lockout_remaining_seconds
-                )
-        except Exception:
-            db.session.rollback()
+                return _lock_response(lockout_remaining_seconds)
         if _login_wants_json():
             return _login_json(
                 ok=False,
@@ -476,7 +263,6 @@ def login():
 
 @app.route('/logout')
 def logout():
-    from auth_utils import TRUSTED_DEVICE_COOKIE
     inactivity = request.args.get('inactivity') == '1'
     pre_sound = request.args.get('pre_sound') == '1'
     play_logout_sound = 'auto' if inactivity else 'manual'
@@ -760,24 +546,6 @@ def _user_can_edit_user(editor_is_master, target_user):
 
 
 DEFAULT_FIRST_PASSWORD = '123'
-
-
-
-
-def _user_effective_active(user):
-    """Login ke liye: User.is_active + agar Employee/Driver se link hai to unka status bhi Active hona chahiye."""
-    if not user or not user.is_active:
-        return False
-    username = (user.username or '').strip()
-    if len(username) < 5:
-        return True
-    emp = Employee.query.filter(func.lower(Employee.cnic_no) == username.lower()).first()
-    if emp:
-        return (emp.status or '').strip() == 'Active'
-    driver = Driver.query.filter(func.lower(Driver.cnic_no) == username.lower()).first()
-    if driver:
-        return (driver.status or '').strip() == 'Active'
-    return True
 
 
 

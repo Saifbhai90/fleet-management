@@ -14,7 +14,7 @@ from flask import (
 from app import app, db, csrf
 from models import (
     User, Role, Permission, Driver, Vehicle,
-    SystemSetting, ActivityLog, LoginLog,
+    SystemSetting, ActivityLog, LoginLog, LoginAttempt, EmployeePost,
 )
 from forms import (
     ChangePasswordForm,
@@ -22,7 +22,13 @@ from forms import (
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, text, or_, and_
 from werkzeug.utils import secure_filename
-from auth_utils import user_can_access, check_password
+from auth_utils import (
+    user_can_access, check_password, generate_password_hash,
+    user_effective_active, find_user_by_login_username,
+    login_lockout_key, login_lockout_remaining_seconds, login_username_variants,
+    LOGIN_MAX_FAILURES,
+)
+from permissions_config import expand_login_permissions
 from utils import (
     pk_now, pk_date, parse_date, format_date_ddmmyyyy,
     load_notification_popup_token,
@@ -54,7 +60,8 @@ from routes import (
 from models import District, DriverAttendance, Employee, Project
 from forms import SetNewPasswordForm
 from vehicle_sort_utils import vehicle_order_by
-from auth_utils import generate_password_hash
+
+
 @app.route('/api/global-search')
 def api_global_search():
     """Global search: returns matching Drivers and Vehicles as JSON. Used by navbar search bar."""
@@ -524,66 +531,169 @@ def biometric_login():
     _ensure_user_biometric_version_column()
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
-    token    = (data.get('token') or '').strip()
+    token = (data.get('token') or '').strip()
     if not username or not token:
         return jsonify({'ok': False, 'error': 'Missing fields'}), 400
-    user = User.query.filter_by(username=username, is_active=True).first()
-    if not user:
-        return jsonify({'ok': False, 'error': 'User not found'}), 401
-    if not _biometric_token_valid(user, token):
+    lockout_remaining = login_lockout_remaining_seconds(username)
+    if lockout_remaining > 0:
+        lock_msg = (
+            f'Account temporarily locked due to {LOGIN_MAX_FAILURES} failed attempts. '
+            f'Try again in {max(1, (lockout_remaining + 59) // 60)} minute(s).'
+        )
+        return jsonify({
+            'ok': False,
+            'error': lock_msg,
+            'lockout_remaining_seconds': lockout_remaining,
+        }), 403
+    user = find_user_by_login_username(username)
+    if not user or not user_effective_active(user) or not _biometric_token_valid(user, token):
+        _record_login_attempt(username, False, request)
         return jsonify({'ok': False, 'error': 'Invalid token'}), 401
-    _do_login_session(user, request)
-    return jsonify({'ok': True, 'redirect': url_for('dashboard')})
+    result = _complete_authenticated_login(user, request)
+    if not result.get('ok'):
+        return jsonify({'ok': False, 'error': result.get('error') or 'Login failed'}), 403
+    return jsonify({
+        'ok': True,
+        'redirect': result['redirect'],
+        'username': result.get('username') or user.username,
+        'display_name': result.get('display_name') or (user.full_name or user.username or '').strip(),
+    })
 
 
+def _record_login_attempt(username, success, req):
+    try:
+        db.session.add(LoginAttempt(
+            username=login_lockout_key(username),
+            ip_address=(getattr(req, 'remote_addr', None) or '')[:64],
+            user_agent=(req.headers.get('User-Agent') or '')[:500],
+            success=bool(success),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
-def _do_login_session(user, req):
-    """Populate Flask session for a successfully authenticated user (shared by password + trusted-device flows)."""
+
+def _login_landing_endpoint(perms):
+    codes = set(perms or [])
+    has_dashboard_access = (
+        'dashboard' in codes
+        or any(p.startswith('dashboard_card_') for p in codes)
+        or 'view_fleet_map' in codes
+        or 'global_search' in codes
+    )
+    if has_dashboard_access:
+        return 'dashboard'
+    if 'driver_attendance' in codes:
+        return 'driver_attendance_list'
+    if 'driver_attendance_report' in codes:
+        return 'driver_attendance_report'
+    return None
+
+
+def _ensure_user_role_from_cnic(user):
+    """Auto-bind role from Employee/Driver post when user.role_id is empty."""
+    if not user or user.role_id:
+        return
+    variants = login_username_variants(user.username)
+    try:
+        role_fixed = False
+        if user.employee_post_id:
+            emp_post = db.session.get(EmployeePost, user.employee_post_id)
+            if emp_post and emp_post.role_id:
+                user.role_id = emp_post.role_id
+                role_fixed = True
+        if not role_fixed:
+            emp = None
+            for cnic in variants:
+                emp = Employee.query.filter(func.lower(Employee.cnic_no) == cnic.lower()).first()
+                if emp:
+                    break
+            if emp and emp.post_id:
+                user.employee_post_id = emp.post_id
+                emp_post = db.session.get(EmployeePost, emp.post_id)
+                if emp_post and emp_post.role_id:
+                    user.role_id = emp_post.role_id
+                    role_fixed = True
+        if not role_fixed:
+            drv = None
+            for cnic in variants:
+                drv = Driver.query.filter(func.lower(Driver.cnic_no) == cnic.lower()).first()
+                if drv:
+                    break
+            if drv and drv.post:
+                emp_post = EmployeePost.query.filter(
+                    EmployeePost.full_name == (drv.post or '').strip()
+                ).first()
+                if emp_post:
+                    user.employee_post_id = emp_post.id
+                    user.role_id = emp_post.role_id
+                    role_fixed = True
+        if role_fixed:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _complete_authenticated_login(user, req):
+    """Populate Flask session after password or biometric proof. Shared gates for both paths."""
+    if not user or not user_effective_active(user):
+        return {'ok': False, 'error': 'Invalid user ID or password.'}
+    if getattr(user, 'force_password_change', None):
+        return {
+            'ok': False,
+            'error': 'Please sign in with your password to set a new password.',
+            'force_password_change': True,
+        }
+    _ensure_user_role_from_cnic(user)
+    try:
+        db.session.refresh(user)
+    except Exception:
+        pass
     role_name = (user.role.name if user.role else '').strip()
-    is_master  = role_name == 'Master'
-    is_admin   = role_name == 'Admin'
-    session['user_id']   = user.id
-    session['user']      = user.full_name or user.username
-    session['is_master'] = is_master
-    session['is_admin']  = is_admin
+    is_master = role_name == 'Master'
+    is_admin = role_name == 'Admin'
     if is_master:
         perms = [p.code for p in Permission.query.all()]
     else:
         perms = user.permission_codes()
     try:
-        from permissions_config import expand_login_permissions
         perms = expand_login_permissions(perms)
     except Exception:
         pass
-    session['permissions'] = perms
-    session.permanent = True
-    # ── Scope: projects / districts / vehicles / shifts ──────────────────
-    allowed_projects  = set()
+    landing = _login_landing_endpoint(perms)
+    if not landing:
+        return {
+            'ok': False,
+            'error': (
+                'Aap ko Dashboard ya kisi bhi module ki access nahi hai. '
+                'Admin se apni permissions check karwayein.'
+            ),
+        }
+    allowed_projects = set()
     allowed_districts = set()
-    allowed_vehicles  = set()
-    allowed_shifts    = set()
+    allowed_vehicles = set()
+    allowed_shifts = set()
     if not (is_master or is_admin):
-        uname = (user.username or '').strip()
-        cnic_variants = [uname, uname.replace('-', '')]
+        cnic_variants = login_username_variants(user.username)
         try:
             emp = None
-            for c in cnic_variants:
-                emp = Employee.query.filter(func.lower(Employee.cnic_no) == c.lower()).first()
+            for cnic in cnic_variants:
+                emp = Employee.query.filter(func.lower(Employee.cnic_no) == cnic.lower()).first()
                 if emp:
                     break
             if emp:
-                for p in (emp.projects or []):
-                    if p and p.id:
-                        allowed_projects.add(p.id)
-                for d in (emp.districts or []):
-                    if d and d.id:
-                        allowed_districts.add(d.id)
+                for project in (emp.projects or []):
+                    if project and project.id:
+                        allowed_projects.add(project.id)
+                for district in (emp.districts or []):
+                    if district and district.id:
+                        allowed_districts.add(district.id)
         except Exception:
             pass
         try:
             drv = None
-            for c in cnic_variants:
-                drv = Driver.query.filter(func.lower(Driver.cnic_no) == c.lower()).first()
+            for cnic in cnic_variants:
+                drv = Driver.query.filter(func.lower(Driver.cnic_no) == cnic.lower()).first()
                 if drv:
                     break
             if drv:
@@ -595,41 +705,79 @@ def _do_login_session(user, req):
                     allowed_districts.add(drv.district_id)
                 if (drv.shift or '').strip():
                     allowed_shifts.add((drv.shift or '').strip())
-                # Comprehensive enrichment from assigned vehicle
-                for _vid in list(allowed_vehicles):
-                    _veh = db.session.get(Vehicle, _vid)
-                    if not _veh:
+                for vehicle_id in list(allowed_vehicles):
+                    veh = db.session.get(Vehicle, vehicle_id)
+                    if not veh:
                         continue
-                    if _veh.district_id:
-                        allowed_districts.add(_veh.district_id)
-                    if not allowed_projects and _veh.project_id:
-                        allowed_projects.add(_veh.project_id)
+                    if veh.district_id:
+                        allowed_districts.add(veh.district_id)
+                    if not allowed_projects and veh.project_id:
+                        allowed_projects.add(veh.project_id)
                     if not allowed_districts:
-                        _ps = _veh.parking_station
-                        if _ps:
-                            if not allowed_projects and _ps.project_id:
-                                allowed_projects.add(_ps.project_id)
-                            if not allowed_districts and (_ps.district or '').strip():
-                                _pd = District.query.filter(
-                                    func.lower(District.name) == _ps.district.strip().lower()
+                        parking = veh.parking_station
+                        if parking:
+                            if not allowed_projects and parking.project_id:
+                                allowed_projects.add(parking.project_id)
+                            if not allowed_districts and (parking.district or '').strip():
+                                parking_district = District.query.filter(
+                                    func.lower(District.name) == parking.district.strip().lower()
                                 ).first()
-                                if _pd:
-                                    allowed_districts.add(_pd.id)
+                                if parking_district:
+                                    allowed_districts.add(parking_district.id)
         except Exception:
             pass
-    session['allowed_projects']  = list(allowed_projects)
+        if not (allowed_projects or allowed_districts or allowed_vehicles or allowed_shifts):
+            return {
+                'ok': False,
+                'error': (
+                    'Aap ke liye koi Project / District / Vehicle / Shift assign nahi hai. '
+                    'Admin se contact karein.'
+                ),
+            }
+    session['user_id'] = user.id
+    session['user'] = user.full_name or user.username
+    session['is_master'] = is_master
+    session['is_admin'] = is_admin
+    session['permissions'] = perms
+    session.permanent = True
+    session['allowed_projects'] = list(allowed_projects)
     session['allowed_districts'] = list(allowed_districts)
-    session['allowed_vehicles']  = list(allowed_vehicles)
-    session['allowed_shifts']    = list(allowed_shifts)
+    session['allowed_vehicles'] = list(allowed_vehicles)
+    session['allowed_shifts'] = list(allowed_shifts)
     try:
-        log = LoginLog(user_id=user.id,
-                       ip_address=(req.remote_addr or '')[:64],
-                       user_agent=(req.headers.get('User-Agent') or '')[:500])
+        log = LoginLog(
+            user_id=user.id,
+            ip_address=(req.remote_addr or '')[:64],
+            user_agent=(req.headers.get('User-Agent') or '')[:500],
+        )
         db.session.add(log)
+        db.session.add(LoginAttempt(
+            username=login_lockout_key(user.username),
+            ip_address=(req.remote_addr or '')[:64],
+            user_agent=(req.headers.get('User-Agent') or '')[:500],
+            success=True,
+        ))
         db.session.commit()
         session['login_log_id'] = log.id
     except Exception:
         db.session.rollback()
+    session['play_login_sound'] = 1
+    flash(f'Welcome, {session["user"]}!', 'success')
+    if landing == 'dashboard':
+        redirect_url = url_for('dashboard', from_login=1)
+    else:
+        redirect_url = url_for(landing)
+    return {
+        'ok': True,
+        'redirect': redirect_url,
+        'username': user.username,
+        'display_name': (user.full_name or user.username or '').strip(),
+    }
+
+
+def _do_login_session(user, req):
+    """Back-compat alias used by other route modules."""
+    return _complete_authenticated_login(user, req)
 
 
 
@@ -648,6 +796,8 @@ def set_new_password():
             return render_template('set_new_password.html', form=form)
         user.password_hash = generate_password_hash(form.new_password.data)
         user.force_password_change = False
+        _ensure_user_biometric_version_column()
+        user.biometric_token_version = int(getattr(user, 'biometric_token_version', 0) or 0) + 1
         db.session.commit()
         session.pop('must_set_password_user_id', None)
         flash('Password set successfully. Please login with your new password.', 'success')
@@ -670,12 +820,12 @@ def account_change_password():
         user.password_hash = generate_password_hash(form.new_password.data)
         if getattr(user, 'force_password_change', None):
             user.force_password_change = False
+        _ensure_user_biometric_version_column()
+        user.biometric_token_version = int(getattr(user, 'biometric_token_version', 0) or 0) + 1
         db.session.commit()
         flash('Password changed successfully. Please login again.', 'success')
-        session.pop('user_id', None)
-        session.pop('user', None)
-        session.pop('permissions', None)
-        return redirect(url_for('login'))
+        session.clear()
+        return redirect(url_for('login', clear_bio=1))
     return render_template('account_change_password.html', form=form)
 
 

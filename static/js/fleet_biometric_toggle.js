@@ -9,8 +9,9 @@
     token: 'fleet_bio_token',
     username: 'fleet_saved_username',
     name: 'fleet_saved_name',
-    setupPending: 'fleet_bio_setup',
-    setupPendingLocal: 'fleet_bio_setup_pending',
+    enabled: 'fleet_bio_enabled',
+    legacyUser: 'fleet_bio_user',
+    legacyName: 'fleet_bio_name',
   };
 
   var LINK_SUCCESS_MSG = 'Biometric Verification Successful!';
@@ -119,14 +120,11 @@
     return usernameEl ? usernameEl.value.trim() : '';
   }
 
-  function isSetupPending() {
-    return global.localStorage.getItem(KEYS.setupPendingLocal) === 'true' ||
-      global.sessionStorage.getItem(KEYS.setupPending) === '1';
-  }
-
   function clearSetupPending() {
-    global.localStorage.removeItem(KEYS.setupPendingLocal);
-    global.sessionStorage.removeItem(KEYS.setupPending);
+    try {
+      global.sessionStorage.removeItem('fleet_bio_setup');
+      global.localStorage.removeItem('fleet_bio_setup_pending');
+    } catch (e) { /* ignore */ }
   }
 
   function saveUserInfo(data) {
@@ -139,11 +137,19 @@
   function saveCredentials(data) {
     if (data.token) global.localStorage.setItem(KEYS.token, data.token);
     saveUserInfo(data);
+    if (data.username) {
+      global.localStorage.setItem(KEYS.enabled, '1');
+      global.localStorage.setItem(KEYS.legacyUser, data.username);
+      global.localStorage.setItem(KEYS.legacyName, data.display_name || data.username);
+    }
     clearSetupPending();
   }
 
   function clearLocalCredentials() {
     global.localStorage.removeItem(KEYS.token);
+    global.localStorage.removeItem(KEYS.enabled);
+    global.localStorage.removeItem(KEYS.legacyUser);
+    global.localStorage.removeItem(KEYS.legacyName);
     clearSetupPending();
   }
 
@@ -151,6 +157,9 @@
     global.localStorage.removeItem(KEYS.token);
     global.localStorage.removeItem(KEYS.username);
     global.localStorage.removeItem(KEYS.name);
+    global.localStorage.removeItem(KEYS.enabled);
+    global.localStorage.removeItem(KEYS.legacyUser);
+    global.localStorage.removeItem(KEYS.legacyName);
     clearSetupPending();
   }
 
@@ -576,35 +585,6 @@
     });
   }
 
-  function completeSetup() {
-    if (!isSetupPending() || hasLocalToken()) {
-      clearSetupPending();
-      return Promise.resolve(null);
-    }
-    if (global._fleetBioCompleteSetupRunning) {
-      return global._fleetBioCompleteSetupPromise || Promise.resolve(null);
-    }
-    global._fleetBioCompleteSetupRunning = true;
-    global._fleetBioCompleteSetupPromise = fetchEnableToken()
-      .then(function(data) {
-        if (!data || !data.ok || !data.token) {
-          throw new Error((data && data.error) || 'Could not link biometric login');
-        }
-        saveCredentials(data);
-        alertMsg(LINK_SUCCESS_MSG);
-        return data;
-      })
-      .catch(function(err) {
-        console.warn('[Bio] completeSetup failed:', err);
-        return null;
-      })
-      .then(function(result) {
-        global._fleetBioCompleteSetupRunning = false;
-        return result;
-      });
-    return global._fleetBioCompleteSetupPromise;
-  }
-
   function showSavedAccountBiometricMode() {
     var bioMode = global.document.getElementById('hblBioMode');
     var pwdRow = global.document.getElementById('hblPasswordRow');
@@ -797,7 +777,8 @@
 
     var urlParams = new global.URLSearchParams(global.location.search);
     if (urlParams.get('clear_bio') === '1') {
-      global.sessionStorage.clear();
+      clearLocalCredentials();
+      try { global.sessionStorage.removeItem('_fleetPendingBioLink'); } catch (e) { /* ignore */ }
       if (global.history && global.history.replaceState) {
         global.history.replaceState({}, global.document.title, global.location.pathname);
       }
@@ -1140,14 +1121,11 @@
     getPlugin: getPlugin,
     _checkBiometry: checkBiometry,
     hasLocalToken: hasLocalToken,
-    isSetupPending: isSetupPending,
-    clearSetupPending: clearSetupPending,
     saveCredentials: saveCredentials,
     clearSavedAccount: clearSavedAccount,
+    clearLocalCredentials: clearLocalCredentials,
     markAppSessionActive: markAppSessionActive,
     withFromLogin: withFromLogin,
-    completeSetup: completeSetup,
-    completeSetupAfterLogin: completeSetup,
     autoTrigger: autoTrigger,
     initLoginPage: initLoginPage,
     initDashboardBioSetup: initDashboardBioSetup,

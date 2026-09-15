@@ -22,9 +22,13 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError
-from werkzeug.security import check_password_hash
 from app import db
-from routes import _lock_attendance_driver_vehicle
+from routes import _lock_attendance_driver_vehicle, DEFAULT_FIRST_PASSWORD
+from auth_utils import (
+    check_password, find_user_by_login_username, user_effective_active,
+    login_lockout_remaining_seconds, login_lockout_key, LOGIN_MAX_FAILURES,
+)
+from models import User, LoginAttempt
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -59,6 +63,19 @@ def _record_failed_attempt(ip: str):
     now = datetime.datetime.now(datetime.timezone.utc).timestamp()
     with _login_lock:
         _login_attempts[ip].append(now)
+
+
+def _record_jwt_login_attempt(username, success):
+    try:
+        db.session.add(LoginAttempt(
+            username=login_lockout_key(username),
+            ip_address=(_get_client_ip() or '')[:64],
+            user_agent=(request.headers.get('User-Agent') or '')[:500],
+            success=bool(success),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _jwt_secret():
@@ -140,7 +157,6 @@ def mobile_login():
     Body: { "username": "CNIC", "password": "..." }
     Returns JWT token on success.
     """
-    from models import User
     body = request.get_json(silent=True) or {}
     username = (body.get('username') or '').strip()
     password = (body.get('password') or '').strip()
@@ -152,10 +168,33 @@ def mobile_login():
     if _is_rate_limited(client_ip):
         return _err('Too many failed attempts. Please try again in 10 minutes.', 429)
 
-    user = User.query.filter_by(username=username, is_active=True).first()
-    if not user or not check_password_hash(user.password_hash, password):
+    lockout_remaining = login_lockout_remaining_seconds(username)
+    if lockout_remaining > 0:
+        return _err(
+            f'Account temporarily locked due to {LOGIN_MAX_FAILURES} failed attempts. '
+            f'Try again in {max(1, (lockout_remaining + 59) // 60)} minute(s).',
+            429,
+        )
+
+    user = find_user_by_login_username(username)
+    if (
+        not user
+        or not user_effective_active(user)
+        or not check_password(user, password)
+    ):
         _record_failed_attempt(client_ip)
+        _record_jwt_login_attempt(username, False)
         return _err('Invalid credentials.', 401)
+
+    if getattr(user, 'force_password_change', None):
+        return _err('Please sign in on the web app to set a new password.', 403)
+
+    if password == DEFAULT_FIRST_PASSWORD:
+        _record_failed_attempt(client_ip)
+        _record_jwt_login_attempt(username, False)
+        return _err('Invalid credentials.', 401)
+
+    _record_jwt_login_attempt(user.username, True)
 
     is_master = bool(user.role and user.role.name == 'Master')
     token = _make_token({
