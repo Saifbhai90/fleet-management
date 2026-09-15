@@ -208,28 +208,6 @@
     z-index: 1;
     pointer-events: none;
   }
-  .vmarker-wrap.gps-delayed-ring .vmarker-car-slot::after,
-  .vmarker-wrap.gps-offline-ring .vmarker-car-slot::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 48px;
-    height: 48px;
-    margin: -24px 0 0 -24px;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 3;
-    background: transparent;
-  }
-  .vmarker-wrap.gps-delayed-ring .vmarker-car-slot::after {
-    border: 2px solid #f59e0b;
-    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.28);
-  }
-  .vmarker-wrap.gps-offline-ring .vmarker-car-slot::after {
-    border: 2px solid #ef4444;
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28);
-  }
   @keyframes vmarker-task-pulse {
     0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75); transform: scale(0.92); opacity: 1; }
     70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); transform: scale(1.15); opacity: 0.35; }

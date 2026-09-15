@@ -463,9 +463,16 @@
     return { base: base, full: base + '|' + Math.round(appliedDeg) };
   }
 
-  function navArrowSvg(color, uid) {
+  function arrowColorForGps(gpsStatus) {
+    if (gpsStatus === 'delayed') return '#f59e0b';
+    if (gpsStatus === 'offline') return '#ef4444';
+    return '#ffffff';
+  }
+
+  function navArrowSvg(color, uid, gpsStatus) {
     var dark = shadeHex(color, -32);
     var light = shadeHex(color, 28);
+    var needle = arrowColorForGps(gpsStatus);
     return '<svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true">' +
       '<defs>' +
       '<linearGradient id="ng-' + uid + '" x1="20" y1="2" x2="20" y2="38" gradientUnits="userSpaceOnUse">' +
@@ -478,8 +485,8 @@
       '</defs>' +
       '<g filter="url(#nf-' + uid + ')">' +
       '<circle cx="20" cy="20" r="17" fill="url(#ng-' + uid + ')" stroke="#ffffff" stroke-width="2.6"/>' +
-      '<path d="M20 8 L27.5 23.5 L20 19.5 L12.5 23.5 Z" fill="#ffffff" stroke="#ffffff" stroke-width="0.6" stroke-linejoin="round"/>' +
-      '<circle cx="20" cy="20" r="3.2" fill="#ffffff" opacity=".95"/>' +
+      '<path d="M20 8 L27.5 23.5 L20 19.5 L12.5 23.5 Z" fill="' + needle + '" stroke="' + needle + '" stroke-width="0.6" stroke-linejoin="round"/>' +
+      '<circle cx="20" cy="20" r="3.2" fill="' + needle + '" opacity=".95"/>' +
       '</g></svg>';
   }
 
@@ -491,15 +498,13 @@
       ? '<div class="vmarker-label" style="color:' + color + ';">' + safeReg + '</div>'
       : '';
     var pulseHtml = hasUfoneTask ? '<div class="vmarker-task-pulse" aria-hidden="true"></div>' : '';
-    var gpsCls = (gpsStatus === 'delayed') ? ' gps-delayed-ring'
-      : (gpsStatus === 'offline') ? ' gps-offline-ring' : '';
     return L.divIcon({
       className: 'fleet-vmarker' + (hasUfoneTask ? ' has-ufone-task' : ''),
-      html: '<div class="vmarker-wrap' + gpsCls + '">' + label +
+      html: '<div class="vmarker-wrap">' + label +
             '<div class="vmarker-car-slot">' +
             pulseHtml +
             '<div class="vmarker-car" style="transform:rotate(' + rotate + 'deg);">' +
-            navArrowSvg(color, uid) +
+            navArrowSvg(color, uid, gpsStatus) +
             '</div></div></div>',
       iconSize: [56, 56],
       iconAnchor: [28, 42]

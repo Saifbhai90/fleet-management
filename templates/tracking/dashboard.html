@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1001" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1002" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ufone_task_modal.css') }}?v=1001" />
 {% endblock %}
 
@@ -120,9 +120,9 @@
         <div class="row"><span class="dot" style="background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.45);animation:vmarker-pulse 2s ease-out infinite"></span> Active Ufone Task</div>
         <div class="row"><span class="dot" style="background:#3b82f6"></span> Idle (engine on)</div>
         <div class="row"><span class="dot" style="background:#f59e0b"></span> No GPS / Not responding</div>
-        <div class="row"><span class="dot" style="background:transparent;box-shadow:0 0 0 2px #f59e0b"></span> Delayed GPS ring</div>
-        <div class="row"><span class="dot" style="background:transparent;box-shadow:0 0 0 2px #ef4444"></span> Offline GPS ring</div>
-        <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Nav arrow · rotates with heading · markers stay full opacity</div>
+        <div class="row"><span class="dot" style="background:#f59e0b;clip-path:polygon(50% 8%, 82% 78%, 50% 62%, 18% 78%)"></span> Delayed GPS (amber arrow)</div>
+        <div class="row"><span class="dot" style="background:#ef4444;clip-path:polygon(50% 8%, 82% 78%, 50% 62%, 18% 78%)"></span> Offline GPS (red arrow)</div>
+        <div style="margin-top:6px;font-size:10px;color:#94a3b8;">Nav arrow · rotates with heading · ring is Ufone task only</div>
       </div>
 
       <!-- Fullscreen-only controls -->
@@ -198,7 +198,7 @@
   'feed': feed or {},
   'ufone_tasks_by_reg': ufone_tasks_by_reg
 } | tojson }}</script>
-<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1001"></script>
+<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1002"></script>
 <script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1006"></script>
 <script>
 if (window.UfoneTaskDetail) {
