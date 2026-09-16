@@ -98,6 +98,7 @@
   var nearestState = null;
   var parkingLayer = L.layerGroup();
   var parkingState = null;
+  var parkingRedrawing = false;
   var AT_PARKING_M = 500;
 
   function fetchUfoneTaskMap() {
@@ -397,28 +398,27 @@
     });
   }
 
-  function updateParkingBanner(info) {
-    var title = document.getElementById('tkParkingTitle');
-    var sub = document.getElementById('tkParkingSub');
-    if (!title || !sub || !info) return;
-    title.textContent = info.parking.name || 'Assigned parking';
-    if (info.meters == null) {
-      sub.textContent = 'Parking location set · vehicle GPS unavailable';
-      return;
-    }
-    sub.textContent = (info.at ? 'At parking' : 'Away from parking') +
-      ' · ' + info.label + ' · ' + AT_PARKING_M + ' m yard';
+  function parkingPopupHtml(info) {
+    var status = info.meters == null
+      ? 'Parking location set · vehicle GPS unavailable'
+      : ((info.at ? 'At parking' : 'Away from parking') +
+        ' · ' + info.label + ' · ' + AT_PARKING_M + ' m yard');
+    return '<div class="tk-parking-pop">' +
+      '<div class="tk-parking-pop-title">' + escapeHtml(info.parking.name || 'Assigned parking') + '</div>' +
+      '<div class="tk-parking-pop-sub">' + escapeHtml(status) + '</div>' +
+      '</div>';
   }
 
   function clearParkingOverlay() {
+    parkingRedrawing = true;
     parkingLayer.clearLayers();
     parkingState = null;
     if (map.hasLayer(parkingLayer)) map.removeLayer(parkingLayer);
-    var banner = document.getElementById('tkParkingBanner');
-    if (banner) banner.classList.remove('open');
+    parkingRedrawing = false;
   }
 
   function drawParkingOverlay(v, info) {
+    parkingRedrawing = true;
     parkingLayer.clearLayers();
     var parkLatLng = [info.parking.latitude, info.parking.longitude];
     L.circle(parkLatLng, {
@@ -428,8 +428,14 @@
       fillColor: info.at ? '#16a34a' : '#f59e0b',
       fillOpacity: 0.12
     }).addTo(parkingLayer);
-    L.marker(parkLatLng, { icon: parkingIcon(), zIndexOffset: 1100 })
-      .bindTooltip('Parking · ' + (info.parking.name || ''), { direction: 'top' })
+    var parkMarker = L.marker(parkLatLng, { icon: parkingIcon(), zIndexOffset: 1100 })
+      .bindPopup(parkingPopupHtml(info), {
+        className: 'tk-parking-popup',
+        closeButton: true,
+        autoClose: false,
+        closeOnClick: false,
+        offset: [0, -6]
+      })
       .addTo(parkingLayer);
     var vLat = parseFloat(v.LAT);
     var vLon = parseFloat(v.LON);
@@ -442,6 +448,8 @@
       }).addTo(parkingLayer);
     }
     if (!map.hasLayer(parkingLayer)) parkingLayer.addTo(map);
+    parkMarker.openPopup();
+    parkingRedrawing = false;
   }
 
   function syncParkingOverlay() {
@@ -451,7 +459,6 @@
     var info = parkingDistanceInfo(v);
     if (!info) return;
     parkingState.info = info;
-    updateParkingBanner(info);
     drawParkingOverlay(v, info);
   }
 
@@ -463,10 +470,7 @@
     closeDetail();
     closeLegend();
     parkingState = { regno: regno, info: info };
-    updateParkingBanner(info);
     drawParkingOverlay(v, info);
-    var banner = document.getElementById('tkParkingBanner');
-    if (banner) banner.classList.add('open');
     var points = [[info.parking.latitude, info.parking.longitude]];
     var vLat = parseFloat(v.LAT);
     var vLon = parseFloat(v.LON);
@@ -497,6 +501,7 @@
   function matchesListFilter(regNo, status) {
     if (currentFilter === 'all') return true;
     if (currentFilter === 'Task') return !!activeUfoneTask(regNo);
+    if (currentFilter === 'NoGPS') return isNoGps(posByReg[regNo]);
     return status === currentFilter;
   }
 
@@ -532,6 +537,14 @@
 
   function gpsStatusOf(v) {
     return (v && v.gps_status) || 'unknown';
+  }
+
+  function isNoGps(v) {
+    if (!v) return true;
+    if ((v.VehicleStatus || '') === 'Unknown') return true;
+    var lat = parseFloat(v.LAT);
+    var lon = parseFloat(v.LON);
+    return !isFinite(lat) || !isFinite(lon) || lat === 0 || lon === 0;
   }
 
   function displayGpsAgeSec(v) {
@@ -978,7 +991,7 @@
 
   function updateStatCounts() {
     var search = document.getElementById('vehicleSearch').value.toLowerCase();
-    var mv = 0, st = 0, id = 0, total = 0;
+    var mv = 0, st = 0, id = 0, total = 0, task = 0, nogps = 0;
     positions.forEach(function(v) {
       var grp = v.GroupName || 'Unassigned';
       var matchGroup = isGroupSelected(grp);
@@ -988,11 +1001,17 @@
       if (v.VehicleStatus === 'Moving') mv++;
       else if (v.VehicleStatus === 'Stopped') st++;
       else if (v.VehicleStatus === 'Idle') id++;
+      if (activeUfoneTask(v.RegNo)) task++;
+      if (isNoGps(v)) nogps++;
     });
     document.getElementById('statTotal').textContent = total;
     document.getElementById('statMoving').textContent = mv;
     document.getElementById('statStopped').textContent = st;
     document.getElementById('statIdle').textContent = id;
+    var taskEl = document.getElementById('statTask');
+    if (taskEl) taskEl.textContent = task;
+    var nogpsEl = document.getElementById('statNoGps');
+    if (nogpsEl) nogpsEl.textContent = nogps;
     var gripCount = document.getElementById('tsGripCount');
     if (gripCount) gripCount.textContent = total;
   }
@@ -1131,7 +1150,7 @@
       if (hdr.style.display !== want) hdr.style.display = want;
       if (body.style.display !== want) body.style.display = want;
       if (!groupMatches) return;
-      if (hasSearch || currentFilter === 'Task') {
+      if (hasSearch || currentFilter === 'Task' || currentFilter === 'NoGPS') {
         if (visibleGroups[hdr.dataset.group]) {
           hdr.classList.remove('collapsed');
           body.classList.remove('collapsed');
@@ -1191,7 +1210,7 @@
       s.classList.toggle('active-filter', s.dataset.statFilter === filter);
     });
     applyFilter();
-    if (filter === 'Task') fitMapToVisibleMarkers();
+    if (filter === 'Task' || filter === 'NoGPS') fitMapToVisibleMarkers();
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -1377,16 +1396,19 @@
   /* Float the map controls above the detail card instead of behind it */
   function syncFabOffset() {
     var fabsEl = document.getElementById('tkFabs');
+    var legend = document.getElementById('mapLegend');
     if (!fabsEl) return;
     if (!isMobile()) {
       fabsEl.style.removeProperty('bottom');
       if (layerPop) layerPop.style.removeProperty('bottom');
+      if (legend) legend.style.removeProperty('bottom');
       return;
     }
     var extra = (detailReg && detailEl) ? (detailEl.offsetHeight + 12) : 0;
     var offset = 'calc(var(--tk-peek) + ' + (12 + extra) + 'px)';
     fabsEl.style.bottom = offset;
     if (layerPop) layerPop.style.bottom = offset;
+    if (legend) legend.style.bottom = 'calc(var(--tk-peek) + ' + (64 + extra) + 'px)';
   }
 
   function openDetail(reg) {
@@ -1475,13 +1497,6 @@
     clearNearestOverlay();
     haptic();
   });
-  var parkingClose = document.getElementById('tkParkingClose');
-  if (parkingClose) {
-    parkingClose.addEventListener('click', function() {
-      clearParkingOverlay();
-      haptic();
-    });
-  }
   document.getElementById('tkNearestFreeOnly').addEventListener('change', function() {
     if (nearestState) {
       nearestState.onlyFree = this.checked;
@@ -1504,6 +1519,7 @@
   if (fabLayers) {
     fabLayers.addEventListener('click', function(e) {
       e.stopPropagation();
+      closeLegend();
       var open = layerPop.classList.toggle('open');
       fabLayers.classList.toggle('active', open);
     });
@@ -1533,7 +1549,6 @@
     trackingWrap.classList.toggle('tk-fullmap', fullMap);
     document.documentElement.classList.toggle('tk-fullmap', fullMap);
     closeLayerPop();
-    closeLegend();
     var fab = document.getElementById('tkFabFull');
     if (fab) fab.classList.toggle('active', fullMap);
     /* Real browser fullscreen where it is available (desktop); harmless if it is not */
@@ -1560,7 +1575,9 @@
   });
 
   var legendEl = document.getElementById('mapLegend');
-  document.getElementById('tkFabInfo').addEventListener('click', function() {
+  document.getElementById('tkFabInfo').addEventListener('click', function(e) {
+    e.stopPropagation();
+    closeLayerPop();
     if (!legendEl.classList.contains('tk-open') && detailReg) closeDetail();
     var open = legendEl.classList.toggle('tk-open');
     this.classList.toggle('active', open);
@@ -1593,6 +1610,7 @@
 
   map.on('click', function() {
     closeLayerPop();
+    closeLegend();
     if (isMobile() && detailReg) closeDetail();
   });
   /* Manual panning cancels follow mode, like every good tracking app */
@@ -1634,7 +1652,6 @@
       sheet.style.removeProperty('transform');
       closeDetail();
       closeLayerPop();
-      closeLegend();
     }
     syncFabOffset();
     setTimeout(resyncMap, 260);

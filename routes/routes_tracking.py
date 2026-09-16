@@ -225,6 +225,25 @@ def _tracking_polling_autostart():
         pass
 
 
+def _vehicle_is_no_gps(v: dict) -> bool:
+    status = str((v or {}).get('VehicleStatus') or '')
+    if status == 'Unknown':
+        return True
+    try:
+        lat = float((v or {}).get('LAT'))
+        lon = float((v or {}).get('LON'))
+    except (TypeError, ValueError):
+        return True
+    return lat == 0 or lon == 0
+
+
+def _with_tracking_stat_extras(stats: dict, vehicles: list, ufone_tasks_by_reg: dict) -> dict:
+    out = dict(stats or {})
+    out['task'] = len(ufone_tasks_by_reg or {})
+    out['nogps'] = sum(1 for v in (vehicles or []) if _vehicle_is_no_gps(v))
+    return out
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # DASHBOARD - Live tracking map
 # ════════════════════════════════════════════════════════════════════════════
@@ -234,7 +253,7 @@ def tracking_dashboard():
     acct_id = _get_account_id()
     accounts = _get_all_accounts()
     vehicles = []
-    stats = {'total': 0, 'moving': 0, 'stopped': 0, 'idle': 0}
+    stats = {'total': 0, 'moving': 0, 'stopped': 0, 'idle': 0, 'task': 0, 'nogps': 0}
     error = None
     feed = {
         'source': None,
@@ -263,6 +282,9 @@ def tracking_dashboard():
     else:
         error = "No PortalXS account configured. Add one in Settings."
 
+    ufone_tasks_by_reg = _ufone_tasks_for_tracking()
+    stats = _with_tracking_stat_extras(stats, vehicles, ufone_tasks_by_reg)
+
     return render_template(
         'tracking/dashboard.html',
         vehicles=vehicles,
@@ -277,7 +299,7 @@ def tracking_dashboard():
             'data_status': feed.get('data_status'),
             'warning': feed.get('warning'),
         },
-        ufone_tasks_by_reg=_ufone_tasks_for_tracking(),
+        ufone_tasks_by_reg=ufone_tasks_by_reg,
         parking_by_reg=_parking_stations_for_tracking(),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
