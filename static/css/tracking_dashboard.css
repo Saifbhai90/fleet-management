@@ -287,6 +287,13 @@
   }
   .tk-fab:active { transform: scale(.94); }
   .tk-fab.active { background: #1a5fb4; color: #fff; }
+  .tk-fab-tools { display: flex; flex-direction: column; gap: 6px; }
+  .tk-fab-more { display: none; }
+  html.capacitor-native .tk-fab-more { display: flex; }
+  html.capacitor-native .tk-fab-tools { display: none; }
+  html.capacitor-native .tk-fabs.tk-tools-open .tk-fab-tools { display: flex; }
+  html.capacitor-native .tk-fab-more i { transition: transform .15s ease; }
+  html.capacitor-native .tk-fabs.tk-tools-open .tk-fab-more i { transform: rotate(45deg); }
   .tk-fab[data-tip]::after {
     content: attr(data-tip);
     position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
@@ -550,6 +557,7 @@
     .tracking-topbar {
       height: auto; flex-wrap: wrap; row-gap: 8px; column-gap: 8px;
       padding: 9px 10px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.35);
+      position: relative; z-index: 700;
     }
     .tracking-topbar .tb-spacer,
     .tracking-topbar .tb-check { display: none; }
@@ -565,8 +573,8 @@
     .tb-stat .num { font-size: 15px; }
     .tb-stat .lbl { font-size: 8.5px; }
 
-    .tracking-body { position: relative; flex: 1; min-height: 0; display: block; }
-    .tracking-map-wrap { position: absolute; inset: 0; flex: none; }
+    .tracking-body { position: relative; flex: 1; min-height: 0; display: block; overflow: hidden; }
+    .tracking-map-wrap { position: absolute; inset: 0; flex: none; overflow: hidden; }
 
     /* Bottom sheet — sits above the system gesture bar */
     .tracking-sidebar {
@@ -621,12 +629,25 @@
     .tk-nearest-list { max-height: 38vh; }
 
     .tk-detail {
-      display: block; position: absolute; left: 8px; right: 8px;
+      display: flex; flex-direction: column;
+      position: absolute; left: 8px; right: 8px;
       bottom: calc(var(--tk-peek) + 10px + env(safe-area-inset-bottom, 0px));
-      z-index: 650; background: #101c28; border: 1px solid #2a3a4a; border-radius: 20px; padding: 14px;
+      box-sizing: border-box;
+      max-height: calc(100% - var(--tk-peek) - 20px - env(safe-area-inset-bottom, 0px));
+      min-height: 0;
+      z-index: 650; background: #101c28; border: 1px solid #2a3a4a; border-radius: 20px;
+      padding: 12px 14px 14px;
       box-shadow: 0 -12px 34px rgba(0,0,0,.55); will-change: transform;
       transform: translate3d(0, 140%, 0); transition: transform .3s cubic-bezier(.22,.61,.36,1), opacity .2s ease;
       opacity: 0; visibility: hidden; pointer-events: none;
+      overflow: hidden;
+    }
+    .tk-detail-head { flex-shrink: 0; }
+    .tk-detail-body {
+      flex: 1 1 auto; min-height: 0;
+      overflow-x: hidden; overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
     }
     .tk-detail.open { transform: translate3d(0, 0, 0); opacity: 1; visibility: visible; pointer-events: auto; }
 

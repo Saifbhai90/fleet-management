@@ -8,6 +8,14 @@
   // ── Mobile detection — layout class must be applied before Leaflet measures ──
   var mq = window.matchMedia('(max-width: 767px)');
   function isMobile() { return mq.matches; }
+  function isNativeApp() {
+    try {
+      if (window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function') {
+        return !!window.Capacitor.isNativePlatform();
+      }
+    } catch (e) {}
+    return document.documentElement.classList.contains('capacitor-native');
+  }
   document.documentElement.classList.toggle('tk-mobile', isMobile());
 
   function haptic(style) {
@@ -1499,6 +1507,7 @@
         '</div>' +
         '<div class="tk-detail-close" data-tk="close" role="button" aria-label="Close"><i class="bi bi-x-lg"></i></div>' +
       '</div>' +
+      '<div class="tk-detail-body">' +
       '<div class="tk-detail-grid">' +
         detailCell('Speed', spd + ' km/h') +
         detailCell('Ignition', escapeHtml(v.IgnitionStatus || 'N/A')) +
@@ -1519,12 +1528,18 @@
         '<a class="tk-act primary" href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '">' +
           '<i class="bi bi-graph-up"></i> Details</a>' +
       '</div>' +
-      taskHtml;
+      taskHtml +
+      '</div>';
     if (detailReg) syncFabOffset();
   }
 
   /* Float the map controls above the detail card instead of behind it */
   function syncFabOffset() {
+    if (!isMobile()) {
+      if (detailEl) detailEl.style.removeProperty('max-height');
+    } else {
+      clampDetailHeight();
+    }
     var fabsEl = document.getElementById('tkFabs');
     var legend = document.getElementById('mapLegend');
     var nearbyPop = document.getElementById('tkNearbyPop');
@@ -1542,6 +1557,18 @@
     if (layerPop) layerPop.style.bottom = offset;
     if (nearbyPop) nearbyPop.style.bottom = offset;
     if (legend) legend.style.bottom = 'calc(var(--tk-peek) + ' + (64 + extra) + 'px)';
+  }
+
+  function clampDetailHeight() {
+    if (!detailEl) return;
+    var host = detailEl.parentElement;
+    if (!host) return;
+    var peek = 122;
+    var wrap = document.querySelector('.tracking-wrap');
+    var parsed = parseFloat(getComputedStyle(wrap || host).getPropertyValue('--tk-peek'));
+    if (parsed) peek = parsed;
+    var maxPx = Math.max(180, host.clientHeight - peek - 20);
+    detailEl.style.maxHeight = maxPx + 'px';
   }
 
   function openDetail(reg) {
@@ -1662,9 +1689,36 @@
 
   var nearbyPop = document.getElementById('tkNearbyPop');
   var fabNearby = document.getElementById('tkFabNearby');
+  var fabsEl = document.getElementById('tkFabs');
+  var fabMore = document.getElementById('tkFabMore');
   function closeNearbyPop(opts) {
     if (nearbyPop) nearbyPop.classList.remove('open');
     if (opts && opts.restoreLegend && !isMobile()) openLegend();
+  }
+
+  function toolsOpen() {
+    return !!(fabsEl && fabsEl.classList.contains('tk-tools-open'));
+  }
+  function setToolsOpen(open) {
+    if (!fabsEl || !isNativeApp()) return;
+    fabsEl.classList.toggle('tk-tools-open', !!open);
+    if (fabMore) {
+      fabMore.classList.toggle('active', !!open);
+      fabMore.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    if (!open) {
+      closeLayerPop();
+      closeNearbyPop();
+      closeLegend();
+    }
+  }
+  if (fabMore) {
+    fabMore.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (!isNativeApp()) return;
+      setToolsOpen(!toolsOpen());
+      haptic();
+    });
   }
 
   if (fabLayers) {
@@ -1791,6 +1845,7 @@
     closeLayerPop();
     closeNearbyPop({ restoreLegend: nearbyWasOpen && !isMobile() });
     if (!(nearbyWasOpen && !isMobile())) closeLegend();
+    if (isNativeApp()) setToolsOpen(false);
     if (isMobile() && detailReg) closeDetail();
   });
   /* Manual panning cancels follow mode, like every good tracking app */
@@ -1807,6 +1862,7 @@
     clearTimeout(resyncTimer);
     resyncTimer = setTimeout(function() {
       try { map.invalidateSize({ animate: false }); } catch (e) {}
+      syncFabOffset();
     }, 60);
   }
   if (window.ResizeObserver) {
