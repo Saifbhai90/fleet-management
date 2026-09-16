@@ -2732,7 +2732,7 @@
         </div>
       </div>
       <div class="card-footer bg-light d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2 rounded-bottom">
-        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). New rows ke liye Close Reading required hai.</span><span class="d-md-none">Saved: <strong>Edit</strong> / <strong>Delete</strong> (agar ijazat ho). Nayi row: <strong>Close Reading</strong> zaroori.</span></span>
+        <span class="text-muted small order-3 order-sm-1 task-batch-footer-hint"><span class="d-none d-md-inline">Saved rows locked rahengi; <strong>Edit</strong> se change, <strong>Delete</strong> se galat entry hataen (ijazat ke sath). Save tabhi hoga jab <strong>sab vehicles</strong> ki Close Reading aur Task dono enter hon.</span><span class="d-md-none">Saved: <strong>Edit</strong> / <strong>Delete</strong> (agar ijazat ho). Save ke liye <strong>sab rows</strong> ki Close + Task zaroori.</span></span>
         <div class="d-flex flex-column flex-sm-row gap-2 order-1 order-sm-2 align-self-stretch align-self-sm-auto">
           <button type="submit" class="btn btn-primary px-4 py-2 align-self-stretch task-batch-save-btn" id="saveBtn">
           <i class="bi bi-save me-1"></i>Save All
@@ -3410,6 +3410,36 @@
       return rows;
     }
 
+    // All-or-nothing rule: whatever is loaded (whole district/project, one
+    // filtered vehicle, or the driver's own single vehicle) must be complete —
+    // Close Reading AND Task's on every row — before Save is allowed.
+    // Locked saved rows count as complete only when they hold both values.
+    function collectIncompleteRows() {
+      var out = [];
+      batchTable.querySelectorAll('tr.task-row').forEach(function (row) {
+        var vid = row.getAttribute('data-vehicle-id');
+        var mode = document.getElementById('row_' + vid + '_edit_mode');
+        var seq = row.getAttribute('data-seq') || '';
+        var vno = row.getAttribute('data-vno') || '';
+        if (mode && mode.value === '0') {
+          var ic = row.getAttribute('data-init-close') || '';
+          var it = row.getAttribute('data-init-tasks') || '';
+          if (ic === '' || it === '') {
+            out.push({ row: row, seq: seq, vno: vno, missing: ic === '' ? 'close' : 'tasks', what: 'Close Reading missing (saved-pending)' });
+          }
+          return;
+        }
+        var closeInp = row.querySelector('.close-input');
+        var taskInp = row.querySelector('input[name*="_tasks_count"]');
+        var hasClose = !!(closeInp && closeInp.value && closeInp.value.trim() !== '');
+        var hasTasks = !!(taskInp && taskInp.value && taskInp.value.trim() !== '');
+        if (!hasClose || !hasTasks) {
+          out.push({ row: row, seq: seq, vno: vno, missing: hasClose ? 'tasks' : 'close', what: hasClose ? 'Task nahi enter hui' : 'Close Reading nahi enter hui' });
+        }
+      });
+      return out;
+    }
+
     // Hard rule: entered Task's must equal the EMG count on saved rows.
     function findFirstTaskDiffRow(candidates) {
       for (var i = 0; i < candidates.length; i++) {
@@ -3603,33 +3633,20 @@
         }
         return false;
       }
-      var filled = 0;
-      batchTable.querySelectorAll('.close-input').forEach(function(inp) {
-        var rowId = inp.getAttribute('data-row');
-        var mode = document.getElementById('row_' + rowId + '_edit_mode');
-        if (mode && mode.value === '0') return;
-        if (inp.value && inp.value.trim() !== '') filled += 1;
-      });
-      if (filled === 0) {
+      // All-or-nothing save gate — runs before anything leaves the page.
+      var incomplete = collectIncompleteRows();
+      if (incomplete.length) {
         e.preventDefault();
-        var firstMissing = null;
-        batchTable.querySelectorAll('.close-input').forEach(function(inp) {
-          var rowId = inp.getAttribute('data-row');
-          var mode = document.getElementById('row_' + rowId + '_edit_mode');
-          if (mode && mode.value === '0') return;
-          var missing = !inp.value || inp.value.trim() === '';
-          inp.classList.toggle('is-missing', missing);
-          if (missing && !firstMissing) firstMissing = inp;
-        });
-        if (firstMissing) {
-          try { firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (err) {}
-          try { firstMissing.focus(); } catch (err2) {}
-        }
-        var msg = 'Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen. Khali rows skip ho jati hain.';
+        var first = incomplete[0];
+        var target = first.missing === 'close'
+          ? first.row.querySelector('.close-input')
+          : first.row.querySelector('input[name*="_tasks_count"]');
+        highlightRowField(first.row, target);
+        var missMsg = incomplete.length + ' vehicle adhoori hain — har vehicle ki Close Reading aur Task dono enter karna zaroori hai, tab tak save nahi hoga. Pehli adhoori: Row ' + first.seq + (first.vno ? ' (' + first.vno + ')' : '') + ' — ' + first.what + '.';
         if (typeof window.taskEntryNotice === 'function') {
-          window.taskEntryNotice('Close Reading zaroori hai', msg);
+          window.taskEntryNotice('Sab vehicles complete karein', missMsg);
         } else {
-          alert(msg);
+          alert(missMsg);
         }
         return false;
       }

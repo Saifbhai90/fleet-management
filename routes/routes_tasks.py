@@ -1138,6 +1138,41 @@ def task_report_new():
                         pass
             return start_reading
 
+        # Production rule: Save is all-or-nothing on the loaded list. Whether the
+        # user loaded a whole district/project, a single vehicle, or (driver) just
+        # their own assigned vehicle — every loaded row must carry BOTH Close
+        # Reading and Task's before anything is written. One missing vehicle
+        # blocks the whole save. Locked saved rows count as complete only when
+        # they actually hold both values.
+        if not vehicles:
+            return _save_fail('Is filter par koi vehicle load nahi hui — pehle District/Project select karke Load Vehicles dabayen.')
+        incomplete = []
+        locked_incomplete = 0
+        for v in vehicles:
+            ex = existing_by_vid.get(int(v.id))
+            mode = request.form.get('row_%s_edit_mode' % v.id, '1')
+            if ex is not None and str(mode) != '1':
+                if ex.close_reading is None or ex.tasks_count is None:
+                    incomplete.append(v)
+                    locked_incomplete += 1
+                continue
+            close_val = request.form.get('vehicle_%s_close_reading' % v.id)
+            tasks_val = request.form.get('vehicle_%s_tasks_count' % v.id)
+            if not (close_val or '').strip() or not (tasks_val or '').strip():
+                incomplete.append(v)
+        if incomplete:
+            _names = ', '.join((v.vehicle_no or '?') for v in incomplete[:3])
+            if len(incomplete) > 3:
+                _names += ' +%d aur' % (len(incomplete) - 3)
+            _msg = (
+                '%d vehicle adhoori hain — har vehicle ki Close Reading aur Task dono enter karna zaroori hai, '
+                'tab tak save nahi hoga (%s).'
+                % (len(incomplete), _names)
+            )
+            if locked_incomplete and not can_edit_saved_task_rows:
+                _msg += ' Saved adhoori rows theek karne ke liye Edit ki ijazat chahiye.'
+            return _save_fail(_msg)
+
         to_save = []
         skipped_empty = 0
         for v in vehicles:
@@ -1190,7 +1225,7 @@ def task_report_new():
                     _dup_kwargs['vehicle_id'] = vehicle_id
                 return redirect(url_for('task_report_new', **_dup_kwargs))
             if skipped_empty:
-                return _save_fail('Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen.')
+                return _save_fail('%s row ki Close Reading valid number nahi hai — har vehicle ki Close Reading aur Task dono sahi enter karein, tab tak save nahi hoga.' % skipped_empty)
             return _save_fail(
                 'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
                 'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.'
@@ -1292,7 +1327,7 @@ def task_report_new():
                     )
             saved_msg = '%s vehicle(s) save ho gayi.' % len(to_save)
             if skipped_empty:
-                saved_msg += ' %s khali Close wale rows skip kiye gaye.' % skipped_empty
+                saved_msg += ' %s row(s) ghalat Close Reading ki wajah se skip huin.' % skipped_empty
             if _ajax_save:
                 return jsonify({
                     'ok': True,
