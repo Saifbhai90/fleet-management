@@ -198,7 +198,7 @@
                   {% if gps_cam_locked %}
                     <span class="text-muted">{{ rec.status if rec else '-' }}</span>
                   {% else %}
-                  <select name="driver_{{ driver.id }}_status" class="form-select form-select-sm search-select" style="min-width: 110px;">
+                  <select name="driver_{{ driver.id }}_status" class="form-select form-select-sm search-select" data-ts-lazy="1" style="min-width: 110px;">
                     {% if not rec %}<option value="" selected>-- Select --</option>{% endif %}
                     {% for val, label in status_choices %}
                       <option value="{{ val }}" {% if rec and rec.status == val %}selected{% endif %}>{{ label }}</option>

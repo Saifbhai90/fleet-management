@@ -17,6 +17,8 @@ html.capacitor-native #dashAppStatusLine {
 
 /* Anti-flicker: hide native selects before Tom Select replaces them */
         select.search-select { display: none; }
+        /* Lazy row selects stay visible as native until first interaction */
+        select.search-select[data-ts-lazy="1"] { display: block; }
         /* Full-width TS wrapper — safety net: always visible & styled */
         .ts-wrapper {
             width: 100%;

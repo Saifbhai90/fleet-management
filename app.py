@@ -277,6 +277,7 @@ def inject_current_permissions():
 @app.context_processor
 def inject_fleet_build_context():
     """Cache-bust + dev banner for Capacitor LAN/USB testing + demo mode flag."""
+    import hashlib
     import os
     import time
     from flask import request
@@ -300,8 +301,36 @@ def inject_fleet_build_context():
         if demo_mode:
             demo_username = 'demo'
             demo_password = 'Demo#2026'
+
+    _hash_cache = getattr(app, '_fleet_static_hash_cache', None)
+    if _hash_cache is None:
+        _hash_cache = {}
+        app._fleet_static_hash_cache = _hash_cache
+
+    def fleet_static_hash(relpath):
+        """Content-hash cache buster for static/ files (Phase 3D).
+        Prefer this over manual ?v=NNN for core JS/CSS so phones pick up
+        edits without hunting every template include.
+        """
+        rel = (relpath or '').replace('\\', '/').lstrip('/')
+        if rel in _hash_cache:
+            return _hash_cache[rel]
+        base = app.static_folder or os.path.join(os.path.dirname(__file__), 'static')
+        full = os.path.join(base, *rel.split('/'))
+        try:
+            h = hashlib.md5()
+            with open(full, 'rb') as fh:
+                for chunk in iter(lambda: fh.read(65536), b''):
+                    h.update(chunk)
+            dig = h.hexdigest()[:10]
+        except OSError:
+            dig = os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time()))
+        _hash_cache[rel] = dig
+        return dig
+
     return {
         'fleet_asset_version': os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time())),
+        'fleet_static_hash': fleet_static_hash,
         'fleet_server_host': host_raw,
         'fleet_mobile_dev': fleet_dev,
         'demo_mode': demo_mode,

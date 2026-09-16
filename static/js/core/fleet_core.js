@@ -4430,9 +4430,11 @@
         if (typeof TomSelect === 'undefined') return;
         var root = scope || document;
         var selector = 'select.search-select, select.tom-select, .tom-select';
-        root.querySelectorAll(selector).forEach(function(el) {
+                root.querySelectorAll(selector).forEach(function(el) {
             if (el.tomselect) return;
             if (el.tagName && el.tagName.toLowerCase() !== 'select') return;
+            /* Lazy row selects: stay native until first focus/pointer (see fleetArmLazySearchSelects). */
+            if (el.getAttribute && el.getAttribute('data-ts-lazy') === '1') return;
             try {
                 // ── Detect placeholder option ─────────────────────────────────
                 // Treat the first option as a placeholder if its value is '' or
@@ -4968,10 +4970,139 @@
     window.FleetInitSelectors = function(scope) {
         if (typeof TomSelect === 'undefined') {
             console.warn('[FleetInitSelectors] TomSelect not loaded — dropdowns will fall back to native selects');
-            return;
+        } else {
+            console.log('[FleetInitSelectors] Triggered', scope ? '(scoped)' : '(global)');
+            window.initSearchableDropdowns(scope);
         }
-        console.log('[FleetInitSelectors] Triggered', scope ? '(scoped)' : '(global)');
-        window.initSearchableDropdowns(scope);
+        window.fleetWireDeclarativeCascades(scope);
+        window.fleetArmLazySearchSelects(scope);
+    };
+
+    /* Per-row Tom Select lazy arm: data-ts-lazy="1" skips eager init; first
+       focus/pointerdown removes the flag and initializes that select only. */
+    window.fleetArmLazySearchSelects = function(scope) {
+        var root = scope && scope.querySelectorAll ? scope : document;
+        function arm(sel) {
+            if (!sel || !sel.getAttribute) return;
+            if (sel.getAttribute('data-ts-lazy') !== '1') return;
+            if (sel.tomselect) return;
+            if (sel.getAttribute('data-ts-lazy-armed') === '1') return;
+            sel.setAttribute('data-ts-lazy-armed', '1');
+            var activate = function(ev) {
+                if (sel.tomselect) return;
+                sel.removeAttribute('data-ts-lazy');
+                sel.removeAttribute('data-ts-lazy-armed');
+                if (typeof window.initSearchableDropdowns === 'function') {
+                    window.initSearchableDropdowns(sel.parentNode || sel);
+                }
+                if (sel.tomselect) {
+                    try {
+                        if (ev && ev.type === 'pointerdown') {
+                            sel.tomselect.open();
+                        } else {
+                            sel.tomselect.focus();
+                        }
+                    } catch (eAct) {}
+                }
+            };
+            sel.addEventListener('focus', activate, true);
+            sel.addEventListener('pointerdown', activate, true);
+            sel.addEventListener('touchstart', activate, { capture: true, passive: true });
+        }
+        if (root.querySelectorAll) {
+            root.querySelectorAll('select.search-select[data-ts-lazy="1"]').forEach(arm);
+        }
+        if (root.matches && root.matches('select.search-select[data-ts-lazy="1"]')) {
+            arm(root);
+        }
+    };
+
+    /* ── Declarative cascade (data-cascade-*) ─────────────────────────
+       Parent <select data-cascade-child="#childId"
+                      data-cascade-url="/api/cascade/projects?parent={value}"
+                      data-cascade-value-key="id"
+                      data-cascade-text-key="name"
+                      data-cascade-placeholder="-- All Projects --"
+                      data-cascade-placeholder-value="0"
+                      data-cascade-also-clear="#vehicleSelect">
+       URL tokens: {value} = parent value; {#otherId} = that select's value.
+       Empty / "0" parent clears the child (no fetch). Uses fleetFillSelectRows.
+    */
+    window.fleetWireDeclarativeCascades = function(scope) {
+        var root = scope && scope.querySelectorAll ? scope : document;
+        var parents = root.querySelectorAll
+            ? root.querySelectorAll('select[data-cascade-child][data-cascade-url]')
+            : [];
+        if (scope && scope.matches && scope.matches('select[data-cascade-child][data-cascade-url]')) {
+            parents = [scope];
+        }
+        Array.prototype.forEach.call(parents, function(parent) {
+            if (parent.getAttribute('data-cascade-wired') === '1') return;
+            parent.setAttribute('data-cascade-wired', '1');
+
+            parent.addEventListener('change', function() {
+                var childSel = parent.getAttribute('data-cascade-child') || '';
+                var urlTpl = parent.getAttribute('data-cascade-url') || '';
+                if (!childSel || !urlTpl) return;
+                var child = document.querySelector(childSel);
+                if (!child) return;
+
+                var valueKey = parent.getAttribute('data-cascade-value-key') || 'id';
+                var textKey = parent.getAttribute('data-cascade-text-key') || 'name';
+                var placeholder = parent.getAttribute('data-cascade-placeholder') || '-- Select --';
+                var placeholderValue = parent.getAttribute('data-cascade-placeholder-value');
+                if (placeholderValue === null || placeholderValue === undefined) placeholderValue = '0';
+                var fillCfg = { placeholder: placeholder, placeholderValue: placeholderValue };
+
+                var alsoClear = (parent.getAttribute('data-cascade-also-clear') || '').split(',');
+                alsoClear.forEach(function(raw) {
+                    var s = (raw || '').trim();
+                    if (!s) return;
+                    var el = document.querySelector(s);
+                    if (!el) return;
+                    var ph = '-- Select --';
+                    var phv = '0';
+                    if (el.options && el.options.length > 0) {
+                        ph = ((el.options[0].text || '').trim()) || ph;
+                        phv = el.options[0].value;
+                    }
+                    if (typeof window.fleetFillSelectRows === 'function') {
+                        window.fleetFillSelectRows(el, [], 'id', 'name', { placeholder: ph, placeholderValue: phv });
+                    }
+                });
+
+                var pval = parent.value;
+                if (!pval || pval === '0') {
+                    if (typeof window.fleetFillSelectRows === 'function') {
+                        window.fleetFillSelectRows(child, [], valueKey, textKey, fillCfg);
+                    }
+                    return;
+                }
+
+                var url = urlTpl.replace(/\{value\}/g, encodeURIComponent(pval));
+                url = url.replace(/\{#([A-Za-z_][\w-]*)\}/g, function(_m, id) {
+                    var el = document.getElementById(id);
+                    var v = el ? el.value : '';
+                    return encodeURIComponent(v || '0');
+                });
+
+                if (typeof window.fleetBeginCascade === 'function') {
+                    window.fleetBeginCascade(child);
+                }
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(arr) {
+                        if (typeof window.fleetFillSelectRows === 'function') {
+                            window.fleetFillSelectRows(child, arr || [], valueKey, textKey, fillCfg);
+                        }
+                    })
+                    .catch(function() {
+                        if (typeof window.fleetFillSelectRows === 'function') {
+                            window.fleetFillSelectRows(child, [], valueKey, textKey, fillCfg);
+                        }
+                    });
+            });
+        });
     };
 
     function _fleetBootSelectors() {
@@ -4986,6 +5117,14 @@
                         if (node.nodeType !== 1) return;
                         if (node.querySelector && node.querySelector('select.search-select, select.tom-select, .tom-select')) {
                             window.initSearchableDropdowns(node);
+                            window.fleetWireDeclarativeCascades(node);
+                            window.fleetArmLazySearchSelects(node);
+                        }
+                        if (node.matches && node.matches('select[data-cascade-child]')) {
+                            window.fleetWireDeclarativeCascades(node);
+                        }
+                        if (node.matches && node.matches('select.search-select[data-ts-lazy="1"]')) {
+                            window.fleetArmLazySearchSelects(node);
                         }
                     });
                 });

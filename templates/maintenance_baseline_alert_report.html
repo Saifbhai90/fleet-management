@@ -29,7 +29,14 @@
         <form method="GET" action="{{ url_for('maintenance_baseline_alert_report') }}" class="row g-2 align-items-end flex-nowrap mbas-filt-row" style="min-width: min(100%, 1080px);">
           <div class="col" style="min-width: 7.5rem;">
             <label class="form-label small mb-1">District</label>
-            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- All Projects --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#vehicleSelect">
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if district_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -37,7 +44,13 @@
           </div>
           <div class="col" style="min-width: 7.5rem;">
             <label class="form-label small mb-1">Project</label>
-            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
+              data-cascade-child="#vehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0">
               {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if project_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -184,37 +197,8 @@ function goPage(n) {
   window.location.search = u.toString();
 }
 document.addEventListener('DOMContentLoaded', function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  var vehicleSelect = document.getElementById('vehicleSelect');
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      if (!did || did === '0') {
-        fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-        return;
-      }
-      fetch('/get_projects_by_district/' + did).then(function(r){ return r.json(); }).then(function(arr){
-        fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-      });
-    });
-  }
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = this.value;
-      var did = districtSelect ? districtSelect.value : '';
-      if (!pid || pid === '0') {
-        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-        return;
-      }
-      var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
-      if (did && did !== '0') url += '&district_id=' + encodeURIComponent(did);
-      fetch(url).then(function(r){ return r.json(); }).then(function(arr){
-        fleetFillSelectRows(vehicleSelect, arr, 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      });
-    });
-  }
+  /* District→Project→Vehicle: declarative data-cascade-* on #districtSelect / #projectSelect
+     (wired by window.fleetWireDeclarativeCascades in fleet_core.js). */
 });
 </script>
 <script>

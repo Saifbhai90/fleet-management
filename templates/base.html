@@ -59,7 +59,7 @@ window.FleetConfig = {
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/tom-select/tom-select.bootstrap5.min.css') }}?v=1001">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v=8014">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/core/fleet_styles.css') }}?v={{ fleet_static_hash('css/core/fleet_styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/fm_hub_pages.css') }}?v=8010">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/rc_tile_gradients.css') }}?v=8005">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_reports.css') }}?v=1001">
@@ -121,7 +121,11 @@ window.FleetConfig = {
         document.addEventListener('DOMContentLoaded', function(){
             setTimeout(function(){
                 document.querySelectorAll('select.search-select').forEach(function(sel){
-                    if (!sel.tomselect) _unhide(sel);
+                    if (sel.tomselect) return;
+                    /* Lazy row selects intentionally stay unwrapped until focus —
+                       do not strip search-select or they can never upgrade to TS. */
+                    if (sel.getAttribute('data-ts-lazy') === '1') return;
+                    _unhide(sel);
                 });
             }, 3000);
         });
@@ -161,7 +165,7 @@ window.FleetConfig = {
     <!-- Lucide: version-pinned + self-hosted (was unpkg @latest — uncacheable,
          so icons always arrived late and popped in after first paint). -->
     <script src="/static/vendor/lucide/1.43.0/lucide.min.js?v=8006" defer></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8025" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v={{ fleet_static_hash('js/core/fleet_core.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8012" defer></script>
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8009" defer></script>
     {% block extra_head %}{% endblock %}

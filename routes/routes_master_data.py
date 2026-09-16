@@ -2721,6 +2721,50 @@ def get_vehicles_by_project_district():
     return resp
 
 
+@app.route('/api/cascade/<entity>')
+def api_cascade_entity(entity):
+    """Thin adapter for declarative dropdown cascades.
+    Delegates to existing get_projects_by_district / get_vehicles_by_project_district
+    so pages can use a uniform URL shape without duplicating business rules.
+    """
+    entity = (entity or '').strip().lower()
+    parent = request.args.get('parent', type=int) or 0
+    if entity in ('projects', 'project'):
+        if not parent:
+            return jsonify([])
+        return get_projects_by_district(parent)
+    if entity in ('vehicles', 'vehicle'):
+        project_id = request.args.get('project_id', type=int) or parent or 0
+        district_id = request.args.get('district_id', type=int) or 0
+        # Same query path as get_vehicles_by_project_district (keep logic in sync).
+        if project_id and district_id:
+            q = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
+        elif project_id:
+            q = Vehicle.query.filter(Vehicle.project_id == project_id)
+        elif district_id:
+            q = Vehicle.query.filter(Vehicle.district_id == district_id)
+        else:
+            return jsonify([])
+        scope_projects, scope_districts, scope_vehicles, scope_shifts = _get_user_scope()
+        if scope_projects:
+            q = q.filter(Vehicle.project_id.in_(scope_projects))
+        if scope_districts:
+            q = q.filter(Vehicle.district_id.in_(scope_districts))
+        if scope_vehicles:
+            q = q.filter(Vehicle.id.in_(scope_vehicles))
+        vehicles = q.order_by(*vehicle_order_by()).all()
+        resp = make_response(jsonify([{
+            'id': v.id,
+            'vehicle_no': v.vehicle_no,
+            'vehicle_type': v.vehicle_type or '',
+            'fuel_type': v.fuel_type or 'Petrol',
+            'fuel_tank_capacity': float(v.fuel_tank_capacity or 0),
+            'vehicle_family': v.vehicle_family or '',
+        } for v in vehicles]))
+        resp.headers['Cache-Control'] = 'private, max-age=60'
+        return resp
+    return jsonify({'error': 'unknown_entity', 'entity': entity}), 404
+
 
 @app.route('/api/fuel-expense/location-cascade')
 def api_fuel_expense_location_cascade():

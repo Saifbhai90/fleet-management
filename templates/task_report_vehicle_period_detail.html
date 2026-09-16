@@ -33,7 +33,13 @@
           <input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">
           <div class="form-control bg-light text-body-secondary">{% for val, label in form.district_id.choices %}{% if val == form.district_id.data %}{{ label }}{% endif %}{% endfor %}</div>
           {% else %}
-          <select name="district_id" id="taskReportDistrictSelect" class="form-select search-select">
+          <select name="district_id" id="taskReportDistrictSelect" class="form-select search-select"
+            data-cascade-child="#taskReportProjectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- Select Project --"
+            data-cascade-placeholder-value="0">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -340,27 +346,8 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  var districtSelect = document.getElementById('taskReportDistrictSelect');
-  var projectSelect = document.getElementById('taskReportProjectSelect');
-  if (districtSelect && projectSelect && !districtSelect.disabled) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      /* projectSelect is Tom Select-wrapped: raw innerHTML/appendChild never
-         shows in its dropdown — must go through the fleet fill helper. */
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-            var opts = (arr || []).map(function(p) {
-              return { value: String(p.id), text: p.name };
-            });
-            window.fleetFillSelect(projectSelect, opts, {});
-          });
-      } else {
-        window.fleetFillSelect(projectSelect, [], {});
-      }
-    });
-  }
+  /* District→Project cascade: declarative data-cascade-* on #taskReportDistrictSelect
+     (wired by window.fleetWireDeclarativeCascades in fleet_core.js). */
 })();
 (function() {
   var table = document.getElementById('vehiclePeriodDetailTable');

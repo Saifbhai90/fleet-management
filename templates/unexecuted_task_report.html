@@ -48,7 +48,13 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">District</label>
-          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All --"
+            data-cascade-placeholder-value="0">
             <option value="0">-- All --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -202,7 +208,7 @@
               <td class="text-end">{{ '%.2f'|format(row.activity_km) }}</td>
               <td>{{ row.shift }}</td>
               <td>
-                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm search-select">
+                <select name="row_{{ loop.index0 }}_driver_id" class="form-select form-select-sm search-select" data-ts-lazy="1">
                   <option value="">-- Select --</option>
                   {% for drv in row.drivers %}
                   <option value="{{ drv.id }}" {% if row.saved and row.saved.driver_id == drv.id %}selected{% endif %}>{{ drv.name }}{% if drv.status != 'Active' %} ({{ drv.status }}){% endif %}</option>
@@ -234,21 +240,8 @@
 
 <script>
 (function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All --', placeholderValue: '0' });
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-      fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All --', placeholderValue: '0' });
-          });
-      }
-    });
-  }
+  /* District→Project: declarative data-cascade-* on #districtSelect
+     (wired by window.fleetWireDeclarativeCascades). Row driver selects use data-ts-lazy. */
 })();
 document.addEventListener('DOMContentLoaded', function(){ if (window.fleetTableEnhance) window.fleetTableEnhance('unexecutedTaskTable'); });
 

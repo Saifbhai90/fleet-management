@@ -35,7 +35,14 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">District</label>
-            <select class="form-select form-select-sm search-select" id="districtSelect" name="district_id">
+            <select class="form-select form-select-sm search-select" id="districtSelect" name="district_id"
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- All Projects --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#vehicleSelect">
               <option value="0">-- All Districts --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -44,7 +51,13 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">Project</label>
-            <select class="form-select form-select-sm search-select" id="projectSelect" name="project_id">
+            <select class="form-select form-select-sm search-select" id="projectSelect" name="project_id"
+              data-cascade-child="#vehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0">
               <option value="0">-- All Projects --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -167,39 +180,8 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  var vehicleSelect = document.getElementById('vehicleSelect');
-
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-          fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-        });
-      } else {
-        fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-      }
-    });
-  }
-
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = projectSelect.value;
-      var did = districtSelect ? districtSelect.value : '';
-      if (pid && pid !== '0') {
-        var url = '/get_vehicles_by_project_district?project_id=' + pid;
-        if (did && did !== '0') url += '&district_id=' + did;
-        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          fleetFillSelectRows(vehicleSelect, arr, 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-        });
-      } else {
-        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      }
-    });
-  }
+  /* District→Project→Vehicle: declarative data-cascade-* on #districtSelect / #projectSelect
+     (wired by window.fleetWireDeclarativeCascades in fleet_core.js). */
 
   var searchInput = document.getElementById('vrsSearch');
   var perPageSelect = document.getElementById('vrsPerPage');
