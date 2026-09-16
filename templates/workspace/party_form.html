@@ -140,8 +140,13 @@
       a.addEventListener('click', function() {
         input.value = it.name;
         if (it.party_type && typeSel) {
-          for (var i = 0; i < typeSel.options.length; i++) {
-            if (typeSel.options[i].value === it.party_type) { typeSel.selectedIndex = i; break; }
+          if (typeSel.tomselect && window.fleetSetSelectValue) {
+            /* Tom Select-wrapped: selectedIndex alone leaves the visible label stale */
+            window.fleetSetSelectValue(typeSel, it.party_type, true);
+          } else {
+            for (var i = 0; i < typeSel.options.length; i++) {
+              if (typeSel.options[i].value === it.party_type) { typeSel.selectedIndex = i; break; }
+            }
           }
         }
         panel.style.display = 'none';

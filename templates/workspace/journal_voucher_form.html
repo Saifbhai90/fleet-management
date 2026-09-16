@@ -168,9 +168,6 @@ function addLine(){
     document.getElementById('jvLinesBody').appendChild(row);
     lineIndex++;
 
-    if(window.initSearchSelect){
-        row.querySelectorAll('.search-select').forEach(function(el){ window.initSearchSelect(el); });
-    }
     updateTotals();
     return row;
 }

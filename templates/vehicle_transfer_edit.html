@@ -63,12 +63,12 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small text-muted text-uppercase">New District <span class="text-danger">*</span></label>
-                            {{ form.new_district_id(class="form-select shadow-sm " + ("is-invalid" if form.new_district_id.errors else ""), id="new_district") }}
+                            {{ form.new_district_id(class="form-select search-select shadow-sm " + ("is-invalid" if form.new_district_id.errors else ""), id="new_district") }}
                             {% for error in form.new_district_id.errors %}<div class="invalid-feedback d-block text-danger small">{{ error }}</div>{% endfor %}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small text-muted text-uppercase">New Parking Site</label>
-                            {{ form.new_parking_id(class="form-select shadow-sm", id="new_parking") }}
+                            {{ form.new_parking_id(class="form-select search-select shadow-sm", id="new_parking") }}
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold small text-muted text-uppercase">Transfer Date <span class="text-danger">*</span></label>

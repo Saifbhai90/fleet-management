@@ -53,7 +53,7 @@
                     <label class="form-label form-label-sm mb-1">District</label>
                     {{ form.district_id(class="form-select form-select-sm search-select") if form.district_id is defined else '' }}
                     {% if form.district_id is not defined %}
-                    <select name="district_id" class="form-select form-select-sm">
+                    <select name="district_id" class="form-select form-select-sm search-select">
                         <option value="0">-- All Districts --</option>
                     </select>
                     {% endif %}
@@ -62,7 +62,7 @@
                     <label class="form-label form-label-sm mb-1">Project</label>
                     {{ form.project_id(class="form-select form-select-sm search-select") if form.project_id is defined else '' }}
                     {% if form.project_id is not defined %}
-                    <select name="project_id" class="form-select form-select-sm">
+                    <select name="project_id" class="form-select form-select-sm search-select">
                         <option value="0">-- All Projects --</option>
                     </select>
                     {% endif %}

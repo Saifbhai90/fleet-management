@@ -268,7 +268,7 @@
       <div class="row g-3 align-items-end">
         <div class="col-md-2">
           <label class="pu-field-label" for="puProjectSelect">Project</label>
-          <select id="puProjectSelect" name="project_id" class="form-select form-select-sm" {% if disable_project %}disabled{% endif %}>
+          <select id="puProjectSelect" name="project_id" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
             {% for val, label in project_choices %}
             <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -277,7 +277,7 @@
         </div>
         <div class="col-md-2">
           <label class="pu-field-label" for="puDistrictSelect">District</label>
-          <select id="puDistrictSelect" name="district_id" class="form-select form-select-sm" {% if disable_district %}disabled{% endif %}>
+          <select id="puDistrictSelect" name="district_id" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
             {% for val, label in district_choices %}
             <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -286,7 +286,7 @@
         </div>
         <div class="col-md-3">
           <label class="pu-field-label" for="puVehicleSelect">Vehicle</label>
-          <select id="puVehicleSelect" name="vehicle_id" class="form-select form-select-sm">
+          <select id="puVehicleSelect" name="vehicle_id" class="form-select form-select-sm search-select">
             {% for val, label in vehicle_choices %}
             <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -294,7 +294,7 @@
         </div>
         <div class="col-md-3">
           <label class="pu-field-label" for="puParkingSelect">Parking Station</label>
-          <select id="puParkingSelect" name="parking_station_id" class="form-select form-select-sm">
+          <select id="puParkingSelect" name="parking_station_id" class="form-select form-select-sm search-select">
             {% for val, label in parking_station_choices %}
             <option value="{{ val }}" {% if parking_station_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
