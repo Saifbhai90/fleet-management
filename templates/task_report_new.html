@@ -3659,6 +3659,7 @@
   });
 })();
 </script>
+{% include 'partials/task_report_mobile_task_modal.html' %}
 {% set fv_prefix = 'taskNewOdomFv' %}
 {% set fv_preview_img_id = '' %}
 {% set fv_photo_label = 'Odoo meter photo' %}
@@ -3743,6 +3744,9 @@ document.addEventListener('click', function(e) {
   var emgLink = e.target.closest && e.target.closest('.emg-link');
   var trackerLink = e.target.closest && e.target.closest('.tracker-link');
   if (!emgLink && !trackerLink) return;
+  // Phones / Capacitor app: the bottom-sheet partial owns EMG/Tracker popups.
+  if (document.documentElement.classList.contains('capacitor-native')
+      || window.matchMedia('(max-width: 767.98px)').matches) return;
   e.preventDefault();
   e.stopPropagation();
   var link = emgLink || trackerLink;
