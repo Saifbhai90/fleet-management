@@ -463,8 +463,10 @@ def mobile_init():
     # Mark this client as the native Capacitor app (1 year). Read by the
     # inject_native_app_flag context processor to render the capacitor-native
     # class server-side — mobile layout applies on first paint, no desktop flash.
+    # Secure only on HTTPS: on plain-HTTP local flows (LAN/USB dev) a Secure
+    # cookie is silently dropped and the native flag is lost for the session.
     resp.set_cookie('fleet_native_app', '1', max_age=31536000, path='/',
-                    secure=True, httponly=False, samesite='Lax')
+                    secure=request.is_secure, httponly=False, samesite='Lax')
     return resp
 
 

@@ -435,7 +435,10 @@
       max-width: none !important;
     }
     .task-batch-page .task-batch-list-header {
-      display: none !important;
+      /* Header now carries the search field too — keep it visible on phones. */
+      display: flex !important;
+      flex-direction: column;
+      align-items: stretch;
     }
     .task-batch-page .task-batch-list-header .fw-semibold {
       font-size: 0.8rem;
@@ -2214,14 +2217,20 @@
   #batchTable tbody tr.task-row.task-row-search-hidden {
     display: none !important;
   }
+  /* Search lives inside the green list-header row — title left, field right. */
+  body[data-fleet-endpoint="task_report_new"] .task-batch-list-header {
+    display: flex !important;
+  }
   body[data-fleet-endpoint="task_report_new"] .task-batch-live-search {
     display: block !important;
-    padding: 10px 12px 8px;
+    flex: 0 1 260px;
+    min-width: 150px;
+    margin-left: auto;
   }
   body[data-fleet-endpoint="task_report_new"] #taskEntrySearch {
     display: block !important;
     width: 100%;
-    max-width: 420px;
+    max-width: none;
   }
   #batchTable tbody tr.task-row.is-editing .task-editable-field,
   #batchTable tbody tr.task-row.is-editing input,
@@ -2230,11 +2239,26 @@
   }
   @media (max-width: 767.98px) {
     body[data-fleet-endpoint="task_report_new"] .task-batch-live-search {
-      padding: 10px 10px 6px;
+      flex: 1 1 auto;
     }
+    /* Green header pill look — ID-scoped so global form-control skins can't
+       paint it white-on-white (placeholder must stay readable). */
     body[data-fleet-endpoint="task_report_new"] #taskEntrySearch {
-      max-width: none;
       min-height: 44px;
+      background: rgba(255, 255, 255, 0.22) !important;
+      color: #fff !important;
+      border: none;
+      border-radius: 999px !important;
+    }
+    body[data-fleet-endpoint="task_report_new"] #taskEntrySearch::placeholder {
+      color: rgba(255, 255, 255, 0.72) !important;
+    }
+    body[data-fleet-endpoint="task_report_new"] #taskEntrySearch:focus::placeholder {
+      color: rgba(15, 23, 42, 0.45) !important;
+    }
+    body[data-fleet-endpoint="task_report_new"] #taskEntrySearch:focus {
+      background: #fff !important;
+      color: #0f172a !important;
     }
   }
   @media (max-width: 767.98px) {
@@ -2523,11 +2547,11 @@
 
     {# overflow-hidden removed so footer Save All stays visible; sticky bar is opted out via data-no-sticky. #}
     <div class="card shadow border-0 task-batch-card fm-no-card-press">
-      <div class="card-header bg-success text-white py-3 rounded-top d-none d-md-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-between gap-2 task-batch-list-header border-0">
+      <div class="card-header bg-success text-white py-2 py-md-3 rounded-top d-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-between gap-2 task-batch-list-header border-0">
         <span class="fw-semibold"><span class="d-none d-md-inline">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span><span class="d-md-none">Sirf <strong>Close Reading</strong> aur <strong>Task's</strong> edit karein — baqi auto.</span></span>
-      </div>
-      <div class="task-batch-live-search">
-        <input type="search" id="taskEntrySearch" class="form-control form-control-sm task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off" enterkeyhint="search">
+        <div class="task-batch-live-search">
+          <input type="search" id="taskEntrySearch" class="form-control form-control-sm task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off" enterkeyhint="search">
+        </div>
       </div>
       <div class="card-body p-0">
         <div class="table-responsive task-batch-table-wrap">
@@ -2574,7 +2598,7 @@
               {% set tot.tdiff = tot.tdiff + task_diff %}
               {% set tot.tracker = tot.tracker + tracker_km %}
               {% set tot.kdiff = tot.kdiff + kms_diff %}
-              <tr class="task-row{% if s %} table-info is-saved{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="Vehicle: {{ row.vehicle.vehicle_no | e }}" data-seq="{{ loop.index }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
+              <tr class="task-row{% if s %} table-info is-saved{% endif %}" data-vehicle-id="{{ row.vehicle.id }}" data-vno="{{ row.vehicle.vehicle_no | e }}" data-start="{{ row.start_reading }}" data-tracker="{{ row.tracker_km }}" data-emg="{{ row.emg_tasks }}" data-vehicle="Vehicle: {{ row.vehicle.vehicle_no | e }}" data-seq="{{ loop.index }}" data-district="{{ (row.vehicle.district.name if row.vehicle.district else '') | e }}" data-init-close="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" data-init-tasks="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" data-init-odom="{{ row.odometer_photo_path or '' }}" data-task-search-hidden="0">
                 <td class="ps-4 ps-md-4 task-batch-num-cell">
                 <input type="hidden" name="row_{{ row.vehicle.id }}_edit_mode" id="row_{{ row.vehicle.id }}_edit_mode" value="{{ '0' if s else '1' }}">
                   <span class="task-batch-num-inner"><span class="task-batch-row-num">{{ loop.index }}</span>{% if s %} <i class="bi bi-check-circle-fill text-success" title="Previously saved"></i>{% endif %}</span>
@@ -2592,9 +2616,6 @@
                     <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_start_reading"
                            class="form-control form-control-sm text-end start-input task-editable-field" data-row="{{ row.vehicle.id }}"
                            inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
-                           oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                           onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                           onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                            value="{% if row.start_reading is not none %}{{ row.start_reading }}{% endif %}" placeholder="Start" {% if s %}disabled{% endif %}>
                   </div>
                 </td>
@@ -2615,9 +2636,6 @@
                   <input type="number" step="0.01" min="0" name="vehicle_{{ row.vehicle.id }}_close_reading"
                          class="form-control form-control-sm text-end close-input task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:90px;"
                          inputmode="decimal" enterkeyhint="next" autocomplete="off" lang="en"
-                         oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                         onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                         onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                          value="{% if row.close_reading is not none %}{{ row.close_reading }}{% endif %}" placeholder="Closing KM" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center align-middle odometer-cell task-batch-input-priority task-entry-tap-cell" style="min-width:72px;vertical-align:middle;">
@@ -2647,9 +2665,6 @@
                   <input type="number" min="0" name="vehicle_{{ row.vehicle.id }}_tasks_count"
                          class="form-control form-control-sm text-center task-editable-field task-entry-tap-target" data-row="{{ row.vehicle.id }}" style="min-width:60px;"
                          inputmode="numeric" enterkeyhint="done" autocomplete="off" lang="en"
-                         oninput="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                         onkeyup="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
-                         onchange="window.updateTaskEntryFromInput && window.updateTaskEntryFromInput(this)"
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="Tasks" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
@@ -3101,7 +3116,7 @@
     }
 
     updateRowStatus(row, m.closeRaw);
-    if (!row._skipTotals) updateTotals();
+    if (!row._skipTotals) scheduleTotalsUpdate();
   }
 
   // Card header chip doubles as the "is this row done?" scan cue.
@@ -3150,6 +3165,17 @@
     if (tdEl) tdEl.classList.toggle('text-danger', tTaskDiff !== 0);
     if (tdEl) tdEl.classList.toggle('fw-bold', tTaskDiff !== 0);
   }
+
+  // Totals scan every visible row — coalesce bursts of row edits into one
+  // animation-frame pass so fast typing stays smooth on long lists.
+  var _totalsRaf = null;
+  function scheduleTotalsUpdate() {
+    if (_totalsRaf) return;
+    _totalsRaf = window.requestAnimationFrame(function() {
+      _totalsRaf = null;
+      updateTotals();
+    });
+  }
   window.updateTaskEntryRow = updateRow;
   window.updateTotals = updateTotals;
 
@@ -3170,26 +3196,9 @@
   }
   window.updateTaskEntryFromInput = updateTaskEntryFromInput;
 
-  function onTaskEntryMetricEdit(e) {
-    var t = e && e.target;
-    if (!t || !t.getAttribute) return;
-    var name = t.getAttribute('name') || '';
-    var isMetric = (t.classList && (t.classList.contains('close-input') || t.classList.contains('start-input')))
-      || name.indexOf('_close_reading') !== -1
-      || name.indexOf('_start_reading') !== -1
-      || name.indexOf('_tasks_count') !== -1;
-    if (!isMetric) return;
-    updateTaskEntryFromInput(t);
-  }
-
-  document.addEventListener('input', onTaskEntryMetricEdit, true);
-  document.addEventListener('change', onTaskEntryMetricEdit, true);
-  document.addEventListener('keyup', onTaskEntryMetricEdit, true);
-  document.addEventListener('paste', function(e) {
-    var t = e.target;
-    window.setTimeout(function() { onTaskEntryMetricEdit({ target: t }); }, 0);
-  }, true);
-
+  // Single binding path per metric input ('input' fires for typing and paste,
+  // 'change' covers spinners/autofill). The old inline attrs + document capture
+  // listeners recomputed the row — and the whole-table totals — up to 6x per keystroke.
   function bindTaskEntryMetricInputs(root) {
     var scope = root || document;
     if (!scope.querySelectorAll) return;
@@ -3197,7 +3206,7 @@
     Array.prototype.forEach.call(nodes, function(inp) {
       if (inp._taskEntryMetricBound) return;
       inp._taskEntryMetricBound = true;
-      ['input', 'change', 'keyup'].forEach(function(evt) {
+      ['input', 'change'].forEach(function(evt) {
         inp.addEventListener(evt, function() { updateTaskEntryFromInput(inp); });
       });
     });
@@ -3284,18 +3293,6 @@
     return true;
   }
 
-  (function taskEntryResumeAfterCamera() {
-    var resumeRow = sessionStorage.getItem('fleet_resume_odom_row');
-    if (!resumeRow) return;
-    sessionStorage.removeItem('fleet_resume_odom_row');
-    taskEntryUnlockRowForOdom(resumeRow);
-    window.setTimeout(function() {
-      if (window.FleetGpsPendingUpload && typeof window.FleetGpsPendingUpload.retryAll === 'function') {
-        window.FleetGpsPendingUpload.retryAll(true);
-      }
-    }, 500);
-  })();
-
   var taskEntryRowList = [];
   var taskEntrySearchQuery = '';
 
@@ -3349,7 +3346,6 @@
         e.preventDefault();
       }
     }, { passive: false });
-    bindTaskEntryMetricInputs(batchTable);
     try {
       batchTable.querySelectorAll('.task-row').forEach(function(row) {
         row._skipTotals = true;
@@ -3471,10 +3467,6 @@
 
   /* ── EMG Detail Panel ──────────────────────────────────── */
   var _emgData = [];
-  function _useMobileTaskPanel() {
-    return document.documentElement.classList.contains('capacitor-native')
-      || window.matchMedia('(max-width: 767.98px)').matches;
-  }
 
   var emgCloseBtn = document.getElementById('emgCloseBtn');
   var emgCloseBtnFooter = document.getElementById('emgCloseBtnFooter');
@@ -3665,10 +3657,8 @@
       alert('Save failed: ' + e);
     });
   });
-  window.updateTotals = updateTotals;
 })();
 </script>
-{% include 'partials/task_report_mobile_task_modal.html' %}
 {% set fv_prefix = 'taskNewOdomFv' %}
 {% set fv_preview_img_id = '' %}
 {% set fv_photo_label = 'Odoo meter photo' %}
@@ -3731,17 +3721,7 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('input', function(e) {
   var el = e.target;
   if (!el || el.id !== 'taskEntrySearch') return;
-  if (typeof window.taskEntryRunSearch === 'function') {
-    window.taskEntryRunSearch(el.value);
-    return;
-  }
-  var q = String(el.value || '').trim().toLowerCase();
-  document.querySelectorAll('#batchTable tbody tr.task-row').forEach(function(row) {
-    var hay = ((row.getAttribute('data-vehicle') || '') + ' ' + (row.getAttribute('data-district') || '') + ' ' + (row.innerText || '')).toLowerCase();
-    var hide = !!q && hay.indexOf(q) === -1;
-    row.dataset.taskSearchHidden = hide ? '1' : '0';
-    row.classList.toggle('task-row-search-hidden', hide);
-  });
+  if (window.taskEntryRunSearch) window.taskEntryRunSearch(el.value);
 });
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Enter') return;
@@ -3756,21 +3736,7 @@ document.addEventListener('click', function(e){
   e.stopPropagation();
   var rowId = btn.getAttribute('data-row');
   if(!rowId) return;
-  if (typeof window.taskEntryUnlockRowForOdom === 'function') {
-    window.taskEntryUnlockRowForOdom(rowId);
-    return;
-  }
-  var editMode = document.getElementById('row_' + rowId + '_edit_mode');
-  if (editMode) editMode.value = '1';
-  var row = document.querySelector('#batchTable tr.task-row[data-vehicle-id="' + rowId + '"]');
-  if (row) {
-    row.classList.add('is-editing');
-    row.querySelectorAll('input, textarea, select, button.task-editable-field').forEach(function(el) {
-      if (el.classList && el.classList.contains('task-row-edit-btn')) return;
-      el.disabled = false;
-      el.removeAttribute('disabled');
-    });
-  }
+  if (window.taskEntryUnlockRowForOdom) window.taskEntryUnlockRowForOdom(rowId);
 });
 
 document.addEventListener('click', function(e) {
@@ -3782,25 +3748,13 @@ document.addEventListener('click', function(e) {
   var link = emgLink || trackerLink;
   var vno = link.getAttribute('data-vno') || '';
   var dt = link.getAttribute('data-date') || '';
-  if (emgLink && typeof window.taskEntryOpenEmgDesktop === 'function') {
+  if (emgLink && window.taskEntryOpenEmgDesktop) {
     window.taskEntryOpenEmgDesktop(vno, dt);
     return;
   }
-  if (trackerLink && typeof window.taskEntryOpenTrackerDesktop === 'function') {
+  if (trackerLink && window.taskEntryOpenTrackerDesktop) {
     window.taskEntryOpenTrackerDesktop(trackerLink, vno, dt);
-    return;
   }
-  var panel = document.getElementById(emgLink ? 'emgPanel' : 'trackerPanel');
-  var other = document.getElementById(emgLink ? 'trackerPanel' : 'emgPanel');
-  if (!panel) return;
-  if (panel.parentNode !== document.body) document.body.appendChild(panel);
-  if (other && other.parentNode !== document.body) document.body.appendChild(other);
-  if (other) {
-    other.classList.add('d-none');
-    other.classList.remove('task-entry-panel-open');
-  }
-  panel.classList.remove('d-none');
-  panel.classList.add('task-entry-panel-open');
 }, true);
 
 document.addEventListener('click', function(e) {

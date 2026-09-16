@@ -73,7 +73,6 @@ from routes import (
     _task_entry_date_hint_for_project,
     _task_entry_date_save_ok,
     _task_entry_record_in_user_scope,
-    _task_entry_resolve_start_reading,
     _task_report_entry_scope_context,
     _latest_vehicle_daily_task,
     _task_report_vehicle_period_detail_impl,
@@ -1074,10 +1073,71 @@ def task_report_new():
             return _task_report_new_render(rows, view_date)
         q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
         vehicles = q.all()
+
+        # Batch both lookups once for the whole batch (was 2 queries per vehicle).
+        _vehicle_ids = [int(v.id) for v in vehicles]
+        existing_by_vid = {}
+        if _vehicle_ids:
+            for t in (
+                VehicleDailyTask.query
+                .filter(
+                    VehicleDailyTask.vehicle_id.in_(_vehicle_ids),
+                    VehicleDailyTask.task_date == task_date,
+                )
+                .order_by(VehicleDailyTask.id.asc())
+                .all()
+            ):
+                existing_by_vid[int(t.vehicle_id)] = t
+        prev_by_vid = {}
+        if _vehicle_ids:
+            _prev_max = (
+                db.session.query(
+                    VehicleDailyTask.vehicle_id.label('vehicle_id'),
+                    func.max(VehicleDailyTask.task_date).label('max_date'),
+                )
+                .filter(
+                    VehicleDailyTask.vehicle_id.in_(_vehicle_ids),
+                    VehicleDailyTask.task_date < task_date,
+                )
+                .group_by(VehicleDailyTask.vehicle_id)
+                .subquery()
+            )
+            for t in (
+                db.session.query(VehicleDailyTask)
+                .join(
+                    _prev_max,
+                    and_(
+                        VehicleDailyTask.vehicle_id == _prev_max.c.vehicle_id,
+                        VehicleDailyTask.task_date == _prev_max.c.max_date,
+                    ),
+                )
+                .all()
+            ):
+                prev_by_vid[int(t.vehicle_id)] = t
+
+        def _entry_start_from_batch(v):
+            """Same start-reading rules as _build_vehicle_rows, from batched maps:
+            prev close wins; else saved row start; else form start; else 0."""
+            prev = prev_by_vid.get(int(v.id))
+            has_prev = prev is not None and prev.close_reading is not None
+            start_reading = float(prev.close_reading) if has_prev else 0
+            ex = existing_by_vid.get(int(v.id))
+            if ex is not None and ex.start_reading is not None and not has_prev:
+                start_reading = float(ex.start_reading)
+            if not has_prev:
+                key_start = 'vehicle_%s_start_reading' % v.id
+                val = request.form.get(key_start)
+                if val not in (None, ''):
+                    try:
+                        start_reading = float(val)
+                    except (TypeError, ValueError):
+                        pass
+            return start_reading
+
         to_save = []
         skipped_empty = 0
         for v in vehicles:
-            existing = _latest_vehicle_daily_task(v.id, task_date)
+            existing = existing_by_vid.get(int(v.id))
             edit_mode = request.form.get('row_%s_edit_mode' % v.id, '1')
             if existing and str(edit_mode) != '1':
                 # Locked row: skip update unless explicitly switched to edit mode.
@@ -1103,14 +1163,11 @@ def task_report_new():
             if close_reading is None:
                 skipped_empty += 1
                 continue
-            start_eff = _task_entry_resolve_start_reading(v, task_date, request.form)
+            start_eff = _entry_start_from_batch(v)
             start_reading = user_start if user_start is not None else start_eff
             to_save.append((v, existing, close_reading, tasks_count, start_reading))
         if not to_save:
-            _all_already_saved = all(
-                VehicleDailyTask.query.filter_by(vehicle_id=v.id, task_date=task_date).first() is not None
-                for v in vehicles
-            )
+            _all_already_saved = all(int(v.id) in existing_by_vid for v in vehicles)
             if _all_already_saved:
                 flash('Task entries pehle se saved hain — duplicate save nahi hua.', 'info')
                 _dup_kwargs = {
@@ -1473,13 +1530,19 @@ def api_emg_detail():
         ),
     )
     if vehicle_no:
+        if not _vehicle_no_in_entry_scope(vehicle_no):
+            return jsonify([])
         q = q.filter(emg_amb_reg_matches_vehicle(vehicle_no))
     elif vehicle_nos_raw:
-        vehicle_nos = [v.strip() for v in vehicle_nos_raw.split(',') if v.strip()]
-        if vehicle_nos:
-            q = q.filter(or_(*[
-                emg_amb_reg_matches_vehicle(v) for v in vehicle_nos
-            ]))
+        vehicle_nos = [
+            v.strip() for v in vehicle_nos_raw.split(',')
+            if v.strip() and _vehicle_no_in_entry_scope(v.strip())
+        ]
+        if not vehicle_nos:
+            return jsonify([])
+        q = q.filter(or_(*[
+            emg_amb_reg_matches_vehicle(v) for v in vehicle_nos
+        ]))
     if task_date:
         q = q.filter(EmergencyTaskRecord.task_date == task_date)
     elif from_date and to_date:
@@ -1578,6 +1641,30 @@ def api_emg_task_detail():
 
 
 
+def _vehicle_no_in_entry_scope(vehicle_no, user_context=None):
+    """True if this reg number (any COW/USG/RAS tag variant) belongs to a fleet
+    vehicle inside the user's New Task Entry scope. Master/admin bypasses."""
+    raw = (vehicle_no or '').strip()
+    if not raw:
+        return False
+    if user_context is None:
+        user_id = session.get('user_id')
+        user_context = get_user_context(user_id) if user_id else {}
+    if user_context.get('is_master_or_admin', False):
+        return True
+    base = strip_ufone_reg_tag(raw) or raw
+    scoped_q = _vehicle_query_task_report_scope(
+        False,
+        user_context.get('allowed_projects', set()),
+        user_context.get('allowed_districts', set()),
+        user_context.get('allowed_vehicles', set()),
+    ).filter(or_(
+        func.lower(Vehicle.vehicle_no) == base.lower(),
+        func.lower(Vehicle.vehicle_no) == raw.lower(),
+    ))
+    return db.session.query(scoped_q.exists()).scalar()
+
+
 @app.route('/api/task-report/tracker-detail')
 def api_tracker_detail():
     """Return mileage record(s) for a given vehicle + date or date range."""
@@ -1586,6 +1673,8 @@ def api_tracker_detail():
     to_date = parse_date(request.args.get('to_date'))
     vehicle_no = (request.args.get('vehicle_no') or '').strip()
     if not vehicle_no:
+        return jsonify({})
+    if not _vehicle_no_in_entry_scope(vehicle_no):
         return jsonify({})
 
     if from_date and to_date and not task_date:
@@ -1683,7 +1772,7 @@ def api_tracker_detail():
 
 @app.route('/api/task-report/tracker-save', methods=['POST'])
 def api_tracker_save():
-    """Save user-edited tracker KM override."""
+    """Save user-edited tracker KM override — scope-checked like row delete."""
     data = request.get_json(silent=True) or {}
     rec_id = data.get('id')
     new_val = data.get('selected_km')
@@ -1692,8 +1781,21 @@ def api_tracker_save():
     rec = db.session.get(VehicleMileageRecord, rec_id)
     if not rec:
         return jsonify({'ok': False, 'error': 'Record not found'}), 404
+    if not _vehicle_no_in_entry_scope(rec.reg_no):
+        return jsonify({'ok': False, 'error': 'Is vehicle par tracker edit ki ijazat nahi.'}), 403
+    if new_val in (None, '', 'null'):
+        rec.selected_km = None
+    else:
+        try:
+            km = float(new_val)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'error': 'Selected KM number honi chahiye.'}), 400
+        if km < 0:
+            return jsonify({'ok': False, 'error': 'Selected KM negative nahi ho sakti.'}), 400
+        if km > 10000000:
+            return jsonify({'ok': False, 'error': 'Selected KM bohot barri value hai.'}), 400
+        rec.selected_km = km
     try:
-        rec.selected_km = float(new_val) if new_val not in (None, '', 'null') else None
         db.session.commit()
         return jsonify({'ok': True, 'effective_km': rec.effective_km()})
     except Exception as e:

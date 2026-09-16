@@ -8782,27 +8782,6 @@ def _show_task_batch_totals(user_context, row_list):
     return len(row_list) > 1
 
 
-def _task_entry_resolve_start_reading(v, task_date, form_dict):
-    """Same start-reading resolution as _build_vehicle_rows (for save validation)."""
-    form_dict = form_dict or {}
-    prev = VehicleDailyTask.query.filter(
-        VehicleDailyTask.vehicle_id == v.id,
-        VehicleDailyTask.task_date < task_date,
-    ).order_by(VehicleDailyTask.task_date.desc()).first()
-    has_prev = prev is not None and prev.close_reading is not None
-    start_reading = float(prev.close_reading) if has_prev else 0
-    existing = _latest_vehicle_daily_task(v.id, task_date)
-    if existing and existing.start_reading is not None and not has_prev:
-        start_reading = float(existing.start_reading)
-    key_start = 'vehicle_%s_start_reading' % v.id
-    if not has_prev and key_start in form_dict and form_dict[key_start] not in (None, ''):
-        try:
-            start_reading = float(form_dict[key_start])
-        except (TypeError, ValueError):
-            pass
-    return start_reading
-
-
 def _parse_hhmm_time_optional(s):
     if not s or not str(s).strip():
         return None

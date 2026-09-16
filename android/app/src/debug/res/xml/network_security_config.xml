@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Local dev over adb reverse / emulator only. Extra LAN IPs live in the
-     debug source set (app/src/debug/res/xml) so release builds stay tight. -->
+<!-- Debug builds only: also allow plain HTTP to the dev laptop's LAN IP.
+     Resource merging overrides the main network_security_config in debug. -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">192.168.18.36</domain>
+        <domain includeSubdomains="true">192.168.18.15</domain>
     </domain-config>
 </network-security-config>

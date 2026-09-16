@@ -286,7 +286,11 @@
 
   function vehicleNoForRow(rowId) {
     var tr = document.querySelector('tr.task-row[data-vehicle-id="' + rowId + '"]');
-    return tr ? (tr.getAttribute('data-vehicle') || '') : '';
+    if (!tr) return '';
+    var vno = tr.getAttribute('data-vno');
+    if (vno) return vno;
+    // Older cached pages: data-vehicle is the search haystack ("Vehicle: ABC-123").
+    return (tr.getAttribute('data-vehicle') || '').replace(/^Vehicle:\s*/, '');
   }
 
   function queueOdometerPending(rowId, jpegDataUrl) {
@@ -324,17 +328,12 @@
         window.FleetGpsPendingUpload.clearOdometerPending(vehicleIdForRow(rowId), taskDateDmy());
       }
       setRowPhotoUi(rowId, res.body.url);
-      if (window.fleetClearResumePath) window.fleetClearResumePath();
     }).catch(function(err) {
       if (jpegDataUrl && (!err.message || err.message.indexOf('auto-retry') < 0)) {
         queueOdometerPending(rowId, jpegDataUrl);
       }
       throw err;
     });
-  }
-
-  function processAnyImageSource(rowId, dataUrl, lat, lng, accuracyMeters) {
-    return stampAndUpload(rowId, dataUrl, lat, lng, accuracyMeters);
   }
 
   function setOdomBusy(rowId, busy) {
@@ -348,12 +347,10 @@
     else delete _odomBusyRows[String(rowId)];
   }
 
-  function runWithGps(rowId, dataUrl, fromRear) {
-    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
+  function runWithGps(rowId, dataUrl) {
     setOdomBusy(rowId, true);
     gpsNowOrWait(700, function(lat, lng, acc) {
       var opts = odometerStampOpts(rowId, lat, lng, acc);
-      if (fromRear) opts.rearCamera = true;
       if (typeof window.fleetStampAttendancePhoto !== 'function') {
         setOdomBusy(rowId, false);
         window.taskEntryNotice('Photo lag nahi saki', 'Page refresh karke dubara Attach dabaen.');
@@ -370,7 +367,6 @@
         })
         .finally(function() {
         setOdomBusy(rowId, false);
-        if (window.fleetClearResumePath) window.fleetClearResumePath();
       });
     });
   }
@@ -378,7 +374,6 @@
   var pendingRowId = null;
 
   function openFilePickerForRow(rowId, fromCamera) {
-    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     pendingRowId = rowId;
     fileInp.value = '';
     if (fromCamera) fileInp.setAttribute('capture', 'environment');
@@ -392,13 +387,12 @@
     if (!rowId || !fileInp.files || !fileInp.files[0]) return;
     var reader = new FileReader();
     reader.onload = function() {
-      runWithGps(rowId, reader.result, false);
+      runWithGps(rowId, reader.result);
     };
     reader.readAsDataURL(fileInp.files[0]);
   });
 
   function nativeGetPhoto(rowId, source) {
-    if (window.fleetSetResumePath) window.fleetSetResumePath({ odomRow: rowId });
     var Cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
     if (!Cam || !Cam.getPhoto) {
       openFilePickerForRow(rowId, source === 'CAMERA');
@@ -429,7 +423,6 @@
       window.taskEntryNotice('Camera open nahi hua', (err && err.message) ? err.message : 'Dubara try karein.');
     }).finally(function() {
       setOdomBusy(rowId, false);
-      if (window.fleetClearResumePath) window.fleetClearResumePath();
     });
   }
 
@@ -475,7 +468,7 @@
         var blob = cd.items[i].getAsFile();
         if (!blob) continue;
         var r = new FileReader();
-        r.onload = function() { runWithGps(rowId, r.result, false); };
+        r.onload = function() { runWithGps(rowId, r.result); };
         r.readAsDataURL(blob);
         break;
       }

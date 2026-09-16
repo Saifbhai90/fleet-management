@@ -1,5 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
    Fleet Manager — Mobile JS (extracted from base.html)
+   Cache note: base.html pins this file with ?v=NNN and /static/?v= responses
+   are cached immutable for a year — BUMP that v= on every edit of this file,
+   otherwise phones keep running the old JS until then.
    ═══════════════════════════════════════════════════════════════ */
 
 (function() {
@@ -19,6 +22,8 @@
                 inp.setAttribute('inputmode', 'text');
                 return;
             }
+            /* Date pickers need the text keyboard — same rule fleet_core applies. */
+            if (inp.classList.contains('datepicker')) return;
             if (inp.getAttribute('inputmode')) return; // already set
             var name = (inp.name || inp.id || '').toLowerCase();
             if (emailPatterns.test(name)) {
@@ -384,11 +389,29 @@
         });
     }
 
-    /* ── Run on DOM ready ── */
+    /* ── Run on DOM ready ──
+       Desktop never needs the card DOM (CSS only reveals it under 768px), so
+       building it there is wasted work on every page load. Build when the
+       viewport is already narrow; if a wide screen crosses into phone width
+       (rotation, DevTools), build lazily at that moment. */
     function init() {
         setInputModes();
-        buildAllCards();
-        addCardSearch();
+        var narrow = window.matchMedia('(max-width: 767px)');
+        function buildForNarrow(ev) {
+            if (!ev.matches) return;
+            buildAllCards();
+            addCardSearch();
+            if (narrow.removeEventListener) narrow.removeEventListener('change', buildForNarrow);
+            else if (narrow.removeListener) narrow.removeListener(buildForNarrow);
+        }
+        if (narrow.matches) {
+            buildAllCards();
+            addCardSearch();
+        } else if (narrow.addEventListener) {
+            narrow.addEventListener('change', buildForNarrow);
+        } else if (narrow.addListener) {
+            narrow.addListener(buildForNarrow);
+        }
     }
 
     if (document.readyState === 'loading') {
@@ -396,65 +419,6 @@
     } else {
         init();
     }
-})();
-
-/* ── Section separator ── */
-
-/* ── Block with Jinja2 statements, kept inline in base.html ── */
-
-/* ── Section separator ── */
-
-/* ── Block with Jinja2 statements, kept inline in base.html ── */
-
-/* ── Resume path after native camera / file picker ── */
-
-/* ═══════════════════════════════════════════════════════════════════
-   Resume path after native camera / file picker (localStorage + cookie).
-   Survives Android WebView process kill; returns user to Task Report etc.
-   ═══════════════════════════════════════════════════════════════════ */
-(function() {
-  'use strict';
-  var FLEET_RESUME_KEY = 'fleet_resume_url';
-  var FLEET_RESUME_ROW = 'fleet_resume_odom_row';
-  var FLEET_RESUME_TS = 'fleet_resume_ts';
-  var RESUME_MAX_AGE_MS = 30 * 60 * 1000;
-
-  function _resumeCookieSuffix() {
-    return (location.protocol === 'https:') ? '; Secure' : '';
-  }
-
-  window.fleetClearResumePath = function() {
-    try {
-      localStorage.removeItem(FLEET_RESUME_KEY);
-      localStorage.removeItem(FLEET_RESUME_ROW);
-      localStorage.removeItem(FLEET_RESUME_TS);
-      document.cookie = 'fleet_resume_path=; path=/; max-age=0; SameSite=Lax' + _resumeCookieSuffix();
-    } catch (e) { /* ignore */ }
-  };
-
-  window.fleetSetResumePath = function(opts) {
-    opts = opts || {};
-    try {
-      var url = location.pathname + location.search + location.hash;
-      localStorage.setItem(FLEET_RESUME_KEY, url);
-      localStorage.setItem(FLEET_RESUME_TS, String(Date.now()));
-      if (opts.odomRow) localStorage.setItem(FLEET_RESUME_ROW, String(opts.odomRow));
-      else localStorage.removeItem(FLEET_RESUME_ROW);
-      document.cookie = 'fleet_resume_path=' + encodeURIComponent(url) + '; path=/; max-age=1800; SameSite=Lax' + _resumeCookieSuffix();
-    } catch (e) { /* ignore */ }
-  };
-
-  /* Auto-restore of Task Report after login was a source of bugs (app would reopen an
-     unfinished report instead of the dashboard). Resume redirect is now disabled:
-     after any login the user always lands on the dashboard. The setter/clearer are kept
-     as harmless no-op-ish helpers so existing call sites (camera/file picker) don't error,
-     but nothing reads the marker to perform a redirect anymore. */
-  window.fleetHasPendingNativeResume = function() { return false; };
-
-  window.fleetApplyResumeRedirect = function() {
-    try { window.fleetClearResumePath(); } catch (e) { /* ignore */ }
-    return false;
-  };
 })();
 
 /* ═══════════════════════════════════════════════════════════════════
