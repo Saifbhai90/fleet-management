@@ -869,8 +869,8 @@ window.FleetConfig = {
 </div>
 {% endif %}
 
-<!-- Master Mind AI Floating Shortcut -->
-{% if can_see_page('report_ai') %}
+<!-- Master Mind AI Floating Shortcut — main software dashboard only -->
+{% if can_see_page('report_ai') and request.endpoint == 'dashboard' %}
 <div id="guideChatbotWrap" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
     <a href="{{ url_for('ai.ai_assistant') }}" class="btn btn-primary btn-lg rounded-circle shadow d-flex align-items-center justify-content-center" title="Master Mind AI" aria-label="Open Master Mind AI" style="width:56px;height:56px;">
         <i class="bi bi-robot"></i>
