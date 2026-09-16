@@ -2210,8 +2210,32 @@
   }
 
   /* Capacitor scroll → base.html #appNativeShell .main-content only. No per-page scroll hacks. */
-  #batchTable tbody tr.task-row[data-task-search-hidden="1"] {
+  #batchTable tbody tr.task-row[data-task-search-hidden="1"],
+  #batchTable tbody tr.task-row.task-row-search-hidden {
     display: none !important;
+  }
+  body[data-fleet-endpoint="task_report_new"] .task-batch-live-search {
+    display: block !important;
+    padding: 10px 12px 8px;
+  }
+  body[data-fleet-endpoint="task_report_new"] #taskEntrySearch {
+    display: block !important;
+    width: 100%;
+    max-width: 420px;
+  }
+  #batchTable tbody tr.task-row.is-editing .task-editable-field,
+  #batchTable tbody tr.task-row.is-editing input,
+  #batchTable tbody tr.task-row.is-editing button.task-editable-field {
+    pointer-events: auto !important;
+  }
+  @media (max-width: 767.98px) {
+    body[data-fleet-endpoint="task_report_new"] .task-batch-live-search {
+      padding: 10px 10px 6px;
+    }
+    body[data-fleet-endpoint="task_report_new"] #taskEntrySearch {
+      max-width: none;
+      min-height: 44px;
+    }
   }
   @media (max-width: 767.98px) {
     #taskEntryLoadMoreWrap,
@@ -2501,9 +2525,9 @@
     <div class="card shadow border-0 task-batch-card fm-no-card-press">
       <div class="card-header bg-success text-white py-3 rounded-top d-none d-md-flex flex-column flex-md-row flex-wrap align-items-stretch align-items-md-center justify-content-between gap-2 task-batch-list-header border-0">
         <span class="fw-semibold"><span class="d-none d-md-inline">Vehicles list – sirf Close Reading aur Task's edit karein. Baaki real-time calculate hoga.</span><span class="d-md-none">Sirf <strong>Close Reading</strong> aur <strong>Task's</strong> edit karein — baqi auto.</span></span>
-        <div class="task-batch-search-wrap">
-          <input type="text" id="taskEntrySearch" class="form-control form-control-sm flex-shrink-0 task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off">
       </div>
+      <div class="task-batch-live-search">
+        <input type="search" id="taskEntrySearch" class="form-control form-control-sm task-batch-entry-search" placeholder="Search vehicles..." autocomplete="off" enterkeyhint="search">
       </div>
       <div class="card-body p-0">
         <div class="table-responsive task-batch-table-wrap">
@@ -2629,14 +2653,14 @@
                          value="{% if row.tasks_count is not none %}{{ row.tasks_count }}{% endif %}" placeholder="Tasks" {% if s %}disabled{% endif %}>
                 </td>
                 <td class="text-center task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
-                  <a href="#" class="emg-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
+                  <a href="javascript:void(0)" class="emg-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge {% if row.emg_tasks %}bg-info text-dark{% else %}bg-secondary{% endif %}" style="cursor:pointer;font-size:.8rem;">{{ row.emg_tasks }}</span>
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
                 </td>
                 <td class="text-center task-diff task-batch-metric-cell task-batch-metric-compact task-batch-pair-right{% if task_diff != 0 %} text-danger fw-bold{% endif %}"><span class="task-batch-metric-plain">{{ task_diff }}</span></td>
                 <td class="text-end task-batch-metric-cell task-batch-metric-compact task-batch-pair-left">
-                  <a href="#" class="tracker-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
+                  <a href="javascript:void(0)" class="tracker-link text-decoration-none" role="button" data-vno="{{ row.vehicle.vehicle_no }}" data-date="{{ view_date.strftime('%d-%m-%Y') }}">
                     <span class="badge bg-dark" style="cursor:pointer;font-size:.8rem;">{{ row.tracker_km }}</span>
                     <i class="bi bi-chevron-right" aria-hidden="true"></i>
                   </a>
@@ -2744,8 +2768,20 @@
   @media (max-width: 767.98px) {
     .fleet-task-float-panel,
     .fleet-task-float-panel--narrow {
-      display: none !important;
+      top: 12px !important;
+      left: 8px !important;
+      right: 8px !important;
+      max-height: calc(100vh - 24px);
+      overflow: auto;
     }
+  }
+  .fleet-task-float-panel.task-entry-panel-open {
+    display: block !important;
+    position: fixed !important;
+    z-index: 20000 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
   }
 </style>
 <div id="emgPanel" class="card shadow-lg border-info d-none fleet-task-float-panel">
@@ -3216,11 +3252,21 @@
   }
 
   window.taskEntryUnlockRowForOdom = function(rowId) {
-    if (!rowId) return;
+    if (!rowId) return false;
+    var row = document.querySelector('#batchTable tr.task-row[data-vehicle-id="' + rowId + '"]');
     var editMode = document.getElementById('row_' + rowId + '_edit_mode');
     if (editMode) editMode.value = '1';
+    if (row) {
+      row.classList.add('is-editing');
+      row.querySelectorAll('input, textarea, select, button.task-editable-field').forEach(function(el) {
+        if (el.classList && el.classList.contains('task-row-edit-btn')) return;
+        el.disabled = false;
+        el.removeAttribute('disabled');
+      });
+    }
     document.querySelectorAll('.task-editable-field[data-row="' + rowId + '"]').forEach(function(el) {
       el.disabled = false;
+      el.removeAttribute('disabled');
     });
     document.querySelectorAll('.odom-ctrl-wrap[data-row="' + rowId + '"]').forEach(function(w) {
       w.classList.remove('odom-wrap-locked');
@@ -3235,6 +3281,7 @@
       btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Editing';
       btn.disabled = true;
     }
+    return true;
   }
 
   (function taskEntryResumeAfterCamera() {
@@ -3254,7 +3301,20 @@
 
   function taskEntryRowIsSearchMatch(row, q) {
     if (!q) return true;
-    return window.fleetMultiWordMatch(row.innerText || row.textContent, q);
+    var hay = [
+      row.getAttribute('data-vehicle') || '',
+      row.getAttribute('data-district') || '',
+      row.innerText || row.textContent || ''
+    ].join(' ');
+    if (typeof window.fleetMultiWordMatch === 'function') {
+      return window.fleetMultiWordMatch(hay, q);
+    }
+    var words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    var lower = hay.toLowerCase();
+    for (var i = 0; i < words.length; i++) {
+      if (lower.indexOf(words[i]) === -1) return false;
+    }
+    return true;
   }
 
   function taskEntryRowIsVisible(row) {
@@ -3272,6 +3332,7 @@
     rows.forEach(function(row) {
       var searchHide = searchActive && !taskEntryRowIsSearchMatch(row, q);
       row.dataset.taskSearchHidden = searchHide ? '1' : '0';
+      row.classList.toggle('task-row-search-hidden', searchHide);
     });
   }
 
@@ -3289,12 +3350,14 @@
       }
     }, { passive: false });
     bindTaskEntryMetricInputs(batchTable);
-    batchTable.querySelectorAll('.task-row').forEach(function(row) {
-      row._skipTotals = true;
-      updateRow(row);
-      row._skipTotals = false;
-    });
-    updateTotals();
+    try {
+      batchTable.querySelectorAll('.task-row').forEach(function(row) {
+        row._skipTotals = true;
+        updateRow(row);
+        row._skipTotals = false;
+      });
+      updateTotals();
+    } catch (errInit) {}
 
     var _batchSubmitting = false;
     document.getElementById('batchForm').addEventListener('submit', function(e) {
@@ -3363,17 +3426,14 @@
       }
     });
 
-    var taskEntrySearch = document.getElementById('taskEntrySearch');
-    if (taskEntrySearch) {
-      taskEntrySearch.addEventListener('input', function() {
-        taskEntrySearchQuery = this.value;
-        taskEntryApplyRowVisibility();
-        updateTotals();
-      });
-    }
-
     taskEntryInitRowList();
   }
+
+  window.taskEntryRunSearch = function(q) {
+    taskEntrySearchQuery = q == null ? '' : String(q);
+    taskEntryApplyRowVisibility();
+    updateTotals();
+  };
 
   (function taskEntryOdomMobileTabindex() {
     var table = document.getElementById('batchTable');
@@ -3388,11 +3448,25 @@
   var emgPanel = document.getElementById('emgPanel');
   var trackerPanel = document.getElementById('trackerPanel');
 
-  function _hidePanel(panel) { panel.classList.add('d-none'); }
+  function _mountFloatPanelsToBody() {
+    [emgPanel, trackerPanel].forEach(function(panel) {
+      if (panel && panel.parentNode !== document.body) {
+        document.body.appendChild(panel);
+      }
+    });
+  }
+  function _hidePanel(panel) {
+    if (!panel) return;
+    panel.classList.add('d-none');
+    panel.classList.remove('task-entry-panel-open');
+  }
   function _showPanel(panel) {
-    _hidePanel(emgPanel); _hidePanel(trackerPanel);
+    if (!panel) return;
+    _mountFloatPanelsToBody();
+    _hidePanel(emgPanel);
+    _hidePanel(trackerPanel);
     panel.classList.remove('d-none');
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    panel.classList.add('task-entry-panel-open');
   }
 
   /* ── EMG Detail Panel ──────────────────────────────────── */
@@ -3402,50 +3476,62 @@
       || window.matchMedia('(max-width: 767.98px)').matches;
   }
 
-  document.getElementById('emgCloseBtn').addEventListener('click', function() { _hidePanel(emgPanel); });
-  document.getElementById('emgCloseBtnFooter').addEventListener('click', function() { _hidePanel(emgPanel); });
+  var emgCloseBtn = document.getElementById('emgCloseBtn');
+  var emgCloseBtnFooter = document.getElementById('emgCloseBtnFooter');
+  if (emgCloseBtn) emgCloseBtn.addEventListener('click', function() { _hidePanel(emgPanel); });
+  if (emgCloseBtnFooter) emgCloseBtnFooter.addEventListener('click', function() { _hidePanel(emgPanel); });
 
-  document.querySelectorAll('.emg-link').forEach(function(a) {
-    a.addEventListener('click', function(e) {
-      if (_useMobileTaskPanel()) return;
-      e.preventDefault();
-      var vno = this.dataset.vno, dt = this.dataset.date;
-      document.getElementById('emgVehicleNo').textContent = vno;
-      document.getElementById('emgDetailBody').innerHTML = '';
-      document.getElementById('emgLoading').classList.remove('d-none');
-      document.getElementById('emgEmpty').classList.add('d-none');
-      document.getElementById('emgCount').textContent = '';
-      _emgData = [];
-      _showPanel(emgPanel);
-      fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
-        .then(function(r) { return r.json(); })
-        .then(function(rows) {
-          document.getElementById('emgLoading').classList.add('d-none');
-          _emgData = rows;
-          if (!rows.length) { document.getElementById('emgEmpty').classList.remove('d-none'); return; }
-          var tb = document.getElementById('emgDetailBody');
-          rows.forEach(function(r, i) {
-            var tr = document.createElement('tr');
-            tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
-              '<td>' + _he(r.task_id) + '</td>' +
-              '<td>' + _he(r.phone) + '</td>' +
-              '<td>' + _he(r.cli) + '</td>' +
-              '<td>' + _he(r.name) + '</td>' +
-              '<td>' + _he(r.address) + '</td>' +
-              '<td>' + _he(r.amb_reg_no) + '</td>' +
-              '<td>' + _he(r.received_by) + '</td>' +
-              '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
-              '<td>' + _he(r.facility_name) + '</td>' +
-              '<td>' + _he(r.created_date) + '</td>' +
-              '<td>' + _he(r.completed_date_time) + '</td>';
-            tb.appendChild(tr);
-          });
-          document.getElementById('emgCount').textContent = 'Total: ' + rows.length + ' tasks';
+  window.taskEntryOpenEmgDesktop = function(vno, dt) {
+    if (!emgPanel) return false;
+    var nameEl = document.getElementById('emgVehicleNo');
+    var bodyEl = document.getElementById('emgDetailBody');
+    var loadEl = document.getElementById('emgLoading');
+    var emptyEl = document.getElementById('emgEmpty');
+    var countEl = document.getElementById('emgCount');
+    if (nameEl) nameEl.textContent = vno || '';
+    if (bodyEl) bodyEl.innerHTML = '';
+    if (loadEl) loadEl.classList.remove('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (countEl) countEl.textContent = '';
+    _emgData = [];
+    _showPanel(emgPanel);
+    fetch('/api/task-report/emg-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        if (loadEl) loadEl.classList.add('d-none');
+        _emgData = Array.isArray(rows) ? rows : [];
+        if (!_emgData.length) { if (emptyEl) emptyEl.classList.remove('d-none'); return; }
+        if (!bodyEl) return;
+        _emgData.forEach(function(r, i) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = '<td class="ps-3">' + (i + 1) + '</td>' +
+            '<td>' + _he(r.task_id) + '</td>' +
+            '<td>' + _he(r.phone) + '</td>' +
+            '<td>' + _he(r.cli) + '</td>' +
+            '<td>' + _he(r.name) + '</td>' +
+            '<td>' + _he(r.address) + '</td>' +
+            '<td>' + _he(r.amb_reg_no) + '</td>' +
+            '<td>' + _he(r.received_by) + '</td>' +
+            '<td><span class="badge ' + (r.category === 'Green' ? 'bg-success' : 'bg-warning text-dark') + '">' + _he(r.category) + '</span></td>' +
+            '<td>' + _he(r.facility_name) + '</td>' +
+            '<td>' + _he(r.created_date) + '</td>' +
+            '<td>' + _he(r.completed_date_time) + '</td>';
+          bodyEl.appendChild(tr);
         });
-    });
-  });
+        if (countEl) countEl.textContent = 'Total: ' + _emgData.length + ' tasks';
+      })
+      .catch(function() {
+        if (loadEl) loadEl.classList.add('d-none');
+        if (emptyEl) {
+          emptyEl.textContent = 'EMG tasks load nahi ho saken.';
+          emptyEl.classList.remove('d-none');
+        }
+      });
+    return true;
+  };
 
-  document.getElementById('emgExportBtn').addEventListener('click', function() {
+  var emgExportBtn = document.getElementById('emgExportBtn');
+  if (emgExportBtn) emgExportBtn.addEventListener('click', function() {
     if (!_emgData.length) return;
     var headers = ['TaskId','Phone','CLI','Name','Address','Vehicle','ReceivedBy','Category','FacilityName','CreatedDate','CompletedDateTime'];
     var keys = ['task_id','phone','cli','name','address','amb_reg_no','received_by','category','facility_name','created_date','completed_date_time'];
@@ -3486,7 +3572,8 @@
     w.document.close();
   }
 
-  document.getElementById('emgPrintBtn').addEventListener('click', function() {
+  var emgPrintBtn = document.getElementById('emgPrintBtn');
+  if (emgPrintBtn) emgPrintBtn.addEventListener('click', function() {
     if (!_emgData.length) return;
     var title = 'EMG Tasks — ' + (document.getElementById('emgVehicleNo').textContent || '').trim();
     _openEmgPrintPreview(title, document.getElementById('emgDetailTable'));
@@ -3494,46 +3581,57 @@
 
   /* ── Tracker Detail / Edit Panel ───────────────────────── */
   var _trackerLinkEl = null;
-  document.getElementById('trackerCloseBtn').addEventListener('click', function() { _hidePanel(trackerPanel); });
-  document.getElementById('trackerCloseBtnFooter').addEventListener('click', function() { _hidePanel(trackerPanel); });
+  var trackerCloseBtn = document.getElementById('trackerCloseBtn');
+  var trackerCloseBtnFooter = document.getElementById('trackerCloseBtnFooter');
+  if (trackerCloseBtn) trackerCloseBtn.addEventListener('click', function() { _hidePanel(trackerPanel); });
+  if (trackerCloseBtnFooter) trackerCloseBtnFooter.addEventListener('click', function() { _hidePanel(trackerPanel); });
 
-  document.querySelectorAll('.tracker-link').forEach(function(a) {
-    a.addEventListener('click', function(e) {
-      if (_useMobileTaskPanel()) return;
-      e.preventDefault();
-      _trackerLinkEl = this;
-      var vno = this.dataset.vno, dt = this.dataset.date;
-      document.getElementById('trackerVehicleNo').textContent = vno;
-      document.getElementById('trackerLoading').classList.remove('d-none');
-      document.getElementById('trackerContent').classList.add('d-none');
-      document.getElementById('trackerEmpty').classList.add('d-none');
-      document.getElementById('trackerSaveBtn').disabled = true;
-      _showPanel(trackerPanel);
-      fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          document.getElementById('trackerLoading').classList.add('d-none');
-          if (!d.id) { document.getElementById('trackerEmpty').classList.remove('d-none'); return; }
-          document.getElementById('trackerContent').classList.remove('d-none');
-          document.getElementById('trackerRecId').value = d.id;
-          document.getElementById('trId').value = d.id;
-          document.getElementById('trRegNo').value = d.reg_no;
-          document.getElementById('trDateFrom').value = d.date_from;
-          document.getElementById('trTimeFrom').value = d.time_from;
-          document.getElementById('trDateTo').value = d.date_to;
-          document.getElementById('trTimeTo').value = d.time_to;
-          document.getElementById('trMileage').value = d.mileage;
-          document.getElementById('trPtoP').value = d.ptop;
-          var autoVal = Math.max(d.mileage || 0, d.ptop || 0);
-          var selKm = document.getElementById('trSelectedKm');
-          selKm.value = d.selected_km !== null ? d.selected_km : autoVal;
-          document.getElementById('trAutoHint').textContent = 'Auto = MAX(Mileage, PtoP) = ' + autoVal.toFixed(2);
-          document.getElementById('trackerSaveBtn').disabled = false;
+  window.taskEntryOpenTrackerDesktop = function(linkEl, vno, dt) {
+    if (!trackerPanel) return false;
+    _trackerLinkEl = linkEl || null;
+    var nameEl = document.getElementById('trackerVehicleNo');
+    var loadEl = document.getElementById('trackerLoading');
+    var contentEl = document.getElementById('trackerContent');
+    var emptyEl = document.getElementById('trackerEmpty');
+    var saveBtn = document.getElementById('trackerSaveBtn');
+    if (nameEl) nameEl.textContent = vno || '';
+    if (loadEl) loadEl.classList.remove('d-none');
+    if (contentEl) contentEl.classList.add('d-none');
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (saveBtn) saveBtn.disabled = true;
+    _showPanel(trackerPanel);
+    fetch('/api/task-report/tracker-detail?date=' + encodeURIComponent(dt) + '&vehicle_no=' + encodeURIComponent(vno))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (loadEl) loadEl.classList.add('d-none');
+        if (!d || !d.id) { if (emptyEl) emptyEl.classList.remove('d-none'); return; }
+        if (contentEl) contentEl.classList.remove('d-none');
+        var rec = document.getElementById('trackerRecId');
+        if (rec) rec.value = d.id;
+        var map = {trId: d.id, trRegNo: d.reg_no, trDateFrom: d.date_from, trTimeFrom: d.time_from, trDateTo: d.date_to, trTimeTo: d.time_to, trMileage: d.mileage, trPtoP: d.ptop};
+        Object.keys(map).forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.value = map[id];
         });
-    });
-  });
+        var autoVal = Math.max(d.mileage || 0, d.ptop || 0);
+        var selKm = document.getElementById('trSelectedKm');
+        if (selKm) selKm.value = d.selected_km !== null ? d.selected_km : autoVal;
+        var hint = document.getElementById('trAutoHint');
+        if (hint) hint.textContent = 'Auto = MAX(Mileage, PtoP) = ' + autoVal.toFixed(2);
+        if (saveBtn) saveBtn.disabled = false;
+      })
+      .catch(function() {
+        if (loadEl) loadEl.classList.add('d-none');
+        if (emptyEl) {
+          emptyEl.textContent = 'Tracker detail load nahi ho saka.';
+          emptyEl.classList.remove('d-none');
+        }
+      });
+    return true;
+  };
 
-  document.getElementById('trackerSaveBtn').addEventListener('click', function() {
+  var trackerSaveBtn = document.getElementById('trackerSaveBtn');
+  if (trackerSaveBtn) trackerSaveBtn.addEventListener('click', function() {
     var btn = this;
     var recId = document.getElementById('trackerRecId').value;
     var val = document.getElementById('trSelectedKm').value;
@@ -3630,14 +3728,88 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('resize', stampTaskBatchMobileLabels);
 });
 
+document.addEventListener('input', function(e) {
+  var el = e.target;
+  if (!el || el.id !== 'taskEntrySearch') return;
+  if (typeof window.taskEntryRunSearch === 'function') {
+    window.taskEntryRunSearch(el.value);
+    return;
+  }
+  var q = String(el.value || '').trim().toLowerCase();
+  document.querySelectorAll('#batchTable tbody tr.task-row').forEach(function(row) {
+    var hay = ((row.getAttribute('data-vehicle') || '') + ' ' + (row.getAttribute('data-district') || '') + ' ' + (row.innerText || '')).toLowerCase();
+    var hide = !!q && hay.indexOf(q) === -1;
+    row.dataset.taskSearchHidden = hide ? '1' : '0';
+    row.classList.toggle('task-row-search-hidden', hide);
+  });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  if (!e.target || e.target.id !== 'taskEntrySearch') return;
+  e.preventDefault();
+});
+
 document.addEventListener('click', function(e){
   var btn = e.target.closest('.task-row-edit-btn');
   if(!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
   var rowId = btn.getAttribute('data-row');
   if(!rowId) return;
   if (typeof window.taskEntryUnlockRowForOdom === 'function') {
     window.taskEntryUnlockRowForOdom(rowId);
+    return;
   }
+  var editMode = document.getElementById('row_' + rowId + '_edit_mode');
+  if (editMode) editMode.value = '1';
+  var row = document.querySelector('#batchTable tr.task-row[data-vehicle-id="' + rowId + '"]');
+  if (row) {
+    row.classList.add('is-editing');
+    row.querySelectorAll('input, textarea, select, button.task-editable-field').forEach(function(el) {
+      if (el.classList && el.classList.contains('task-row-edit-btn')) return;
+      el.disabled = false;
+      el.removeAttribute('disabled');
+    });
+  }
+});
+
+document.addEventListener('click', function(e) {
+  var emgLink = e.target.closest && e.target.closest('.emg-link');
+  var trackerLink = e.target.closest && e.target.closest('.tracker-link');
+  if (!emgLink && !trackerLink) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var link = emgLink || trackerLink;
+  var vno = link.getAttribute('data-vno') || '';
+  var dt = link.getAttribute('data-date') || '';
+  if (emgLink && typeof window.taskEntryOpenEmgDesktop === 'function') {
+    window.taskEntryOpenEmgDesktop(vno, dt);
+    return;
+  }
+  if (trackerLink && typeof window.taskEntryOpenTrackerDesktop === 'function') {
+    window.taskEntryOpenTrackerDesktop(trackerLink, vno, dt);
+    return;
+  }
+  var panel = document.getElementById(emgLink ? 'emgPanel' : 'trackerPanel');
+  var other = document.getElementById(emgLink ? 'trackerPanel' : 'emgPanel');
+  if (!panel) return;
+  if (panel.parentNode !== document.body) document.body.appendChild(panel);
+  if (other && other.parentNode !== document.body) document.body.appendChild(other);
+  if (other) {
+    other.classList.add('d-none');
+    other.classList.remove('task-entry-panel-open');
+  }
+  panel.classList.remove('d-none');
+  panel.classList.add('task-entry-panel-open');
+}, true);
+
+document.addEventListener('click', function(e) {
+  var closer = e.target.closest && e.target.closest('#emgCloseBtn, #emgCloseBtnFooter, #trackerCloseBtn, #trackerCloseBtnFooter');
+  if (!closer) return;
+  var panel = closer.closest('.fleet-task-float-panel');
+  if (!panel) return;
+  panel.classList.add('d-none');
+  panel.classList.remove('task-entry-panel-open');
 });
 
 document.addEventListener('click', function(e){

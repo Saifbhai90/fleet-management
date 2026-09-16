@@ -1,6 +1,10 @@
 <script>
 (function(){
-    if (document.getElementById("mobileTaskModal")) return;
+    if (window._mobileTaskModalReady) return;
+    window._mobileTaskModalReady = true;
+    if (document.getElementById("mobileTaskModal")) {
+      /* Modal already in DOM — still bind open/close + click handlers below. */
+    } else {
     // Create Mobile-Optimized Modal Container
     var modalHTML = `
     <div id="mobileTaskModal" class="mobile-task-modal d-none">
@@ -283,7 +287,8 @@
     var styleEl = document.createElement('style');
     styleEl.textContent = styles;
     document.head.appendChild(styleEl);
-    
+    }
+
     // Global functions for modal
     window.openMobileTaskModal = function(title, content, eyebrow) {
         document.getElementById('mobileTaskTitle').textContent = title;
@@ -298,8 +303,10 @@
         document.body.style.overflow = '';
     };
 
-    document.getElementById('mobileTaskCloseBtn').addEventListener('click', window.closeMobileTaskModal);
-    document.getElementById('mobileTaskCloseFooterBtn').addEventListener('click', window.closeMobileTaskModal);
+    var mobileCloseBtn = document.getElementById('mobileTaskCloseBtn');
+    var mobileCloseFooterBtn = document.getElementById('mobileTaskCloseFooterBtn');
+    if (mobileCloseBtn) mobileCloseBtn.addEventListener('click', window.closeMobileTaskModal);
+    if (mobileCloseFooterBtn) mobileCloseFooterBtn.addEventListener('click', window.closeMobileTaskModal);
 
     function _mobileHe(s) {
         var d = document.createElement('div');
@@ -372,8 +379,13 @@
             + '</div>';
     }
     
+    // New Task Entry owns EMG/Tracker clicks itself (body-mounted popup).
+    var _skipTaskEntryCapture = document.body
+      && document.body.getAttribute('data-fleet-endpoint') === 'task_report_new';
+
     // EMG Link Handler (mobile / Capacitor only)
     document.addEventListener('click', function(e) {
+        if (_skipTaskEntryCapture) return;
         var emgLink = e.target.closest('.emg-link');
         if (!emgLink || !_useMobileTaskPanel()) return;
         e.preventDefault();
@@ -403,6 +415,7 @@
     
     // Tracker Link Handler (mobile / Capacitor only)
     document.addEventListener('click', function(e) {
+        if (_skipTaskEntryCapture) return;
         var trackerLink = e.target.closest('.tracker-link');
         if (!trackerLink || !_useMobileTaskPanel()) return;
         e.preventDefault();
