@@ -260,10 +260,11 @@
 
   /* ── Floating map controls ── */
   .tk-fabs {
-    position: absolute; right: 12px; bottom: 16px; z-index: 650;
+    position: absolute; right: 12px; bottom: 16px; z-index: 700;
     display: flex; flex-direction: column; gap: 6px; padding: 6px;
     background: rgba(15,25,35,.94); border: 1px solid #2a3a4a; border-radius: 16px;
     box-shadow: 0 8px 22px rgba(0,0,0,.4);
+    overflow: visible;
   }
   .tk-fab {
     position: relative; width: 40px; height: 40px; border-radius: 12px; background: transparent;
@@ -279,13 +280,15 @@
     background: rgba(15,25,35,.96); border: 1px solid #2a3a4a; color: #e2e8f0;
     font-size: 12px; font-weight: 600; line-height: 1.2;
     box-shadow: 0 8px 18px rgba(0,0,0,.4); opacity: 0; pointer-events: none;
-    transition: opacity .12s; z-index: 2;
+    transition: opacity .12s; z-index: 20;
   }
   @media (hover: hover) and (pointer: fine) {
+    .tk-fab[data-tip]:hover { z-index: 3; }
     .tk-fab[data-tip]:hover::after { opacity: 1; }
   }
   body:has(.tracking-wrap) #guideChatbotWrap { display: none !important; }
   .tracking-map-wrap .leaflet-bottom.leaflet-right { margin-right: 68px; margin-bottom: 6px; }
+  .tracking-map-wrap .leaflet-control-layers { display: none !important; }
 
   /* ── Fullscreen map mode ── */
   .tracking-wrap.tk-fullmap {
@@ -299,6 +302,7 @@
   .tracking-wrap.tk-fullmap .tracking-map-wrap { position: absolute; inset: 0; }
   .tracking-wrap.tk-fullmap .tk-fabs { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
   .tracking-wrap.tk-fullmap .tk-layer-pop,
+  .tracking-wrap.tk-fullmap .tk-nearby-pop,
   .tracking-wrap.tk-fullmap .map-legend { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
   html.tk-fullmap .mobile-menu-btn,
   html.tk-fullmap #mobileMenuBtn { display: none !important; }
@@ -339,6 +343,38 @@
   .tk-layer-item.active { background: #1a5fb4; color: #fff; font-weight: 600; }
   .tk-layer-extras { border-top: 1px solid #22303e; margin-top: 6px; padding: 8px 10px 4px; }
   .tk-layer-extras .tb-check { color: #cbd5e1; font-size: 12.5px; }
+
+  .tk-nearby-pop {
+    position: absolute; right: 72px; bottom: 16px; z-index: 660; width: 228px; display: none;
+    background: #0f1923; border: 1px solid #2a3a4a; border-radius: 16px; padding: 8px 8px 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.5);
+  }
+  .tk-nearby-pop.open { display: block; }
+  .tk-nearby-hint { font-size: 12px; color: #cbd5e1; padding: 0 8px 8px; line-height: 1.35; }
+  .tk-nearby-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 4px; }
+  .tk-nearby-presets button {
+    border: 1px solid #2a3a4a; background: #16232f; color: #e2e8f0; border-radius: 10px;
+    padding: 8px 6px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .tk-nearby-presets button.active, .tk-nearby-presets button:hover { background: #1a5fb4; border-color: #1a5fb4; color: #fff; }
+  .tk-nearby-custom { display: flex; gap: 6px; padding: 8px 4px 4px; }
+  .tk-nearby-custom input {
+    flex: 1; min-width: 0; border: 1px solid #2a3a4a; background: #0b141c; color: #e2e8f0;
+    border-radius: 10px; padding: 8px 10px; font-size: 12px;
+  }
+  .tk-nearby-custom button, .tk-nearby-clear {
+    border: 0; background: #1a5fb4; color: #fff; border-radius: 10px;
+    padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .tk-nearby-clear {
+    display: block; width: calc(100% - 8px); margin: 4px 4px 0; background: #334155;
+  }
+  .leaflet-tooltip.tk-nearby-tip {
+    background: rgba(15,25,35,.94); border: 1px solid #2a3a4a; color: #93c5fd;
+    font-size: 10px; font-weight: 700; border-radius: 8px; padding: 2px 7px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.35);
+  }
+  .leaflet-tooltip.tk-nearby-tip::before { border-top-color: rgba(15,25,35,.94); }
 
   /* ── Nearest vehicle assist overlay ── */
   .tk-nearest-panel {
@@ -553,6 +589,7 @@
     /* Controls float above the sheet peek */
     .tk-fabs { bottom: calc(var(--tk-peek) + 12px + env(safe-area-inset-bottom, 0px)); right: 10px; }
     .tk-layer-pop { bottom: calc(var(--tk-peek) + 12px + env(safe-area-inset-bottom, 0px)); right: 62px; }
+    .tk-nearby-pop { bottom: calc(var(--tk-peek) + 12px + env(safe-area-inset-bottom, 0px)); right: 62px; }
 
     .map-legend {
       bottom: calc(var(--tk-peek) + 64px + env(safe-area-inset-bottom, 0px));

@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1007" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1009" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ufone_task_modal.css') }}?v=1001" />
 {% endblock %}
 
@@ -141,6 +141,7 @@
         <div class="tk-fab" id="tkFabFull" role="button" aria-label="Fullscreen map" data-tip="Fullscreen map"><i class="bi bi-arrows-fullscreen"></i></div>
         <div class="tk-fab" id="tkFabFit" role="button" aria-label="Fit all vehicles" data-tip="Fit all vehicles"><i class="bi bi-bounding-box"></i></div>
         <div class="tk-fab" id="tkFabLocate" role="button" aria-label="My location" data-tip="My location"><i class="bi bi-crosshair"></i></div>
+        <div class="tk-fab" id="tkFabNearby" role="button" aria-label="Nearby vehicles" data-tip="Nearby vehicles"><i class="bi bi-radar"></i></div>
         <div class="tk-fab tk-fab-info active" id="tkFabInfo" role="button" aria-label="Map legend" data-tip="Map legend"><i class="bi bi-info-lg"></i></div>
       </div>
 
@@ -148,7 +149,23 @@
         <div class="tk-layer-title">Map style</div>
         <div id="tkLayerList"></div>
         <div class="tk-layer-extras" id="tkLayerExtras"></div>
-</div>
+      </div>
+
+      <div class="tk-nearby-pop" id="tkNearbyPop">
+        <div class="tk-layer-title">Nearby vehicles</div>
+        <div class="tk-nearby-hint" id="tkNearbyHint">How far around you should we show?</div>
+        <div class="tk-nearby-presets">
+          <button type="button" data-nearby-km="1">1 km</button>
+          <button type="button" data-nearby-km="2">2 km</button>
+          <button type="button" data-nearby-km="5">5 km</button>
+          <button type="button" data-nearby-km="10">10 km</button>
+        </div>
+        <div class="tk-nearby-custom">
+          <input type="number" id="tkNearbyKm" min="0.5" max="200" step="0.5" inputmode="decimal" placeholder="Custom km">
+          <button type="button" id="tkNearbyApply">Show</button>
+        </div>
+        <button type="button" class="tk-nearby-clear" id="tkNearbyClear" hidden>Clear nearby filter</button>
+      </div>
 
       <section class="tk-nearest-panel" id="tkNearestPanel" aria-live="polite">
         <div class="tk-nearest-head">
@@ -203,7 +220,7 @@
   'ufone_tasks_by_reg': ufone_tasks_by_reg,
   'parking_by_reg': parking_by_reg
 } | tojson }}</script>
-<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1007"></script>
+<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1011"></script>
 <script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1006"></script>
 <script>
 if (window.UfoneTaskDetail) {

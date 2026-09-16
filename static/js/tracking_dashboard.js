@@ -55,12 +55,6 @@
   ];
   var activeBaseName = 'Google Streets';
 
-  if (!isMobile()) {
-    var ctrlLayers = {};
-    baseLayers.forEach(function(b) { ctrlLayers[b.name] = b.layer; });
-    L.control.layers(ctrlLayers, null, { position: 'topright', collapsed: true }).addTo(map);
-  }
-
   function renderLayerList() {
     var host = document.getElementById('tkLayerList');
     if (!host) return;
@@ -100,6 +94,9 @@
   var parkingState = null;
   var parkingRedrawing = false;
   var AT_PARKING_M = 500;
+  var nearbyState = null;
+  var nearbyCircle = null;
+  var meMarker = null;
 
   function fetchUfoneTaskMap() {
     var ctrl = new AbortController();
@@ -309,7 +306,6 @@
     if (!regno) return;
     clearParkingOverlay();
     closeDetail();
-    closeLegend();
     var panel = document.getElementById('tkNearestPanel');
     panel.classList.add('open');
     document.getElementById('tkNearestTitle').textContent = 'Finding nearest vehicles…';
@@ -372,6 +368,123 @@
     return km.toFixed(km < 10 ? 1 : 0) + ' km';
   }
 
+  function nearbyDistanceMeters(v) {
+    if (!nearbyState || !v) return null;
+    var lat = parseFloat(v.LAT);
+    var lon = parseFloat(v.LON);
+    if (!isFinite(lat) || !isFinite(lon) || lat === 0 || lon === 0) return null;
+    return haversineMeters(nearbyState.lat, nearbyState.lon, lat, lon);
+  }
+
+  function matchesNearby(v) {
+    if (!nearbyState) return true;
+    var meters = nearbyDistanceMeters(v);
+    return meters != null && meters <= nearbyState.meters;
+  }
+
+  function setNearbyHint(text) {
+    var hint = document.getElementById('tkNearbyHint');
+    if (hint) hint.textContent = text || 'Vehicles around your current location';
+  }
+
+  function syncNearbyTips() {
+    Object.keys(markers).forEach(function(reg) {
+      var marker = markers[reg];
+      if (!marker) return;
+      var show = nearbyState && map.hasLayer(marker);
+      var meters = show ? nearbyDistanceMeters(posByReg[reg]) : null;
+      if (meters == null) {
+        if (marker.getTooltip()) marker.unbindTooltip();
+        return;
+      }
+      var text = formatParkingDistance(meters) + ' away';
+      if (marker.getTooltip()) marker.setTooltipContent(text);
+      else marker.bindTooltip(text, {
+        permanent: true,
+        direction: 'top',
+        offset: [0, -22],
+        className: 'tk-nearby-tip',
+        opacity: 1
+      });
+    });
+  }
+
+  function clearNearbyFilter() {
+    nearbyState = null;
+    if (nearbyCircle) {
+      map.removeLayer(nearbyCircle);
+      nearbyCircle = null;
+    }
+    var fab = document.getElementById('tkFabNearby');
+    if (fab) fab.classList.remove('active');
+    var clearBtn = document.getElementById('tkNearbyClear');
+    if (clearBtn) clearBtn.hidden = true;
+    document.querySelectorAll('[data-nearby-km]').forEach(function(btn) {
+      btn.classList.remove('active');
+    });
+    setNearbyHint('Vehicles around your current location');
+    applyFilter();
+  }
+
+  function applyNearbyFilter(lat, lon, km) {
+    nearbyState = { lat: lat, lon: lon, km: km, meters: km * 1000 };
+    var ll = [lat, lon];
+    if (meMarker) meMarker.setLatLng(ll);
+    else meMarker = L.circleMarker(ll, { radius: 7, weight: 3, color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map);
+    if (nearbyCircle) map.removeLayer(nearbyCircle);
+    nearbyCircle = L.circle(ll, {
+      radius: nearbyState.meters,
+      color: '#2563eb',
+      weight: 2,
+      fillColor: '#3b82f6',
+      fillOpacity: 0.08
+    }).addTo(map);
+    var fab = document.getElementById('tkFabNearby');
+    if (fab) fab.classList.add('active');
+    var clearBtn = document.getElementById('tkNearbyClear');
+    if (clearBtn) clearBtn.hidden = false;
+    document.querySelectorAll('[data-nearby-km]').forEach(function(btn) {
+      btn.classList.toggle('active', parseFloat(btn.getAttribute('data-nearby-km')) === km);
+    });
+    applyFilter();
+    var count = positions.filter(function(v) { return vehicleIsVisible(v); }).length;
+    setNearbyHint(count + ' vehicle' + (count === 1 ? '' : 's') + ' within ' + km + ' km');
+    map.fitBounds(nearbyCircle.getBounds(), { padding: [48, 48], maxZoom: 15, animate: true });
+  }
+
+  function getMyLocation(onOk, onFail) {
+    var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
+    if (Geo && typeof Geo.getCurrentPosition === 'function') {
+      Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
+        .then(function(p) { onOk(p.coords.latitude, p.coords.longitude); })
+        .catch(onFail);
+      return;
+    }
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(function(p) {
+        onOk(p.coords.latitude, p.coords.longitude);
+      }, onFail, { enableHighAccuracy: true, timeout: 8000 });
+      return;
+    }
+    onFail();
+  }
+
+  function startNearby(km) {
+    km = parseFloat(km);
+    if (!isFinite(km) || km <= 0) {
+      setNearbyHint('Enter a range in km');
+      return;
+    }
+    km = Math.min(200, Math.max(0.5, km));
+    setNearbyHint('Getting your location…');
+    getMyLocation(function(lat, lon) {
+      applyNearbyFilter(lat, lon, km);
+      haptic();
+    }, function() {
+      setNearbyHint('Location unavailable. Allow GPS and try again.');
+    });
+  }
+
   function parkingDistanceInfo(v) {
     var parking = v && parkingOf(v.RegNo);
     if (!parking) return null;
@@ -417,6 +530,11 @@
     parkingRedrawing = false;
   }
 
+  function armParkingPopupClose() {
+    map.once('moveend', function() { parkingRedrawing = false; });
+    setTimeout(function() { parkingRedrawing = false; }, 700);
+  }
+
   function drawParkingOverlay(v, info) {
     parkingRedrawing = true;
     parkingLayer.clearLayers();
@@ -437,6 +555,10 @@
         offset: [0, -6]
       })
       .addTo(parkingLayer);
+    parkMarker.on('popupclose', function() {
+      if (parkingRedrawing) return;
+      clearParkingOverlay();
+    });
     var vLat = parseFloat(v.LAT);
     var vLon = parseFloat(v.LON);
     if (isFinite(vLat) && isFinite(vLon) && vLat !== 0 && vLon !== 0) {
@@ -449,7 +571,6 @@
     }
     if (!map.hasLayer(parkingLayer)) parkingLayer.addTo(map);
     parkMarker.openPopup();
-    parkingRedrawing = false;
   }
 
   function syncParkingOverlay() {
@@ -460,6 +581,7 @@
     if (!info) return;
     parkingState.info = info;
     drawParkingOverlay(v, info);
+    armParkingPopupClose();
   }
 
   function openParking(regno) {
@@ -468,7 +590,6 @@
     if (!info) return;
     clearNearestOverlay();
     closeDetail();
-    closeLegend();
     parkingState = { regno: regno, info: info };
     drawParkingOverlay(v, info);
     var points = [[info.parking.latitude, info.parking.longitude]];
@@ -482,6 +603,7 @@
     } else {
       map.setView(points[0], Math.max(map.getZoom(), 15), { animate: true });
     }
+    armParkingPopupClose();
   }
 
   function popupParkingBlock(v) {
@@ -524,7 +646,8 @@
     var grp = v.GroupName || 'Unassigned';
     return matchesListFilter(v.RegNo, v.VehicleStatus)
       && isGroupSelected(grp)
-      && vehicleMatchesSearch(v, currentSearchQuery());
+      && vehicleMatchesSearch(v, currentSearchQuery())
+      && matchesNearby(v);
   }
 
   // ── Vehicle Icons — modern navigation arrow markers ──
@@ -1131,10 +1254,8 @@
 
     Object.keys(rowNodes).forEach(function(reg) {
       var r = rowNodes[reg];
-      var matchFilter = matchesListFilter(reg, r.dataset.status);
-      var matchGroup = isGroupSelected(r.dataset.group);
-      var matchSearch = vehicleMatchesSearch(posByReg[reg] || { RegNo: reg, GroupName: r.dataset.group }, search);
-      var show = (matchFilter && matchGroup && matchSearch);
+      var v = posByReg[reg] || { RegNo: reg, GroupName: r.dataset.group, VehicleStatus: r.dataset.status };
+      var show = vehicleIsVisible(v);
       var want = show ? '' : 'none';
       if (r.style.display !== want) r.style.display = want;
       if (show) visibleGroups[r.dataset.group] = true;
@@ -1150,7 +1271,7 @@
       if (hdr.style.display !== want) hdr.style.display = want;
       if (body.style.display !== want) body.style.display = want;
       if (!groupMatches) return;
-      if (hasSearch || currentFilter === 'Task' || currentFilter === 'NoGPS') {
+      if (hasSearch || nearbyState || currentFilter === 'Task' || currentFilter === 'NoGPS') {
         if (visibleGroups[hdr.dataset.group]) {
           hdr.classList.remove('collapsed');
           body.classList.remove('collapsed');
@@ -1170,16 +1291,19 @@
     Object.keys(markers).forEach(function(reg) {
       var v = posByReg[reg];
       if (!v) return;
-      var grp = v.GroupName || 'Unassigned';
-      var matchFilter = matchesListFilter(reg, v.VehicleStatus);
-      var matchGroup = isGroupSelected(grp);
-      var matchSearch = vehicleMatchesSearch(v, search);
-      if (matchFilter && matchGroup && matchSearch) {
+      if (vehicleIsVisible(v)) {
         if (!map.hasLayer(markers[reg])) markers[reg].addTo(map);
       } else {
         if (map.hasLayer(markers[reg])) map.removeLayer(markers[reg]);
       }
     });
+
+    syncNearbyTips();
+    if (nearbyState) {
+      var nearbyCount = 0;
+      positions.forEach(function(v) { if (vehicleIsVisible(v)) nearbyCount++; });
+      setNearbyHint(nearbyCount + ' vehicle' + (nearbyCount === 1 ? '' : 's') + ' within ' + nearbyState.km + ' km');
+    }
 
     updateGroupFilterLabel();
     updateStatCounts();
@@ -1397,10 +1521,12 @@
   function syncFabOffset() {
     var fabsEl = document.getElementById('tkFabs');
     var legend = document.getElementById('mapLegend');
+    var nearbyPop = document.getElementById('tkNearbyPop');
     if (!fabsEl) return;
     if (!isMobile()) {
       fabsEl.style.removeProperty('bottom');
       if (layerPop) layerPop.style.removeProperty('bottom');
+      if (nearbyPop) nearbyPop.style.removeProperty('bottom');
       if (legend) legend.style.removeProperty('bottom');
       return;
     }
@@ -1408,6 +1534,7 @@
     var offset = 'calc(var(--tk-peek) + ' + (12 + extra) + 'px)';
     fabsEl.style.bottom = offset;
     if (layerPop) layerPop.style.bottom = offset;
+    if (nearbyPop) nearbyPop.style.bottom = offset;
     if (legend) legend.style.bottom = 'calc(var(--tk-peek) + ' + (64 + extra) + 'px)';
   }
 
@@ -1474,15 +1601,19 @@
     var nearestButton = e.target.closest('.pop-nearest-btn');
     if (nearestButton) {
       e.preventDefault();
+      e.stopPropagation();
       openNearest(decodeURIComponent(nearestButton.dataset.nearestReg || ''));
       haptic();
     }
     var parkingButton = e.target.closest('.pop-parking-btn');
     if (parkingButton) {
       e.preventDefault();
+      e.stopPropagation();
       openParking(decodeURIComponent(parkingButton.dataset.parkingReg || ''));
       haptic();
     }
+    var taskBtn = e.target.closest('.task-detail-btn');
+    if (taskBtn) e.stopPropagation();
     var nearestRow = e.target.closest('.tk-nearest-row');
     if (nearestRow && nearestState) {
       var marker = nearestMarkers[nearestMarkerKey(nearestRow.dataset.nearestReg)];
@@ -1516,10 +1647,17 @@
     if (fabLayers) fabLayers.classList.remove('active');
   }
 
+  var nearbyPop = document.getElementById('tkNearbyPop');
+  var fabNearby = document.getElementById('tkFabNearby');
+  function closeNearbyPop() {
+    if (nearbyPop) nearbyPop.classList.remove('open');
+  }
+
   if (fabLayers) {
     fabLayers.addEventListener('click', function(e) {
       e.stopPropagation();
       closeLegend();
+      closeNearbyPop();
       var open = layerPop.classList.toggle('open');
       fabLayers.classList.toggle('active', open);
     });
@@ -1549,6 +1687,7 @@
     trackingWrap.classList.toggle('tk-fullmap', fullMap);
     document.documentElement.classList.toggle('tk-fullmap', fullMap);
     closeLayerPop();
+    closeNearbyPop();
     var fab = document.getElementById('tkFabFull');
     if (fab) fab.classList.toggle('active', fullMap);
     /* Real browser fullscreen where it is available (desktop); harmless if it is not */
@@ -1578,38 +1717,59 @@
   document.getElementById('tkFabInfo').addEventListener('click', function(e) {
     e.stopPropagation();
     closeLayerPop();
+    closeNearbyPop();
     if (!legendEl.classList.contains('tk-open') && detailReg) closeDetail();
     var open = legendEl.classList.toggle('tk-open');
     this.classList.toggle('active', open);
   });
 
-  var meMarker = null;
   document.getElementById('tkFabLocate').addEventListener('click', function() {
     var fab = this;
     fab.classList.add('active');
-    function done(lat, lon) {
+    getMyLocation(function(lat, lon) {
       fab.classList.remove('active');
       var ll = [lat, lon];
       if (meMarker) meMarker.setLatLng(ll);
       else meMarker = L.circleMarker(ll, { radius: 7, weight: 3, color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1 }).addTo(map);
       map.setView(ll, Math.max(map.getZoom(), 14), { animate: true });
       haptic();
-    }
-    function fail() { fab.classList.remove('active'); }
-    var Geo = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Geolocation;
-    if (Geo && typeof Geo.getCurrentPosition === 'function') {
-      Geo.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
-        .then(function(p) { done(p.coords.latitude, p.coords.longitude); })
-        .catch(fail);
-    } else if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(p) { done(p.coords.latitude, p.coords.longitude); }, fail, { timeout: 8000 });
-    } else {
-      fail();
-    }
+    }, function() { fab.classList.remove('active'); });
   });
 
-  map.on('click', function() {
+  if (fabNearby && nearbyPop) {
+    fabNearby.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closeLegend();
+      closeLayerPop();
+      nearbyPop.classList.toggle('open');
+    });
+    nearbyPop.addEventListener('click', function(e) { e.stopPropagation(); });
+    nearbyPop.addEventListener('click', function(e) {
+      var preset = e.target.closest('[data-nearby-km]');
+      if (preset) startNearby(preset.getAttribute('data-nearby-km'));
+    });
+    document.getElementById('tkNearbyApply').addEventListener('click', function() {
+      startNearby(document.getElementById('tkNearbyKm').value);
+    });
+    document.getElementById('tkNearbyKm').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        startNearby(this.value);
+      }
+    });
+    document.getElementById('tkNearbyClear').addEventListener('click', function() {
+      clearNearbyFilter();
+      haptic();
+    });
+  }
+
+  map.on('click', function(e) {
+    var t = e.originalEvent && e.originalEvent.target;
+    if (t && t.closest && (t.closest('.leaflet-popup') || t.closest('.modal') || t.closest('.tk-detail'))) {
+      return;
+    }
     closeLayerPop();
+    closeNearbyPop();
     closeLegend();
     if (isMobile() && detailReg) closeDetail();
   });
@@ -1652,6 +1812,7 @@
       sheet.style.removeProperty('transform');
       closeDetail();
       closeLayerPop();
+      closeNearbyPop();
     }
     syncFabOffset();
     setTimeout(resyncMap, 260);
