@@ -2537,7 +2537,10 @@
   </div>
 
   {% if rows %}
-  <form method="POST" id="batchForm" data-no-sticky="1">
+  <form method="POST" id="batchForm" data-no-sticky="1"
+        data-odom-required="{{ '1' if task_entry_odometer_required else '0' }}"
+        data-can-edit="{{ '1' if can_edit_saved_task_rows else '0' }}"
+        data-can-delete="{{ '1' if can_delete_saved_task_rows else '0' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="save_batch" value="1">
     <input type="hidden" name="task_date" value="{{ view_date.strftime('%d-%m-%Y') }}">
@@ -2739,6 +2742,17 @@
       </div>
     </div>
   </form>
+
+  <div id="taskEntrySaveOverlay" class="te-save-overlay d-none" aria-live="polite">
+    <div class="te-save-card text-center">
+      <div class="spinner-border text-primary mb-2" style="width:2.2rem;height:2.2rem;"></div>
+      <h5 class="mb-2">Save ho raha hai...</h5>
+      <div class="progress te-save-progress">
+        <div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>
+      </div>
+      <p class="text-muted small mb-0 mt-2">Task report server par upload ho rahi hai — thora intezar karein.</p>
+    </div>
+  </div>
   {% else %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>Date aur <strong>Project</strong> select karke <strong>Load Vehicles</strong> par click karein. District / Vehicle optional hain. Us ke baad list mein Close Reading aur Task's enter karke Save All karein.
@@ -2798,6 +2812,30 @@
     opacity: 1 !important;
     pointer-events: auto !important;
   }
+  .te-save-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40000;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .te-save-overlay.d-none { display: none !important; }
+  .te-save-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px 18px;
+    width: min(360px, 100%);
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.35);
+  }
+  .te-save-progress {
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .task-row.is-missing-row { outline: 2px solid #dc3545; outline-offset: -2px; }
 </style>
 <div id="emgPanel" class="card shadow-lg border-info d-none fleet-task-float-panel">
   <div class="card-header bg-info bg-opacity-10 d-flex justify-content-between align-items-center py-2">
@@ -3356,7 +3394,188 @@
     } catch (errInit) {}
 
     var _batchSubmitting = false;
-    document.getElementById('batchForm').addEventListener('submit', function(e) {
+    var batchFormEl = document.getElementById('batchForm');
+
+    // Rows the server would actually save: unlocked with a Close Reading filled.
+    function collectSaveCandidates() {
+      var rows = [];
+      batchTable.querySelectorAll('tr.task-row').forEach(function (row) {
+        var vid = row.getAttribute('data-vehicle-id');
+        var mode = document.getElementById('row_' + vid + '_edit_mode');
+        if (mode && mode.value === '0') return;
+        var closeInp = row.querySelector('.close-input');
+        if (!closeInp || !closeInp.value || closeInp.value.trim() === '') return;
+        rows.push(row);
+      });
+      return rows;
+    }
+
+    // Hard rule: entered Task's must equal the EMG count on saved rows.
+    function findFirstTaskDiffRow(candidates) {
+      for (var i = 0; i < candidates.length; i++) {
+        var row = candidates[i];
+        var taskInp = row.querySelector('input[name*="_tasks_count"]');
+        var emg = parseFloat(row.getAttribute('data-emg')) || 0;
+        var tasksRaw = taskInp ? taskInp.value.trim() : '';
+        var tasks = tasksRaw === '' || isNaN(parseInt(tasksRaw, 10)) ? 0 : parseInt(tasksRaw, 10);
+        if (tasks !== emg) {
+          return { row: row, input: taskInp, emg: emg, tasks: tasks, seq: row.getAttribute('data-seq') || '' };
+        }
+      }
+      return null;
+    }
+
+    // Hard rule (Settings ON): every saved row needs an odometer photo.
+    function findFirstPhotoMissingRow(candidates) {
+      for (var i = 0; i < candidates.length; i++) {
+        var row = candidates[i];
+        var urlInp = row.querySelector('.odom-url-input');
+        if (!urlInp || !urlInp.value) return row;
+      }
+      return null;
+    }
+
+    function highlightRowField(row, input) {
+      if (row) {
+        try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+        row.classList.add('is-missing-row');
+      }
+      if (input) {
+        input.classList.add('is-missing');
+        try { input.focus({ preventScroll: true }); } catch (e2) { try { input.focus(); } catch (e3) {} }
+        var clear = function () { input.classList.remove('is-missing'); if (row) row.classList.remove('is-missing-row'); };
+        input.addEventListener('input', clear, { once: true });
+      }
+    }
+
+    /* ── AJAX save: no full page reload ───────────────────────
+       Big fleet apps save in place and keep the user on the data: the POST
+       goes out with keepalive (survives app close) while a progress overlay
+       shows state, and rows flip to Saved without a round trip. The native
+       form POST stays as fallback for browsers without fetch. */
+    var _saveGuardArmed = false;
+    function onGuardPop() {
+      if (!_saveGuardArmed) return;
+      try { history.pushState({ fleetSaveGuard: true }, '', window.location.href); } catch (e) {}
+      if (window.taskEntryNotice) {
+        window.taskEntryNotice('Save chal raha hai', 'Save server par complete ho raha hai — barabar intezar karein. App band karne par bhi save complete ho jata hai.');
+      }
+    }
+    function armBackGuard() {
+      if (_saveGuardArmed) return;
+      _saveGuardArmed = true;
+      try { history.pushState({ fleetSaveGuard: true }, '', window.location.href); } catch (e) {}
+      window.addEventListener('popstate', onGuardPop);
+    }
+    function disarmBackGuard() {
+      if (!_saveGuardArmed) return;
+      _saveGuardArmed = false;
+      window.removeEventListener('popstate', onGuardPop);
+      try { history.back(); } catch (e) {} // drop the sentinel state
+    }
+
+    function showSaveOverlay() {
+      var el = document.getElementById('taskEntrySaveOverlay');
+      if (el) el.classList.remove('d-none');
+    }
+    function hideSaveOverlay() {
+      var el = document.getElementById('taskEntrySaveOverlay');
+      if (el) el.classList.add('d-none');
+    }
+
+    function markRowsSaved(candidates, savedRows) {
+      var canEdit = batchFormEl.getAttribute('data-can-edit') === '1';
+      var canDelete = batchFormEl.getAttribute('data-can-delete') === '1';
+      var dateInp = batchFormEl.querySelector('input[name="task_date"]');
+      var dateStr = dateInp ? dateInp.value : '';
+      candidates.forEach(function (row) {
+        var vid = row.getAttribute('data-vehicle-id');
+        row.classList.add('table-info', 'is-saved');
+        row.classList.remove('task-row-incomplete', 'task-row-ready', 'is-missing-row');
+        var editMode = document.getElementById('row_' + vid + '_edit_mode');
+        if (editMode) editMode.value = '0';
+        row.querySelectorAll('input, textarea, select, button.task-editable-field, .odom-photo-btn, .odom-clear-btn').forEach(function (el) {
+          if (el.type === 'hidden') return;
+          el.disabled = true;
+        });
+        var wrap = row.querySelector('.odom-ctrl-wrap');
+        if (wrap) { wrap.classList.add('odom-wrap-locked'); wrap.setAttribute('tabindex', '-1'); }
+        var chip = row.querySelector('.task-batch-mobile-card-status');
+        if (chip) { chip.textContent = 'Saved'; chip.classList.add('is-saved'); }
+        var num = row.querySelector('.task-batch-row-num');
+        if (num && !row.querySelector('.bi-check-circle-fill')) {
+          var check = document.createElement('i');
+          check.className = 'bi bi-check-circle-fill text-success';
+          check.title = 'Previously saved';
+          num.parentNode.appendChild(document.createTextNode(' '));
+          num.parentNode.appendChild(check);
+        }
+        var actions = row.querySelector('td:last-child');
+        if (!actions) return;
+        var taskId = savedRows[vid] !== undefined ? savedRows[vid] : savedRows[String(vid)];
+        if ((canEdit || canDelete) && taskId) {
+          var vno = row.getAttribute('data-vno') || '';
+          actions.classList.remove('task-batch-actions-status-only');
+          actions.innerHTML = '<div class="task-batch-row-actions">'
+            + (canEdit ? '<button type="button" class="btn btn-sm btn-outline-primary task-row-edit-btn" data-row="' + vid + '" title="Enable editing for this row"><i class="bi bi-pencil-square me-1"></i>Edit</button>' : '')
+            + (canDelete ? '<button type="button" class="btn btn-sm btn-outline-danger task-row-delete-btn" data-task-id="' + taskId + '" data-row="' + vid + '" data-vehicle-no="' + vno + '" data-task-date="' + dateStr + '" title="Galat entry delete karein"><i class="bi bi-trash me-1"></i>Delete</button>' : '')
+            + '</div>';
+        } else {
+          actions.innerHTML = '<span class="badge bg-secondary px-2 py-2" title="Edit/Delete ki ijazat nahi — role mein permissions add karein">Locked</span>';
+        }
+      });
+    }
+
+    function resetSaveUi() {
+      _batchSubmitting = false;
+      var btn = document.getElementById('saveBtn');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-save me-1"></i>Save All';
+      }
+    }
+
+    function startAjaxSave(candidates) {
+      var fd = new FormData(batchFormEl);
+      var bodyChars = 0;
+      fd.forEach(function (val) { if (typeof val === 'string') bodyChars += val.length; });
+      var opts = {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Fleet-Ajax': '1' },
+        credentials: 'same-origin'
+      };
+      if (bodyChars < 55000) opts.keepalive = true; // survives app close (64KB browser cap)
+      showSaveOverlay();
+      armBackGuard();
+      fetch(window.location.href, opts)
+        .then(function (r) {
+          var ct = r.headers.get('content-type') || '';
+          if (ct.indexOf('json') === -1) throw new Error('non-json response');
+          return r.json();
+        })
+        .then(function (d) {
+          disarmBackGuard();
+          resetSaveUi();
+          if (!d || !d.ok) {
+            hideSaveOverlay();
+            window.taskEntryNotice('Save nahi hua', (d && d.message) || 'Unknown error');
+            return;
+          }
+          markRowsSaved(candidates, d.saved_rows || {});
+          hideSaveOverlay();
+          updateTotals();
+          window.taskEntryNotice('Save ho gayi', d.message || (d.saved + ' vehicle(s) save ho gayi.'));
+        })
+        .catch(function () {
+          disarmBackGuard();
+          hideSaveOverlay();
+          resetSaveUi();
+          window.taskEntryNotice('Save nahi hua', 'Network masla — dubara Save All dabayen. Masla barhta rahe to pehle Reload karein.');
+        });
+    }
+
+    batchFormEl.addEventListener('submit', function(e) {
       if (typeof window.taskEntryStripOdomDataUrls === 'function') {
         window.taskEntryStripOdomDataUrls();
       }
@@ -3414,11 +3633,46 @@
         }
         return false;
       }
+      // Hard pre-save rules — run before anything leaves the page.
+      var candidates = collectSaveCandidates();
+      var diffInfo = findFirstTaskDiffRow(candidates);
+      if (diffInfo) {
+        e.preventDefault();
+        highlightRowField(diffInfo.row, diffInfo.input);
+        window.taskEntryNotice(
+          'Task Diff hai',
+          'Row ' + diffInfo.seq + ': EMG (' + diffInfo.emg + ') aur Task\'s (' + diffInfo.tasks + ') barabar honi chahiye. Task\'s field mein ' + diffInfo.emg + ' karein — tab save hoga.'
+        );
+        return false;
+      }
+      if (batchFormEl.getAttribute('data-odom-required') === '1') {
+        var photoRow = findFirstPhotoMissingRow(candidates);
+        if (photoRow) {
+          e.preventDefault();
+          var photoBtn = photoRow.querySelector('.odom-photo-btn');
+          try { photoRow.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (err3) {}
+          if (photoBtn) { try { photoBtn.focus({ preventScroll: true }); } catch (err4) {} }
+          window.taskEntryNotice(
+            'Odoo meter photo zaroori hai',
+            'Settings ke mutabiq har saved row par photo zaroori hai. Row ' + (photoRow.getAttribute('data-seq') || '') + ' ki photo lagayen — baghair photo save nahi hoga.'
+          );
+          return false;
+        }
+      }
       _batchSubmitting = true;
       var btn = document.getElementById('saveBtn');
       if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+      }
+      e.preventDefault();
+      try {
+        startAjaxSave(candidates);
+      } catch (ajaxErr) {
+        // Very old WebView without fetch — fall back to the native POST
+        // (form.submit() bypasses this listener, so the flash+redirect path runs).
+        resetSaveUi();
+        batchFormEl.submit();
       }
     });
 

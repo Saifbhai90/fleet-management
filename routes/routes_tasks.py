@@ -28,7 +28,8 @@ from werkzeug.utils import secure_filename
 from auth_utils import user_can_access, get_user_context
 from utils import (
     pk_now, pk_date, parse_date, format_date_ddmmyyyy,
-    emg_amb_reg_matches_vehicle, strip_ufone_reg_tag,
+    emg_amb_reg_matches_vehicle, emg_amb_reg_matches_vehicle_no,
+    strip_ufone_reg_tag,
     normalize_vehicle_reg_key,
 )
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
@@ -1047,6 +1048,7 @@ def task_report_new():
         return resp
 
     if request.method == 'POST' and request.form.get('save_batch'):
+        _ajax_save = request.headers.get('X-Fleet-Ajax') == '1'
         task_date = parse_date(request.form.get('task_date')) or view_date
         district_id = request.form.get('district_id', type=int) or 0
         project_id = request.form.get('project_id', type=int) or 0
@@ -1056,21 +1058,23 @@ def task_report_new():
         if project_id and scoped_project_ids is not None and project_id not in scoped_project_ids:
             project_id = 0
         district_id, project_id, vehicle_id, task_entry_filter = _apply_task_entry_locks(district_id, project_id, vehicle_id)
-        if not project_id:
-            flash('Project select karna zaroori hai — baghair project ke save nahi ho sakta.', 'danger')
+
+        def _save_fail(msg, category='danger'):
+            """AJAX save returns JSON in place; native submit keeps flash+render."""
+            if _ajax_save:
+                return jsonify({'ok': False, 'message': msg})
+            flash(msg, category)
             view_date = task_date
             vehicles = _task_report_new_vehicle_query(district_id, project_id, vehicle_id).all()
             rows = _build_vehicle_rows(vehicles, task_date, request.form)
             return _task_report_new_render(rows, view_date)
+
+        if not project_id:
+            return _save_fail('Project select karna zaroori hai — baghair project ke save nahi ho sakta.')
         _save_project = db.session.get(Project, project_id)
         ok_date, date_msg = _task_entry_date_save_ok(_save_project, task_date)
         if not ok_date:
-            flash(date_msg, 'danger')
-            view_date = task_date
-            q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
-            vehicles = q.all()
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+            return _save_fail(date_msg)
         q = _task_report_new_vehicle_query(district_id, project_id, vehicle_id)
         vehicles = q.all()
 
@@ -1169,6 +1173,12 @@ def task_report_new():
         if not to_save:
             _all_already_saved = all(int(v.id) in existing_by_vid for v in vehicles)
             if _all_already_saved:
+                if _ajax_save:
+                    return jsonify({
+                        'ok': True, 'saved': 0, 'skipped': skipped_empty,
+                        'already_saved': True,
+                        'message': 'Task entries pehle se saved hain — duplicate save nahi hua.',
+                    })
                 flash('Task entries pehle se saved hain — duplicate save nahi hua.', 'info')
                 _dup_kwargs = {
                     'date': task_date.strftime('%d-%m-%Y'),
@@ -1180,16 +1190,11 @@ def task_report_new():
                     _dup_kwargs['vehicle_id'] = vehicle_id
                 return redirect(url_for('task_report_new', **_dup_kwargs))
             if skipped_empty:
-                flash('Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen.', 'danger')
-            else:
-                flash(
-                    'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
-                    'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.',
-                    'danger',
-                )
-            view_date = task_date
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+                return _save_fail('Kam az kam ek vehicle ki Close Reading enter karein, phir Save All dabaen.')
+            return _save_fail(
+                'Koi record save nahi hua: tamam rows locked thin (Edit ke baghair) ya koi row update ke liye tayyar nahi. '
+                'Zarurat ho to pehle row par Edit karein, phir Close Reading bharen aur dubara Save All dabaen.'
+            )
         validation_msgs = []
         try:
             max_km_cap = int(max_km_setting) if max_km_setting is not None else 0
@@ -1215,11 +1220,40 @@ def task_report_new():
             )
             if odom_required_setting and not photo_url:
                 validation_msgs.append('%s: Odoo meter photo zaroori hai (Settings).' % (v.vehicle_no,))
+
+        # Hard rule (same as the client pre-check): entered Task's must equal the
+        # EMG count for every saved row. One batched EMG lookup for the batch.
+        _to_save_nos = []
+        _seen_nos = set()
+        for v, _e, _c, _t, _s in to_save:
+            _no = (v.vehicle_no or '').strip()
+            if _no and _no not in _seen_nos:
+                _seen_nos.add(_no)
+                _to_save_nos.append(_no)
+        _emg_filters = [emg_amb_reg_matches_vehicle(no) for no in _to_save_nos]
+        _emg_regs = []
+        if _emg_filters:
+            _emg_rows = EmergencyTaskRecord.query.filter(
+                EmergencyTaskRecord.task_date == task_date,
+                or_(
+                    EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                    EmergencyTaskRecord.category.is_(None),
+                    EmergencyTaskRecord.category == '',
+                ),
+                or_(*_emg_filters),
+            ).with_entities(EmergencyTaskRecord.amb_reg_no).all()
+            _emg_regs = [(r[0] or '').strip() for r in _emg_rows if r and (r[0] or '').strip()]
+        for v, _e, _c, tasks_count, _s in to_save:
+            _emg_n = sum(1 for reg in _emg_regs if emg_amb_reg_matches_vehicle_no(reg, v.vehicle_no))
+            _entered = tasks_count if tasks_count is not None else 0
+            if _entered != _emg_n:
+                validation_msgs.append(
+                    "%s: Task's (%s) aur EMG (%s) barabar honi chahiye — Task's %s karein."
+                    % (v.vehicle_no, _entered, _emg_n, _emg_n)
+                )
         if validation_msgs:
-            flash('Save nahi ho saka: ' + ' '.join(validation_msgs), 'danger')
-            view_date = task_date
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+            return _save_fail('Save nahi ho saka: ' + ' '.join(validation_msgs))
+        _saved_refs = {}
         for v, existing, close_reading, tasks_count, start_reading in to_save:
             photo_url = _stored_odometer_photo_url(
                 request.form.get('vehicle_%s_odometer_photo_url' % v.id)
@@ -1229,13 +1263,16 @@ def task_report_new():
                 existing.tasks_count = tasks_count
                 existing.start_reading = start_reading
                 existing.odometer_photo_path = photo_url or None
+                _saved_refs[v.id] = existing
             else:
-                db.session.add(VehicleDailyTask(
+                _new_row = VehicleDailyTask(
                     vehicle_id=v.id, project_id=project_id or None, district_id=district_id or None,
                     task_date=task_date, close_reading=close_reading, tasks_count=tasks_count,
                     start_reading=start_reading,
                     odometer_photo_path=photo_url or None,
-                ))
+                )
+                db.session.add(_new_row)
+                _saved_refs[v.id] = _new_row
         try:
             db.session.commit()
             for v, existing, close_reading, tasks_count, start_reading in to_save:
@@ -1256,6 +1293,14 @@ def task_report_new():
             saved_msg = '%s vehicle(s) save ho gayi.' % len(to_save)
             if skipped_empty:
                 saved_msg += ' %s khali Close wale rows skip kiye gaye.' % skipped_empty
+            if _ajax_save:
+                return jsonify({
+                    'ok': True,
+                    'message': saved_msg,
+                    'saved': len(to_save),
+                    'skipped': skipped_empty,
+                    'saved_rows': {str(vid): (row.id if row is not None else None) for vid, row in _saved_refs.items()},
+                })
             flash(saved_msg, 'success')
             _redirect_kwargs = {
                 'date': task_date.strftime('%d-%m-%Y'),
@@ -1268,16 +1313,10 @@ def task_report_new():
             return redirect(url_for('task_report_new', **_redirect_kwargs))
         except IntegrityError:
             db.session.rollback()
-            flash('Duplicate save rok diya gaya — list Reload karke dubara try karein.', 'warning')
-            view_date = task_date
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+            return _save_fail('Duplicate save rok diya gaya — list Reload karke dubara try karein.', 'warning')
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'danger')
-            view_date = task_date
-            rows = _build_vehicle_rows(vehicles, task_date, request.form)
-            return _task_report_new_render(rows, view_date)
+            return _save_fail(f'Error: {str(e)}')
 
     if request.method == 'POST':
         return redirect(url_for(
