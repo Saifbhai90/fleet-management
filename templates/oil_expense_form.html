@@ -137,8 +137,8 @@
             <small class="text-muted" id="oilCurrentReadingMatchNote">Enter reading to check match with task start/close.</small>
           </div>
           <div class="col-md-3 field-group">
-            <label class="form-label">KM (Current − Previous)</label>
-            <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="—">
+            <label class="form-label">KM (Current âˆ’ Previous)</label>
+            <input type="text" id="kmDisplay" class="form-control bg-light" readonly placeholder="â€”">
           </div>
           <div class="col-md-3 field-group">
             <label class="form-label fw-bold">Total Bill Amount (User Entry)</label>
@@ -163,7 +163,7 @@
     <div class="form-section">
       <div class="form-section-header">Product Lines</div>
       <div class="form-section-body">
-        <p class="small text-muted mb-2">Search product → Purchase Qty → Used Qty → Price/Amount. Qty+Price se Amount auto calc hota hai, aur Amount enter karne par Price = Amount/Qty auto hota hai. Balance = Purchase − Used (agar used zyada ho to <span class="text-danger">red</span> + alert). Press <kbd>Enter</kbd> to add line to list below.</p>
+        <p class="small text-muted mb-2">Search product â†’ Purchase Qty â†’ Used Qty â†’ Price/Amount. Qty+Price se Amount auto calc hota hai, aur Amount enter karne par Price = Amount/Qty auto hota hai. Balance = Purchase âˆ’ Used (agar used zyada ho to <span class="text-danger">red</span> + alert). Press <kbd>Enter</kbd> to add line to list below.</p>
         <div class="row g-2 align-items-end mb-3 border rounded p-2 bg-light" id="entryRow">
           <div class="col-md-3">
             <label class="form-label mb-0">Product</label>
@@ -265,7 +265,7 @@
               <td class="text-end">Total</td>
               <td><span id="totalPurchaseQty">0</span></td>
               <td><span id="totalUsedQty">0</span></td>
-              <td>—</td>
+              <td>â€”</td>
               <td><span id="totalBillAmount">0.00</span></td>
               <td><span id="totalBalanceQty">0</span></td>
               <td></td>
@@ -294,7 +294,7 @@
           <div class="col-md-8">
             <label class="form-label">Photos / Videos</label>
             <input type="file" name="attachments" id="oilAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-            <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ oil_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — fail hone par <strong>file names + Retry</strong> dikhega, aapko alag se missing files dhundhne ki zaroorat nahi.</small>
+            <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ oil_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega â€” fail hone par <strong>file names + Retry</strong> dikhega, aapko alag se missing files dhundhne ki zaroorat nahi.</small>
             <div class="small text-success mt-1" id="oilAttachmentPasteHint"></div>
           </div>
         </div>
@@ -443,7 +443,7 @@ document.addEventListener('DOMContentLoaded', function() {
     entryBalanceQty.classList.remove('balance-qty-input--bad', 'text-danger', 'text-muted');
     if (u > p + 0.0001) {
       entryBalanceQty.classList.add('balance-qty-input--bad');
-      _oilAlertBalance('Used Qty purchase qty se zyada hai (negative balance). Save block nahi — values check karein.');
+      _oilAlertBalance('Used Qty purchase qty se zyada hai (negative balance). Save block nahi â€” values check karein.');
     }
   }
   function _styleRowBalance(tr) {
@@ -460,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function() {
       balInput.classList.add('balance-qty-input--bad');
       if (!tr.dataset.balanceWarned) {
         tr.dataset.balanceWarned = '1';
-        _oilAlertBalance('Is line par used qty purchase se zyada hai. Save block nahi — record check karein.');
+        _oilAlertBalance('Is line par used qty purchase se zyada hai. Save block nahi â€” record check karein.');
       }
     } else {
       tr.dataset.balanceWarned = '';
@@ -1000,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return false;
     }
     if (!_tsVal(partySelect)) {
-      alert('Party Name select karna لازمی hai.');
+      alert('Party Name select karna Ù„Ø§Ø²Ù…ÛŒ hai.');
       if (partySelect && partySelect.tomselect) {
         partySelect.tomselect.focus();
       } else if (partySelect) {
@@ -1134,7 +1134,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _smoothLoadingSelect(projectSelect);
-    fetch('/get_projects_by_district/' + did)
+    fetch('/api/cascade/projects?parent=' + did)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_cKey] = arr;
@@ -1171,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _smoothLoadingSelect(vehicleSelect);
-    var url = '/get_vehicles_by_project_district?project_id=' + pid;
+    var url = '/api/cascade/vehicles?parent=' + pid;
     if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
     fetch(url)
       .then(function(r) { return r.json(); })
@@ -1333,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', function() {
       _tsSet(districtSelect, did);
     }
 
-    // Always run full fetch chain — never rely on server-rendered project/vehicle options.
+    // Always run full fetch chain â€” never rely on server-rendered project/vehicle options.
     if (did && did !== 0 && projectSelect) {
       _loadProjectsForDistrict(did, pid || null, function() {
         var activePid = pid || _tsVal(projectSelect);
@@ -1481,7 +1481,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function oilUploadInBatches(fileList, totalBytes) {
     if (!window.ExpenseBatchUpload) {
-      return Promise.reject(new Error('Batch upload module missing — page refresh karein.'));
+      return Promise.reject(new Error('Batch upload module missing â€” page refresh karein.'));
     }
     return ExpenseBatchUpload.runSplitUpload({
       overlayId: 'oilSubmitOverlay',
@@ -1538,11 +1538,11 @@ document.addEventListener('DOMContentLoaded', function() {
             ExpenseBatchUpload.showProgress(
               { overlayId: 'oilSubmitOverlay', panelClass: 'oil-submit-panel' },
               'Upload fail',
-              (err && err.message) ? err.message : 'Upload fail — dubara try karein.',
+              (err && err.message) ? err.message : 'Upload fail â€” dubara try karein.',
               0
             );
           } else {
-            alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+            alert((err && err.message) ? err.message : 'Upload fail â€” dubara try karein.');
           }
         });
         return;
@@ -1568,7 +1568,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }).catch(function(err) {
         oilHideSubmitOverlay();
         oilUnlockSubmitButtons();
-        alert((err && err.message) ? err.message : 'Save fail — dubara try karein.');
+        alert((err && err.message) ? err.message : 'Save fail â€” dubara try karein.');
       });
     });
   }

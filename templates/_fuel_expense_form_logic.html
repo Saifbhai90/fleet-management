@@ -1,4 +1,4 @@
-<script src="{{ url_for('static', filename='js/fuel_cascade.js') }}?v=1001"></script>
+<script src="{{ url_for('static', filename='js/fuel_cascade.js') }}?v={{ fleet_static_hash('js/fuel_cascade.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
@@ -1929,7 +1929,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var _bootPid = projectSelect ? (projectSelect.value || '') : '';
     var _bootDid = districtSelect ? (districtSelect.value || '') : '';
     if (_bootPid && _bootPid !== '0') {
-      var _bootUrl = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(_bootPid);
+      var _bootUrl = '/api/cascade/vehicles?parent=' + encodeURIComponent(_bootPid);
       if (_bootDid && _bootDid !== '0') _bootUrl += '&district_id=' + encodeURIComponent(_bootDid);
       fetch(_bootUrl)
         .then(function(r) { return r.json(); })

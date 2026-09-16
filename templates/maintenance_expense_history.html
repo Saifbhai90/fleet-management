@@ -39,7 +39,14 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">District</label>
-            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+            <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- All Projects --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#vehicleSelect">
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if district_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -47,7 +54,13 @@
           </div>
           <div class="col-md-2">
             <label class="form-label small">Project</label>
-            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+            <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
+              data-cascade-child="#vehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0">
               {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if project_id|int == val|int %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -249,41 +262,7 @@ function goPage(n) {
   window.location.search = u.toString();
 }
 document.addEventListener('DOMContentLoaded', function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  var vehicleSelect = document.getElementById('vehicleSelect');
-
-  function refreshSelect(select, placeholder, rows, textField) {
-    if (!select) return;
-    fleetFillSelectRows(select, rows, 'id', textField, { placeholder: placeholder, placeholderValue: '0' });
-  }
-
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      refreshSelect(projectSelect, '-- All Projects --', [], 'name');
-      refreshSelect(vehicleSelect, '-- All Vehicles --', [], 'vehicle_no');
-      if (!did || did === '0') return;
-      fetch('/get_projects_by_district/' + did)
-        .then(function(r) { return r.json(); })
-        .then(function(rows) { refreshSelect(projectSelect, '-- All Projects --', rows, 'name'); })
-        .catch(function() {});
-    });
-  }
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = this.value;
-      var did = districtSelect ? districtSelect.value : '';
-      refreshSelect(vehicleSelect, '-- All Vehicles --', [], 'vehicle_no');
-      if (!pid || pid === '0') return;
-      var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
-      if (did && did !== '0') url += '&district_id=' + encodeURIComponent(did);
-      fetch(url)
-        .then(function(r) { return r.json(); })
-        .then(function(rows) { refreshSelect(vehicleSelect, '-- All Vehicles --', rows, 'vehicle_no'); })
-        .catch(function() {});
-    });
-  }
+  /* District→Project→Vehicle: declarative data-cascade-* on #districtSelect / #projectSelect */
 
   var modalEl = document.getElementById('maintenanceInvoiceDetailModal');
   var modal = (window.bootstrap && modalEl) ? new window.bootstrap.Modal(modalEl, { backdrop: false, focus: false, keyboard: true }) : null;

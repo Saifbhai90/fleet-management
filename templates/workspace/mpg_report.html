@@ -191,10 +191,10 @@
     .mpg-vehicle-cell .vno { font-weight: 700; font-size: .85rem; color: #1e293b; }
     .mpg-vehicle-cell .vno-sub { font-size: .68rem; color: #64748b; margin-top: 1px; }
 
-    /* ── Desktop web table ─────────────────────────────────────────────────
+    /* â”€â”€ Desktop web table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
        22 columns means the grid always scrolls sideways, so the header row and
        the two identity columns stay pinned and the two editable columns are
-       tinted — otherwise a reading gets typed into the wrong vehicle's row. */
+       tinted â€” otherwise a reading gets typed into the wrong vehicle's row. */
     .mpg-report-page:not(.is-mobile-layout) .mpg-toolbar-more-btn { display: none; }
     @media (min-width: 768px) {
       .mpg-report-page:not(.is-mobile-layout) .mpg-top-bar {
@@ -296,7 +296,7 @@
     }
     .mpg-report-page.is-mobile-layout .mpg-table tfoot { display: none !important; }
 
-    /* Mobile-only helpers — hidden on desktop web table */
+    /* Mobile-only helpers â€” hidden on desktop web table */
     .mpg-m-filter-head,
     .mpg-m-save-bar,
     .mpg-m-scroll-spacer,
@@ -305,7 +305,7 @@
     .mpg-m-input-wrap .mpg-m-input-icon { display: none; }
     .mpg-m-edit-label { display: none; }
 
-    /* ── Mobile layout (real phone + ?mobile_preview=1 on desktop) ── */
+    /* â”€â”€ Mobile layout (real phone + ?mobile_preview=1 on desktop) â”€â”€ */
     body.mpg-preview-body {
       background: linear-gradient(160deg, #dbeafe 0%, #e2e8f0 45%, #f1f5f9 100%) !important;
     }
@@ -349,7 +349,7 @@
       overflow: hidden;
     }
 
-    /* Hero — mobile only */
+    /* Hero â€” mobile only */
     .mpg-report-page.is-mobile-layout .mpg-hero {
       border: 0;
       border-radius: 18px;
@@ -383,7 +383,7 @@
     }
     .mpg-report-page.is-mobile-layout .mpg-hero-emp strong { color: #0f172a !important; }
 
-    /* Action bar — sticky compact on mobile (Report Center) */
+    /* Action bar â€” sticky compact on mobile (Report Center) */
     .mpg-report-page.is-mobile-layout .mpg-top-bar {
       display: flex !important;
       flex-wrap: nowrap;
@@ -539,7 +539,7 @@
       margin-top: 2px !important;
     }
 
-    /* Stat cards — always visible on mobile */
+    /* Stat cards â€” always visible on mobile */
     .mpg-report-page.is-mobile-layout .mpg-hero-stats {
       display: grid !important;
       grid-template-columns: repeat(3, 1fr);
@@ -852,7 +852,7 @@
       box-shadow: 0 0 0 3px rgba(59,130,246,.16) !important;
       outline: none;
     }
-    /* Locked (auto-selected) district / project / vehicle — muted, not editable look */
+    /* Locked (auto-selected) district / project / vehicle â€” muted, not editable look */
     .mpg-report-page .mpg-m-field--locked .form-label {
       color: #94a3b8 !important;
     }
@@ -1021,7 +1021,7 @@
       max-height: none !important;
     }
 
-    /* Vehicle cards — light polish on existing layout */
+    /* Vehicle cards â€” light polish on existing layout */
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table {
       min-width: 0 !important;
       width: 100% !important;
@@ -1043,7 +1043,7 @@
       -webkit-tap-highlight-color: transparent;
       scroll-margin-bottom: max(120px, calc(90px + env(safe-area-inset-bottom, 0px)));
     }
-    /* Touch keeps :hover / :focus-within stuck — Bootstrap table-hover would tint the whole card */
+    /* Touch keeps :hover / :focus-within stuck â€” Bootstrap table-hover would tint the whole card */
     .mpg-report-page.is-mobile-layout .mpg-table.table-hover > tbody > tr.mpg-data-row:hover,
     .mpg-report-page.is-mobile-layout .mpg-table.table-hover > tbody > tr.mpg-data-row:focus-within,
     .mpg-report-page.is-mobile-layout .mpg-table.table-hover > tbody > tr.mpg-data-row:active {
@@ -1151,7 +1151,7 @@
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-high { background: #16a34a; }
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table .mpg-val-mobile.mpg-tier-neutral { background: #64748b; }
 
-    /* Editable inputs — calmer focus, less aggressive pulse */
+    /* Editable inputs â€” calmer focus, less aggressive pulse */
     .mpg-report-page.is-mobile-layout #workspaceMpgReportTable.mpg-mobile-table tbody td.mpg-m-editable {
       grid-column: 1 / -1;
       margin: 0;
@@ -1298,7 +1298,7 @@
     }
     .mpg-last-saved.is-visible { display: inline-flex; align-items: center; gap: 6px; }
     .mpg-last-saved i { color: #16a34a; }
-    /* Mobile: only beside Save Inputs (bottom bar) — hide header duplicate */
+    /* Mobile: only beside Save Inputs (bottom bar) â€” hide header duplicate */
     .mpg-report-page.is-mobile-layout #mpgLastSaved {
       display: none !important;
     }
@@ -1359,13 +1359,13 @@
     /* Desktop: hide mobile-only MPG pill */
     .mpg-val-mobile { display: none; }
 
-    /* Report Centre title — mobile chrome only (desktop keeps text back) */
+    /* Report Centre title â€” mobile chrome only (desktop keeps text back) */
     .mpg-report-title-inline { display: none; }
     .mpg-report-page:not(.is-mobile-layout) .mpg-report-title-inline { display: none !important; }
     .mpg-report-page:not(.is-mobile-layout) .mpg-back-label { display: inline; }
     .mpg-report-page:not(.is-mobile-layout) .mpg-report-back-btn .bi { margin-right: .25rem; }
 
-    /* Report Centre → MPG: hide hamburger + full-width chrome (Fuel Expense parity) */
+    /* Report Centre â†’ MPG: hide hamburger + full-width chrome (Fuel Expense parity) */
     html.capacitor-native body.mpg-hide-mobile-menu .mobile-menu-btn,
     body.mpg-hide-mobile-menu .mobile-menu-btn,
     body.mpg-hide-mobile-menu #mobileMenuBtn {
@@ -1397,7 +1397,7 @@
         background: #eef2f7 !important;
       }
 
-      /* Fixed top bar — ← | MPG Report | ⋯ */
+      /* Fixed top bar â€” â† | MPG Report | â‹¯ */
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-top-bar {
         display: flex !important;
         flex-wrap: nowrap !important;
@@ -1477,7 +1477,7 @@
         right: 8px !important;
       }
 
-      /* Stats hero — full width, no card shell */
+      /* Stats hero â€” full width, no card shell */
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero,
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-hero--compact {
         margin: 0 0 10px !important;
@@ -1493,7 +1493,7 @@
         display: none !important;
       }
 
-      /* Active Filter — full width */
+      /* Active Filter â€” full width */
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card,
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-filters-card.card {
         position: relative !important;
@@ -1556,7 +1556,7 @@
         width: 100% !important;
       }
 
-      /* Data list — full width grey band + edge cards */
+      /* Data list â€” full width grey band + edge cards */
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card,
       body.mpg-hide-mobile-menu .mpg-report-page.from-report-center .mpg-data-card.card {
         margin: 0 !important;
@@ -1703,7 +1703,7 @@
           <span class="mpg-filter-summary-action" id="mpgFilterSummaryAction">Change</span>
         </span>
         <span class="mpg-filter-chips">
-          <span class="mpg-filter-chip is-date">{{ from_date.strftime('%d-%m-%Y') if from_date else '—' }} → {{ to_date.strftime('%d-%m-%Y') if to_date else '—' }}</span>
+          <span class="mpg-filter-chip is-date">{{ from_date.strftime('%d-%m-%Y') if from_date else 'â€”' }} â†’ {{ to_date.strftime('%d-%m-%Y') if to_date else 'â€”' }}</span>
           {% if sel_district %}<span class="mpg-filter-chip">{{ sel_district }}</span>{% endif %}
           {% if sel_project %}<span class="mpg-filter-chip">{{ sel_project }}</span>{% endif %}
           <span class="mpg-filter-chip{% if sel_vehicle %} is-vehicle{% endif %}">{{ sel_vehicle or (vehicle_count ~ ' vehicle(s)' if vehicle_count else 'All vehicles') }}</span>
@@ -1748,7 +1748,7 @@
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-geo-alt me-1"></i>District</label>
           {% if disable_district %}
           <input type="hidden" name="district_id" value="{{ district_id }}">
-          <div class="mpg-locked-chip" title="Aap ko sirf yeh district assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_district or '—' }}</span></div>
+          <div class="mpg-locked-chip" title="Aap ko sirf yeh district assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_district or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
             <i class="bi bi-geo-alt mpg-m-input-icon"></i>
@@ -1765,7 +1765,7 @@
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-folder2 me-1"></i>Project</label>
           {% if disable_project %}
           <input type="hidden" name="project_id" value="{{ project_id }}">
-          <div class="mpg-locked-chip" title="Aap ko sirf yeh project assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_project or '—' }}</span></div>
+          <div class="mpg-locked-chip" title="Aap ko sirf yeh project assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_project or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
             <i class="bi bi-folder2-open mpg-m-input-icon"></i>
@@ -1782,7 +1782,7 @@
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-truck me-1"></i>Vehicle No.</label>
           {% if disable_vehicle %}
           <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
-          <div class="mpg-locked-chip" title="Aap ko sirf yeh vehicle assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_vehicle or '—' }}</span></div>
+          <div class="mpg-locked-chip" title="Aap ko sirf yeh vehicle assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_vehicle or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
             <i class="bi bi-truck mpg-m-input-icon"></i>
@@ -2042,7 +2042,7 @@
 </div>
 
 <div class="mpg-preview-banner" id="mpgPreviewBanner" hidden>
-  <i class="bi bi-phone me-1"></i> Mobile preview mode — remove <code>?mobile_preview=1</code> for normal desktop view
+  <i class="bi bi-phone me-1"></i> Mobile preview mode â€” remove <code>?mobile_preview=1</code> for normal desktop view
 </div>
 
 <script>
@@ -2093,7 +2093,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   syncMpgLayoutAndSize();
   window.addEventListener('resize', syncMpgLayoutAndSize);
-  /* Capacitor may add class slightly after first paint — re-sync once. */
+  /* Capacitor may add class slightly after first paint â€” re-sync once. */
   setTimeout(syncMpgLayoutAndSize, 50);
   setTimeout(syncMpgLayoutAndSize, 300);
 
@@ -2213,7 +2213,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
 
     function rowSearchHaystack(row){
-      /* textContent includes display:none cells (vehicle no) — innerText does not. */
+      /* textContent includes display:none cells (vehicle no) â€” innerText does not. */
       var parts = [
         row.getAttribute('data-vehicle') || '',
         row.dataset.targetMpg || '',
@@ -2505,7 +2505,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   })();
 
-  /* Filter collapse (mobile summary) — Fuel Expense parity */
+  /* Filter collapse (mobile summary) â€” Fuel Expense parity */
   (function(){
     var filterCard = document.getElementById('mpgFiltersCard');
     var filterToggle = document.getElementById('mpgFilterToggle');
@@ -2569,7 +2569,7 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
 
-      fetch('/get_projects_by_district/' + encodeURIComponent(did))
+      fetch('/api/cascade/projects?parent=' + encodeURIComponent(did))
         .then(function(resp){ return resp.json(); })
         .then(function(projects){
           const previousProjectValue = projectSelect.value || '0';
@@ -2593,7 +2593,7 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
 
-      let url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
+      let url = '/api/cascade/vehicles?parent=' + encodeURIComponent(pid);
       if(did !== '0'){
         url += '&district_id=' + encodeURIComponent(did);
       }

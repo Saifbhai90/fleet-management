@@ -22,7 +22,7 @@
         </div>
         <div class="col-md-4">
           <label class="form-label">District Name</label>
-          {{ form.district_id(class="form-select search-select", id="districtSelect") }}
+          {{ form.district_id(class="form-select search-select", id="districtSelect", data_cascade_child="#projectSelect", data_cascade_url="/api/cascade/projects?parent={value}", data_cascade_value_key="id", data_cascade_text_key="name", data_cascade_placeholder="-- Select Project --", data_cascade_placeholder_value="0") }}
         </div>
         <div class="col-md-4">
           <label class="form-label">Project</label>
@@ -70,21 +70,7 @@
 </div>
 <script>
 (function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-      fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- Select Project --', placeholderValue: '0' });
-          });
-      }
-    });
-  }
+  /* District→Project: declarative data-cascade-* on #districtSelect */
 })();
 </script>
 {% endblock %}

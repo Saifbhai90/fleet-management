@@ -1,8 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    Fleet Manager — Mobile JS (extracted from base.html)
-   Cache note: base.html pins this file with ?v=NNN and /static/?v= responses
-   are cached immutable for a year — BUMP that v= on every edit of this file,
-   otherwise phones keep running the old JS until then.
+   Cache note: base.html loads this via fleet_static_hash(...) so content
+   changes bust the cache automatically — no manual ?v= bump needed.
    ═══════════════════════════════════════════════════════════════ */
 
 (function() {

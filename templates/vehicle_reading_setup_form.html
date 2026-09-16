@@ -125,7 +125,7 @@
 
     <div class="vrs-section-h border-top"><i class="bi bi-wrench-adjustable-circle me-1 text-primary"></i>Job category baselines <span class="fw-normal text-muted small">(optional)</span></div>
     <div class="vrs-section-b">
-      <p class="small text-muted mb-2 mb-md-3">Neeche category chunen, last done date / reading likhen, <strong>Add to list</strong> dabayen — lines neeche table mein jayengi. <strong>Table se Edit</strong> (pencil) dabakar upar se bhi line badal sakte hain. Sab set ho to upar <strong>Save setup</strong> se ek dafa save karen.</p>
+      <p class="small text-muted mb-2 mb-md-3">Neeche category chunen, last done date / reading likhen, <strong>Add to list</strong> dabayen â€” lines neeche table mein jayengi. <strong>Table se Edit</strong> (pencil) dabakar upar se bhi line badal sakte hain. Sab set ho to upar <strong>Save setup</strong> se ek dafa save karen.</p>
 
       <div class="vrs-entry-box" id="vrsBaselineEntryBox">
         <div class="vrs-entry-grid">
@@ -183,7 +183,7 @@
           </thead>
           <tbody id="baselineLinesBody">
             <tr id="baselineEmptyRow" class="text-muted">
-              <td colspan="6" class="text-center py-4">Koi line add nahi — zaroorat ho to upar se add karen.</td>
+              <td colspan="6" class="text-center py-4">Koi line add nahi â€” zaroorat ho to upar se add karen.</td>
             </tr>
           </tbody>
         </table>
@@ -200,7 +200,7 @@
   </form>
 
   <p class="vrs-foot mb-0">
-    Fuel / Oil forms mein previous reading pehle last entry se aati hai; agar koi entry na ho to yahan wala value use hota hai. Due / next service interval job category (Add Maintenance) ki settings se aata hai — detail report <a href="{{ url_for('maintenance_baseline_alert_report') }}">Maintenance Baseline Alert</a> mein.
+    Fuel / Oil forms mein previous reading pehle last entry se aati hai; agar koi entry na ho to yahan wala value use hota hai. Due / next service interval job category (Add Maintenance) ki settings se aata hai â€” detail report <a href="{{ url_for('maintenance_baseline_alert_report') }}">Maintenance Baseline Alert</a> mein.
   </p>
 </div>
 
@@ -319,7 +319,7 @@
       var did = district.tomselect ? district.tomselect.getValue() : district.value;
       fleetFillSelectRows(vehicle, [], 'id', 'vehicle_no', { placeholder: '-- Select --', placeholderValue: '' });
       if (did) {
-        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
+        fetch('/api/cascade/projects?parent=' + did).then(function(r) { return r.json(); }).then(function(arr) {
           fleetFillSelectRows(project, arr, 'id', 'name', { placeholder: '-- Select --', placeholderValue: '' });
         });
       } else {
@@ -334,7 +334,7 @@
       var pid = project.tomselect ? project.tomselect.getValue() : project.value;
       var did = district ? (district.tomselect ? district.tomselect.getValue() : district.value) : '';
       if (pid) {
-        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+        var url = '/api/cascade/vehicles?parent=' + pid;
         if (did) url += '&district_id=' + did;
         fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
           fleetFillSelectRows(vehicle, arr, 'id', 'vehicle_no', { placeholder: '-- Select --', placeholderValue: '' });
@@ -439,7 +439,7 @@
         '</tr>';
     }
     if (!html) {
-      html = '<tr id="baselineEmptyRow" class="text-muted"><td colspan="6" class="text-center py-4">Koi line add nahi — zaroorat ho to upar se add karen.</td></tr>';
+      html = '<tr id="baselineEmptyRow" class="text-muted"><td colspan="6" class="text-center py-4">Koi line add nahi â€” zaroorat ho to upar se add karen.</td></tr>';
     }
     baselineBody.innerHTML = html;
     if (blEditIndex !== null && blEditIndex >= BASELINES.length) {

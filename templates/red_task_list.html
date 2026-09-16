@@ -33,7 +33,13 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">District</label>
-          <select name="district_id" id="districtSelect" class="form-select search-select">
+          <select name="district_id" id="districtSelect" class="form-select search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -163,22 +169,7 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fleetFillSelectRows(projectSelect, [], 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-      if (did && did !== '0') {
-        fetch('/get_projects_by_district/' + did)
-          .then(function(r) { return r.json(); })
-          .then(function(arr) {
-      fleetFillSelectRows(projectSelect, arr, 'id', 'name', { placeholder: '-- All Projects --', placeholderValue: '0' });
-          });
-      }
-    });
-  }
-  
+  /* District→Project: declarative data-cascade-* on #districtSelect */
 })();
 document.addEventListener('DOMContentLoaded', function(){
   if(window.fleetTableEnhance) window.fleetTableEnhance('redTaskTable');

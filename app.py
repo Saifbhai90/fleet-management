@@ -311,12 +311,20 @@ def inject_fleet_build_context():
         """Content-hash cache buster for static/ files (Phase 3D).
         Prefer this over manual ?v=NNN for core JS/CSS so phones pick up
         edits without hunting every template include.
+        In debug, also key on mtime so edits show without process restart.
         """
         rel = (relpath or '').replace('\\', '/').lstrip('/')
-        if rel in _hash_cache:
-            return _hash_cache[rel]
         base = app.static_folder or os.path.join(os.path.dirname(__file__), 'static')
         full = os.path.join(base, *rel.split('/'))
+        mtime_key = ''
+        if app.debug:
+            try:
+                mtime_key = str(int(os.path.getmtime(full)))
+            except OSError:
+                mtime_key = ''
+        cache_key = rel + ('|' + mtime_key if mtime_key else '')
+        if cache_key in _hash_cache:
+            return _hash_cache[cache_key]
         try:
             h = hashlib.md5()
             with open(full, 'rb') as fh:
@@ -325,7 +333,7 @@ def inject_fleet_build_context():
             dig = h.hexdigest()[:10]
         except OSError:
             dig = os.environ.get('FLEET_ASSET_VERSION') or str(int(time.time()))
-        _hash_cache[rel] = dig
+        _hash_cache[cache_key] = dig
         return dig
 
     return {

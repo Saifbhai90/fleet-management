@@ -40,7 +40,16 @@
 
           <div class="col-md-4">
             <label class="form-label">District</label>
-            <select name="district_id" id="districtSelect" class="form-select search-select">
+                        <select name="district_id" id="districtSelect" class="form-select search-select"
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- Select Project --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#vehicleSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
               <option value="0">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if (selected_district_id or 0) == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -49,7 +58,16 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Project</label>
-            <select name="project_id" id="projectSelect" class="form-select search-select">
+                        <select name="project_id" id="projectSelect" class="form-select search-select"
+              data-cascade-child="#vehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- Select Vehicle --"
+              data-cascade-placeholder-value="0"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="veh_p"
+              data-cascade-cache-district="#districtSelect">
               <option value="0">-- Select Project --</option>
               {% for p in projects %}
               <option value="{{ p.id }}" {% if (selected_project_id or 0) == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -205,94 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window._cascadeCache['proj_d' + dk] = LOCATION_CASCADE.projects_by_district[dk];
     });
   }
-  function vehiclesFromColdCacheWorkOrder(pid, did) {
-    if (!LOCATION_CASCADE || !LOCATION_CASCADE.vehicles) return null;
-    var list = LOCATION_CASCADE.vehicles;
-    var out = [];
-    var restrictDid = (did && did !== '0' && did !== 0) ? String(did) : '';
-    for (var i = 0; i < list.length; i++) {
-      var v = list[i];
-      if (String(v.project_id) !== String(pid)) continue;
-      if (!restrictDid) { out.push(v); continue; }
-      if (String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
-    }
-    out.sort(function(a, b) { return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true }); });
-    return out;
-  }
-  function fillProjectOptions(arr) {
-    var opts = (arr || []).map(function(p) { return { value: p.id, text: p.name }; });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(projectSelect, opts, { placeholder: '-- Select Project --', placeholderValue: '0' });
-      return;
-    }
-    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-    opts.forEach(function(p) {
-      var o = document.createElement('option');
-      o.value = p.value; o.textContent = p.text; projectSelect.appendChild(o);
-    });
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
-  }
-  function fillVehicleOptions(arr) {
-    var opts = (arr || []).map(function(v) { return { value: v.id, text: v.vehicle_no }; });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(vehicleSelect, opts, { placeholder: '-- Select Vehicle --', placeholderValue: '0' });
-      return;
-    }
-    vehicleSelect.innerHTML = '<option value="0">-- Select Vehicle --</option>';
-    opts.forEach(function(v) {
-      var o = document.createElement('option');
-      o.value = v.value; o.textContent = v.text; vehicleSelect.appendChild(o);
-    });
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
-  }
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value || '0';
-      fillProjectOptions([]);
-      fillVehicleOptions([]);
-      if (did !== '0') {
-        var cacheKey = 'proj_d' + did;
-        if (window._cascadeCache[cacheKey]) {
-          fillProjectOptions(window._cascadeCache[cacheKey]);
-          return;
-        }
-        fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-          window._cascadeCache[cacheKey] = arr || [];
-          fillProjectOptions(window._cascadeCache[cacheKey]);
-        });
-      } else {
-        initSelectSearch(projectSelect);
-        initSelectSearch(vehicleSelect);
-      }
-    });
-  }
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = this.value || '0';
-      var did = districtSelect ? (districtSelect.value || '0') : '0';
-      fillVehicleOptions([]);
-      if (pid !== '0') {
-        var vSync = vehiclesFromColdCacheWorkOrder(pid, did);
-        if (vSync !== null) {
-          fillVehicleOptions(vSync);
-          return;
-        }
-        var cacheKey = 'veh_p' + pid + '_d' + did;
-        if (window._cascadeCache[cacheKey]) {
-          fillVehicleOptions(window._cascadeCache[cacheKey]);
-          return;
-        }
-        var url = '/get_vehicles_by_project_district?project_id=' + encodeURIComponent(pid);
-        if (did !== '0') url += '&district_id=' + encodeURIComponent(did);
-        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-          window._cascadeCache[cacheKey] = arr || [];
-          fillVehicleOptions(window._cascadeCache[cacheKey]);
-        });
-      } else {
-        initSelectSearch(vehicleSelect);
-      }
-    });
-  }
+  /* D→P→V cascade: declarative data-cascade-* (fleet_core). */
 });
 </script>
 {% endblock %}

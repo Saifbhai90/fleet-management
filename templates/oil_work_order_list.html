@@ -71,7 +71,16 @@
         </div>
         <div class="col-md-2 col-6">
           <label class="form-label small">District</label>
-          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select">
+                    <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- Select Project --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#vehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in district_choices %}
             <option value="{{ val }}" {% if (selected_district_id or 0) == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -79,7 +88,16 @@
         </div>
         <div class="col-md-2 col-6">
           <label class="form-label small">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+                    <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#vehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#districtSelect">
             {% for val, label in project_choices %}
             <option value="{{ val }}" {% if (selected_project_id or 0) == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -275,105 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
       window._cascadeCache['proj_d' + dk] = LC.projects_by_district[dk];
     });
   }
-  function listProjectsByDistrict(did) {
-    if (!LC || !LC.projects_by_district) return null;
-    return LC.projects_by_district[String(did)] || [];
-  }
-  function listVehiclesByProjectDistrict(pid, did) {
-    if (!LC || !LC.vehicles) return null;
-    var out = [];
-    var restrictDid = (did && did !== '0') ? String(did) : '';
-    for (var i = 0; i < LC.vehicles.length; i++) {
-      var v = LC.vehicles[i];
-      if (String(v.project_id) !== String(pid)) continue;
-      if (!restrictDid || String(v.district_id == null ? '' : v.district_id) === restrictDid) out.push(v);
-    }
-    out.sort(function(a, b) { return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true }); });
-    return out;
-  }
-  var districtSelect = document.getElementById('districtSelect');
-  var projectSelect = document.getElementById('projectSelect');
-  var vehicleSelect = document.getElementById('vehicleSelect');
-  function fillProjectOptions(arr) {
-    var opts = (arr || []).map(function(p) { return { value: p.id, text: p.name }; });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(projectSelect, opts, { placeholder: '-- Select Project --', placeholderValue: '0' });
-      return;
-    }
-    projectSelect.innerHTML = '<option value="0">-- Select Project --</option>';
-    opts.forEach(function(p) {
-      var o = document.createElement('option');
-      o.value = p.value; o.textContent = p.text; projectSelect.appendChild(o);
-    });
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(projectSelect.parentNode);
-  }
-  function fillVehicleOptions(arr) {
-    var opts = (arr || []).map(function(v) { return { value: v.id, text: v.vehicle_no }; });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(vehicleSelect, opts, { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      return;
-    }
-    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-    opts.forEach(function(v) {
-      var o = document.createElement('option');
-      o.value = v.value; o.textContent = v.text; vehicleSelect.appendChild(o);
-    });
-    if (typeof initSearchableDropdowns === 'function') initSearchableDropdowns(vehicleSelect.parentNode);
-  }
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      fillProjectOptions([]);
-      if (vehicleSelect) fillVehicleOptions([]);
-      if (did && did !== '0') {
-        var cacheKey = 'proj_d' + did;
-        if (window._cascadeCache[cacheKey]) {
-          fillProjectOptions(window._cascadeCache[cacheKey]);
-          return;
-        }
-        var pSync = listProjectsByDistrict(did);
-        if (pSync !== null) {
-          window._cascadeCache[cacheKey] = pSync;
-          fillProjectOptions(window._cascadeCache[cacheKey]);
-        } else {
-          fetch('/get_projects_by_district/' + did).then(function(r) { return r.json(); }).then(function(arr) {
-            window._cascadeCache[cacheKey] = arr || [];
-            fillProjectOptions(window._cascadeCache[cacheKey]);
-          });
-        }
-      } else {
-        initSelectSearch(projectSelect);
-      }
-    });
-  }
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = projectSelect.value;
-      var did = districtSelect ? districtSelect.value : '';
-      fillVehicleOptions([]);
-      if (pid && pid !== '0') {
-        var cacheKey = 'veh_p' + pid + '_d' + (did || '0');
-        if (window._cascadeCache[cacheKey]) {
-          fillVehicleOptions(window._cascadeCache[cacheKey]);
-          return;
-        }
-        var vSync = listVehiclesByProjectDistrict(pid, did);
-        if (vSync !== null) {
-          window._cascadeCache[cacheKey] = vSync;
-          fillVehicleOptions(window._cascadeCache[cacheKey]);
-        } else {
-          var url = '/get_vehicles_by_project_district?project_id=' + pid;
-          if (did && did !== '0') url += '&district_id=' + did;
-          fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-            window._cascadeCache[cacheKey] = arr || [];
-            fillVehicleOptions(window._cascadeCache[cacheKey]);
-          });
-        }
-      } else {
-        initSelectSearch(vehicleSelect);
-      }
-    });
-  }
+  /* D→P→V cascade: declarative data-cascade-* (fleet_core). */
 
   var searchInput = document.getElementById('owoTableSearch');
   var table = document.getElementById('owoTable');

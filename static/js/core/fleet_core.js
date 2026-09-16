@@ -4580,6 +4580,7 @@
                         var dc = ts.dropdown_content;
                         if (!dc) return;
                         dc.querySelectorAll('.ts-empty-forced').forEach(function(n){ n.remove(); });
+                        dc.querySelectorAll('.ts-truncation-hint').forEach(function(n){ n.remove(); });
                         var hasVisible = dc.querySelector('.option, .optgroup-header, [data-value]');
                         if (!hasVisible) {
                             var div = document.createElement('div');
@@ -4589,6 +4590,20 @@
                                 : 'No ' + _emptyLabelCap + ' available';
                             div.innerHTML = _emptyStateHTML(lbl);
                             dc.appendChild(div);
+                        } else {
+                            /* maxOptions: 300 — show hint when the source list is larger. */
+                            var totalOpts = 0;
+                            try {
+                                totalOpts = Object.keys(ts.options || {}).length;
+                            } catch (eTot) { totalOpts = 0; }
+                            if (totalOpts > 300) {
+                                var hint = document.createElement('div');
+                                hint.className = 'ts-truncation-hint';
+                                hint.setAttribute('role', 'note');
+                                hint.style.cssText = 'padding:8px 12px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;background:#f8fafc;';
+                                hint.textContent = 'Showing first 300 of ' + totalOpts + ' — type to search the rest';
+                                dc.appendChild(hint);
+                            }
                         }
                         requestAnimationFrame(function() {
                             window.fleetPositionTomSelectDropdown(ts);
@@ -4917,6 +4932,7 @@
         if (typeof window.initSearchableDropdowns === 'function') {
             window.initSearchableDropdowns(sel.parentNode || sel);
         }
+        window.fleetEndCascade(sel);
         if (selected != null && selected !== '' && String(selected) !== '0') {
             window.fleetSetSelectValue(sel, selected, cfg.silent !== false);
         }
@@ -5024,10 +5040,59 @@
                       data-cascade-text-key="name"
                       data-cascade-placeholder="-- All Projects --"
                       data-cascade-placeholder-value="0"
-                      data-cascade-also-clear="#vehicleSelect">
+                      data-cascade-also-clear="#vehicleSelect"
+                      data-cascade-source="locationCascadeData"
+                      data-cascade-cache-prefix="proj_d"
+                      data-cascade-cache-district="#districtSelect">
        URL tokens: {value} = parent value; {#otherId} = that select's value.
+       Optional cold-cache: #locationCascadeData JSON and/or window._cascadeCache.
        Empty / "0" parent clears the child (no fetch). Uses fleetFillSelectRows.
     */
+    function _fleetParseLocationCascade(sourceId) {
+        var id = sourceId || 'locationCascadeData';
+        try {
+            var el = document.getElementById(id);
+            if (!el || !el.textContent) return null;
+            return JSON.parse(el.textContent);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function _fleetLcProjects(LC, districtId) {
+        if (!LC || !LC.projects_by_district) return null;
+        return LC.projects_by_district[String(districtId)] || [];
+    }
+
+    function _fleetLcVehicles(LC, projectId, districtId) {
+        if (!LC || !LC.vehicles) return null;
+        var out = [];
+        var restrictDid = (districtId && districtId !== '0') ? String(districtId) : '';
+        var i;
+        for (i = 0; i < LC.vehicles.length; i++) {
+            var v = LC.vehicles[i];
+            if (String(v.project_id) !== String(projectId)) continue;
+            if (!restrictDid || String(v.district_id == null ? '' : v.district_id) === restrictDid) {
+                out.push(v);
+            }
+        }
+        out.sort(function(a, b) {
+            return (a.vehicle_no || '').localeCompare(b.vehicle_no || '', undefined, { numeric: true });
+        });
+        return out;
+    }
+
+    function _fleetCascadeCacheKey(prefix, parentVal, districtSel) {
+        if (!prefix) return '';
+        var key = String(prefix) + String(parentVal);
+        if (districtSel) {
+            var el = document.querySelector(districtSel);
+            var did = el ? (el.value || '0') : '0';
+            key += '_d' + did;
+        }
+        return key;
+    }
+
     window.fleetWireDeclarativeCascades = function(scope) {
         var root = scope && scope.querySelectorAll ? scope : document;
         var parents = root.querySelectorAll
@@ -5053,6 +5118,10 @@
                 var placeholderValue = parent.getAttribute('data-cascade-placeholder-value');
                 if (placeholderValue === null || placeholderValue === undefined) placeholderValue = '0';
                 var fillCfg = { placeholder: placeholder, placeholderValue: placeholderValue };
+                var sourceId = parent.getAttribute('data-cascade-source') || '';
+                var cachePrefix = parent.getAttribute('data-cascade-cache-prefix') || '';
+                var cacheDistrict = parent.getAttribute('data-cascade-cache-district') || '';
+                var isVehicles = (textKey === 'vehicle_no') || (urlTpl.indexOf('/vehicles') !== -1);
 
                 var alsoClear = (parent.getAttribute('data-cascade-also-clear') || '').split(',');
                 alsoClear.forEach(function(raw) {
@@ -5079,6 +5148,41 @@
                     return;
                 }
 
+                function fillRows(arr) {
+                    if (typeof window.fleetFillSelectRows === 'function') {
+                        window.fleetFillSelectRows(child, arr || [], valueKey, textKey, fillCfg);
+                    }
+                }
+
+                var cacheKey = _fleetCascadeCacheKey(cachePrefix, pval, cacheDistrict);
+                if (cacheKey) {
+                    window._cascadeCache = window._cascadeCache || {};
+                    if (window._cascadeCache[cacheKey]) {
+                        fillRows(window._cascadeCache[cacheKey]);
+                        return;
+                    }
+                }
+
+                if (sourceId) {
+                    var LC = _fleetParseLocationCascade(sourceId);
+                    var sync = null;
+                    if (isVehicles) {
+                        var didEl = cacheDistrict ? document.querySelector(cacheDistrict) : null;
+                        var did = didEl ? (didEl.value || '0') : '0';
+                        sync = _fleetLcVehicles(LC, pval, did);
+                    } else {
+                        sync = _fleetLcProjects(LC, pval);
+                    }
+                    if (sync !== null) {
+                        if (cacheKey) {
+                            window._cascadeCache = window._cascadeCache || {};
+                            window._cascadeCache[cacheKey] = sync;
+                        }
+                        fillRows(sync);
+                        return;
+                    }
+                }
+
                 var url = urlTpl.replace(/\{value\}/g, encodeURIComponent(pval));
                 url = url.replace(/\{#([A-Za-z_][\w-]*)\}/g, function(_m, id) {
                     var el = document.getElementById(id);
@@ -5092,14 +5196,14 @@
                 fetch(url)
                     .then(function(r) { return r.json(); })
                     .then(function(arr) {
-                        if (typeof window.fleetFillSelectRows === 'function') {
-                            window.fleetFillSelectRows(child, arr || [], valueKey, textKey, fillCfg);
+                        if (cacheKey) {
+                            window._cascadeCache = window._cascadeCache || {};
+                            window._cascadeCache[cacheKey] = arr || [];
                         }
+                        fillRows(arr || []);
                     })
                     .catch(function() {
-                        if (typeof window.fleetFillSelectRows === 'function') {
-                            window.fleetFillSelectRows(child, [], valueKey, textKey, fillCfg);
-                        }
+                        fillRows([]);
                     });
             });
         });

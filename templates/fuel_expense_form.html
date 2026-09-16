@@ -1220,7 +1220,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/fuel_cascade.js') }}?v=1001"></script>
+<script src="{{ url_for('static', filename='js/fuel_cascade.js') }}?v={{ fleet_static_hash('js/fuel_cascade.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};

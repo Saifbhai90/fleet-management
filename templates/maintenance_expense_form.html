@@ -259,7 +259,7 @@
           <!-- Row 2: Work Order | Job Category -->
           <div class="col-md-6 field-group">
             <label class="form-label d-flex justify-content-between align-items-center">
-              <span>Work Order <small class="text-muted fw-normal">(optional — multi-bill job)</small></span>
+              <span>Work Order <small class="text-muted fw-normal">(optional â€” multi-bill job)</small></span>
               <span class="d-flex gap-2">
                 <a href="{{ url_for('maintenance_work_order_list') }}" class="small text-decoration-none">View All</a>
                 <a href="{{ url_for('maintenance_work_order_form') }}" class="small text-decoration-none text-success">+ New</a>
@@ -295,7 +295,7 @@
               </button>
             </div>
             <input type="hidden" name="job_interval_mode" id="jobIntervalMode" value="{{ rec.job_interval_mode if rec and rec.job_interval_mode else '' }}">
-            <small class="text-muted">Category with interval → next maintenance tracking support.</small>
+            <small class="text-muted">Category with interval â†’ next maintenance tracking support.</small>
           </div>
 
           <!-- Row 3: Current Reading | Payment Type | Party Name | Total Bill -->
@@ -450,7 +450,7 @@
             <tr>
               <td class="text-end">Total</td>
               <td><span id="totalQty">0</span></td>
-              <td>—</td>
+              <td>â€”</td>
               <td><span id="totalBillAmount">0.00</span></td>
               <td></td>
             </tr>
@@ -470,7 +470,7 @@
       <div class="form-section-header">Photos / Videos</div>
       <div class="form-section-body">
         <input type="file" name="attachments" id="maintAttachmentFiles" multiple accept="image/*,video/*" class="form-control">
-        <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ maintenance_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega — fail hone par <strong>file names + Retry</strong> dikhega.{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) — R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
+        <small class="text-muted">Multiple images or videos allowed. Paste with Ctrl+V. Har file ~{{ maintenance_attachment_max_mb|default(300) }} MB tak. Zyada files hon to system khud batches me upload karega â€” fail hone par <strong>file names + Retry</strong> dikhega.{% if maintenance_direct_r2 %} <strong>Cloudflare par seedha upload</strong> (server par bojh kam) â€” R2 bucket par CORS allow karein is site ke domain ke liye.{% endif %}</small>
         <div class="small text-success mt-1" id="maintAttachmentPasteHint"></div>
         {% if maintenance_direct_r2 %}
         <div class="form-check mt-2">
@@ -668,7 +668,7 @@
               </tr>
             </thead>
             <tbody id="jobCategoryListBody">
-              <tr><td colspan="3" class="text-muted small px-3 py-2">Loading…</td></tr>
+              <tr><td colspan="3" class="text-muted small px-3 py-2">Loadingâ€¦</td></tr>
             </tbody>
           </table>
         </div>
@@ -1089,7 +1089,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  /* ── Total Bill Expression Evaluator ── */
+  /* â”€â”€ Total Bill Expression Evaluator â”€â”€ */
   function _evalBillExpr(expr) {
     if (!expr) return null;
     var safe = expr.replace(/[^0-9+\-*\/.()\s]/g, '').trim();
@@ -1197,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _smoothLoadingSelect(projectSelect);
-    fetch('/get_projects_by_district/' + did)
+    fetch('/api/cascade/projects?parent=' + did)
       .then(function(r) { return r.json(); })
       .then(function(arr) {
         window._cascadeCache[_cKey] = arr;
@@ -1231,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     _smoothLoadingSelect(vehicleSelect);
-    var url = '/get_vehicles_by_project_district?project_id=' + pid;
+    var url = '/api/cascade/vehicles?parent=' + pid;
     if (did && did !== '0' && did !== 0) url += '&district_id=' + did;
     fetch(url)
       .then(function(r) { return r.json(); })
@@ -1808,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function loadJcatListIntoTable() {
     if (!jobCategoryListBody) return;
-    jobCategoryListBody.innerHTML = '<tr><td colspan="3" class="text-muted small px-3 py-2">Loading…</td></tr>';
+    jobCategoryListBody.innerHTML = '<tr><td colspan="3" class="text-muted small px-3 py-2">Loadingâ€¦</td></tr>';
     fetch('/api/maintenance-job-categories', { method: 'GET', credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -1883,7 +1883,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (del) {
         var dname = del.getAttribute('data-name') || '';
         if (!dname) return;
-        if (!window.confirm('Delete “' + dname + '”? Purani maintenance rows par yeh text pehle jaisa rahega; nayi entries mein yeh list se hat jayegi.')) return;
+        if (!window.confirm('Delete â€œ' + dname + 'â€? Purani maintenance rows par yeh text pehle jaisa rahega; nayi entries mein yeh list se hat jayegi.')) return;
         var tok = maintJobCategoryCsrf();
         if (!tok) { alert('Security token missing. Page refresh karein.'); return; }
         fetch('/api/maintenance-job-categories/delete', {
@@ -2133,14 +2133,14 @@ document.addEventListener('DOMContentLoaded', function() {
       try { workOrderSelect.focus(); } catch (e0) {}
       return;
     }
-    /* Already open and focused — leave it alone (no re-open flicker). */
+    /* Already open and focused â€” leave it alone (no re-open flicker). */
     if (ts.isOpen && document.activeElement === ts.control_input) return;
 
     _maintBeginWoFocusGuard(5000);
     _maintPatchWoCloseLock(ts);
     _maintWoCloseLockUntil = Date.now() + 2500;
 
-    /* Must be truly empty — value "0" / "No Work Order" selected closes the menu
+    /* Must be truly empty â€” value "0" / "No Work Order" selected closes the menu
        on focus. Typing works because it clears into search mode. */
     ts._wsSilentFill = true;
     ts._justSelected = true;
@@ -2225,7 +2225,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ts.clearOptions();
       (opts || []).forEach(function(o) {
         var v = String(o.value);
-        /* Never put "No Work Order" (value 0) in the dropdown — it gets auto-selected
+        /* Never put "No Work Order" (value 0) in the dropdown â€” it gets auto-selected
            and then focus/open immediately closes the menu. */
         if (v === '0') return;
         ts.addOption({ value: v, text: o.text });
@@ -2323,7 +2323,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (thenOpen && !_maintWoOpenScheduled) {
           _maintWoOpenScheduled = true;
-          /* Wait for cascade/layout to settle, then open once — no reopen loop. */
+          /* Wait for cascade/layout to settle, then open once â€” no reopen loop. */
           window.setTimeout(function() {
             focusAndOpenWorkOrder();
           }, 280);
@@ -2492,7 +2492,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function maintUploadInBatches(fileList, totalBytes) {
     if (!window.ExpenseBatchUpload) {
-      return Promise.reject(new Error('Batch upload module missing — page refresh karein.'));
+      return Promise.reject(new Error('Batch upload module missing â€” page refresh karein.'));
     }
     return ExpenseBatchUpload.runSplitUpload({
       overlayId: 'maintSubmitOverlay',
@@ -2513,7 +2513,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (maintenanceExpenseForm) {
     maintenanceExpenseForm.addEventListener('submit', function(e) {
-      /* Empty WO TomSelect → POST 0 (optional field). */
+      /* Empty WO TomSelect â†’ POST 0 (optional field). */
       if (workOrderSelect) {
         var wv = workOrderSelect.tomselect
           ? String(workOrderSelect.tomselect.getValue() || '')
@@ -2568,11 +2568,11 @@ document.addEventListener('DOMContentLoaded', function() {
             ExpenseBatchUpload.showProgress(
               { overlayId: 'maintSubmitOverlay', panelClass: 'maint-submit-panel' },
               'Upload fail',
-              (err && err.message) ? err.message : 'Upload fail — dubara try karein.',
+              (err && err.message) ? err.message : 'Upload fail â€” dubara try karein.',
               0
             );
           } else {
-            alert((err && err.message) ? err.message : 'Upload fail — dubara try karein.');
+            alert((err && err.message) ? err.message : 'Upload fail â€” dubara try karein.');
           }
         });
         return;
@@ -2598,7 +2598,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }).catch(function(err) {
         maintHideSubmitOverlay();
         maintUnlockSubmitButtons();
-        alert((err && err.message) ? err.message : 'Save fail — dubara try karein.');
+        alert((err && err.message) ? err.message : 'Save fail â€” dubara try karein.');
       });
     });
   }
@@ -2618,7 +2618,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var pid = serverProjectId;
     var vid = serverVehicleId;
     if (did && did !== 0) _selSet(districtSelect, did);
-    // Always run full fetch chain — never rely on server-rendered project/vehicle options.
+    // Always run full fetch chain â€” never rely on server-rendered project/vehicle options.
     function _afterVehicleLoad() {
       fetchTaskReadingsForMaintenance();
       var openWo = !!(shouldFocusWorkOrder || (serverWorkOrderId && serverWorkOrderId !== 0));
@@ -2764,7 +2764,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Auto-scroll with focus movement — disabled entirely during Add-bill WO open
+  // Auto-scroll with focus movement â€” disabled entirely during Add-bill WO open
   // (smooth scroll closes body-attached TomSelect and caused open/close flicker).
   var focusScrollSelectors = 'input, select, textarea, .ts-control input';
   maintenanceExpenseForm && maintenanceExpenseForm.addEventListener('focusin', function(e) {

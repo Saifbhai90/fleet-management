@@ -1,15 +1,15 @@
-/* ═══════════════════════════════════════════════════════════════════
-   Fleet Manager — Fuel Expense cascade wiring (shared)
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Fleet Manager â€” Fuel Expense cascade wiring (shared)
    Used by BOTH templates/fuel_expense_form.html (desktop) and
    templates/_fuel_expense_form_logic.html (mobile form). Those two pages
    used to carry verbatim copies of this wiring; the only real behavioral
    difference (how the fuel-type UI resets when the cascade clears) is
    injected via hooks. All helpers are provided by the page through `deps`
-   — this file must stay page-agnostic.
+   â€” this file must stay page-agnostic.
    Call this inside the page's DOMContentLoaded handler, after the page's
    select/helper variables exist. Cache note: bump the ?v= on the <script
    src> include in both templates whenever this file changes.
-   ═══════════════════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 (function() {
     'use strict';
 
@@ -28,7 +28,7 @@
 
         if (!window._cascadeCache) window._cascadeCache = {};
 
-        /* ── Suppress dropdown auto-open while a cascade refills ── */
+        /* â”€â”€ Suppress dropdown auto-open while a cascade refills â”€â”€ */
         if (districtSelect && projectSelect && typeof window.fleetBeginCascade === 'function') {
             districtSelect.addEventListener('change', function() {
                 window.fleetBeginCascade(projectSelect);
@@ -41,7 +41,7 @@
             }, true);
         }
 
-        /* ── District change → refill Project (+ clear Vehicle) ── */
+        /* â”€â”€ District change â†’ refill Project (+ clear Vehicle) â”€â”€ */
         if (districtSelect && projectSelect) {
             districtSelect.addEventListener('change', function() {
                 var did = this.value;
@@ -58,7 +58,7 @@
                         smoothFill(projectSelect, window._cascadeCache[_cKey], function(p) { return { value: String(p.id), text: p.name }; });
                     } else {
                         smoothLoading(projectSelect);
-                        fetch('/get_projects_by_district/' + did)
+                        fetch('/api/cascade/projects?parent=' + did)
                             .then(function(r) { return r.json(); })
                             .then(function(arr) {
                                 window._cascadeCache[_cKey] = arr;
@@ -74,7 +74,7 @@
             });
         }
 
-        /* ── Project change → refill Vehicle (cold cache → cache → fetch) ── */
+        /* â”€â”€ Project change â†’ refill Vehicle (cold cache â†’ cache â†’ fetch) â”€â”€ */
         if (projectSelect && vehicleSelect) {
             projectSelect.addEventListener('change', function() {
                 var pid = projectSelect.value;
@@ -93,7 +93,7 @@
                         smoothFill(vehicleSelect, window._cascadeCache[_vKey], function(v) { return { value: String(v.id), text: v.vehicle_no }; });
                     } else {
                         smoothLoading(vehicleSelect);
-                        var url = '/get_vehicles_by_project_district?project_id=' + pid;
+                        var url = '/api/cascade/vehicles?parent=' + pid;
                         if (did && did !== '0') url += '&district_id=' + did;
                         fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
                             window._cascadeCache[_vKey] = arr;
@@ -107,12 +107,12 @@
             });
         }
 
-        /* ── Fuel-type select: price refresh on change (optional) ── */
+        /* â”€â”€ Fuel-type select: price refresh on change (optional) â”€â”€ */
         if (deps.fuelTypeSelect && typeof deps.onFuelTypeChange === 'function') {
             deps.fuelTypeSelect.addEventListener('change', deps.onFuelTypeChange);
         }
 
-        /* ── Pump: guarded TS re-init + price refresh on change (optional) ── */
+        /* â”€â”€ Pump: guarded TS re-init + price refresh on change (optional) â”€â”€ */
         if (deps.fuelPumpSelect) {
             if (!deps.fuelPumpSelect.tomselect && typeof window.initSearchableDropdowns === 'function') {
                 window.initSearchableDropdowns(deps.fuelPumpSelect.parentNode);
