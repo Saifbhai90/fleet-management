@@ -1220,6 +1220,7 @@
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/fuel_cascade.js') }}?v=1001"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   window._cascadeCache = window._cascadeCache || {};
@@ -2851,81 +2852,27 @@ document.addEventListener('DOMContentLoaded', function() {
       .catch(function() { checkTankCapacityThenSubmit(submitter); });
   }
 
-  if (districtSelect && projectSelect && typeof fleetBeginCascade === 'function') {
-    districtSelect.addEventListener('change', function() {
-      fleetBeginCascade(projectSelect);
-      if (vehicleSelect) fleetBeginCascade(vehicleSelect);
-    }, true);
-  }
-  if (projectSelect && vehicleSelect && typeof fleetBeginCascade === 'function') {
-    projectSelect.addEventListener('change', function() {
-      fleetBeginCascade(vehicleSelect);
-    }, true);
-  }
-
-  if (districtSelect && projectSelect) {
-    districtSelect.addEventListener('change', function() {
-      var did = this.value;
-      _smoothLoadingSelect(projectSelect);
-      _smoothLoadingSelect(vehicleSelect);
-      if (fuelTypeSelect) fuelTypeSelect.value = '';
-      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
-      fetchVehicleLastEntry();
-      if (did && did !== '0') {
-        var _cKey = 'proj_d' + did;
-        var coldP = projectsFromColdCache(did);
-        if (coldP !== null) {
-          _smoothFillSelect(projectSelect, coldP, function(p) { return {value: String(p.id), text: p.name}; });
-        } else if (window._cascadeCache[_cKey]) {
-          _smoothFillSelect(projectSelect, window._cascadeCache[_cKey], function(p) { return {value: String(p.id), text: p.name}; });
-        } else {
-          _smoothLoadingSelect(projectSelect);
-          fetch('/get_projects_by_district/' + did)
-            .then(function(r) { return r.json(); })
-            .then(function(arr) {
-              window._cascadeCache[_cKey] = arr;
-              _smoothFillSelect(projectSelect, arr, function(p) { return {value: String(p.id), text: p.name}; });
-            })
-            .catch(function() { _smoothFillSelect(projectSelect, [], function(p) { return p; }); });
-        }
-        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-      } else {
-        _smoothFillSelect(projectSelect, [], function(p) { return {value: String(p.id), text: p.name}; });
-        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-      }
-    });
-  }
-
-  if (projectSelect && vehicleSelect) {
-    projectSelect.addEventListener('change', function() {
-      var pid = projectSelect.value;
-      var did = districtSelect ? districtSelect.value : '';
-      _smoothLoadingSelect(vehicleSelect);
-      if (fuelTypeSelect) fuelTypeSelect.value = '';
-      if (fuelTypeDisplay) fuelTypeDisplay.value = '';
-      fetchVehicleLastEntry();
-      if (pid && pid !== '0') {
-        var _vKey = 'veh_p' + pid + '_d' + (did || '0');
-        var coldV = vehiclesFromColdCache(pid, did);
-        if (coldV !== null) {
-          coldV.forEach(_rememberVehicleMeta);
-          _smoothFillSelect(vehicleSelect, coldV, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-        } else if (window._cascadeCache[_vKey]) {
-          window._cascadeCache[_vKey].forEach(_rememberVehicleMeta);
-          _smoothFillSelect(vehicleSelect, window._cascadeCache[_vKey], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-        } else {
-          _smoothLoadingSelect(vehicleSelect);
-          var url = '/get_vehicles_by_project_district?project_id=' + pid;
-          if (did && did !== '0') url += '&district_id=' + did;
-          fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
-            window._cascadeCache[_vKey] = arr;
-            arr.forEach(_rememberVehicleMeta);
-            _smoothFillSelect(vehicleSelect, arr, function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-          }).catch(function() { _smoothFillSelect(vehicleSelect, [], function(v) { return v; }); });
-        }
-      } else {
-        _smoothFillSelect(vehicleSelect, [], function(v) { return {value: String(v.id), text: v.vehicle_no}; });
-      }
+  /* District→Project→Vehicle cascade + pump/fuel-type price refresh now live
+     in js/fuel_cascade.js — shared verbatim with the mobile fuel form. */
+  if (window.wireFuelCascade) {
+    window.wireFuelCascade({
+      districtSelect: districtSelect,
+      projectSelect: projectSelect,
+      vehicleSelect: vehicleSelect,
+      smoothFill: _smoothFillSelect,
+      smoothLoading: _smoothLoadingSelect,
+      projectsFromColdCache: projectsFromColdCache,
+      vehiclesFromColdCache: vehiclesFromColdCache,
+      rememberVehicleMeta: _rememberVehicleMeta,
+      onCascadeReset: function() {
+        if (fuelTypeSelect) fuelTypeSelect.value = '';
+        if (fuelTypeDisplay) fuelTypeDisplay.value = '';
+      },
+      fetchVehicleLastEntry: fetchVehicleLastEntry,
+      fuelPumpSelect: fuelPumpSelect,
+      onPumpChange: function() { fetchPriceHistory(); fetchSuggestedPrice(); },
+      fuelTypeSelect: fuelTypeSelect,
+      onFuelTypeChange: function() { fetchSuggestedPrice(); fetchPriceHistory(); fetchPsoRateForDate(); }
     });
   }
 
@@ -3146,20 +3093,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (fuelTypeSelect) fuelTypeSelect.addEventListener('change', function() {
-    fetchSuggestedPrice();
-    fetchPriceHistory();
-    fetchPsoRateForDate();
-  });
-
-  var fuelPumpSel = document.getElementById('fuelPumpSelect');
-  if (fuelPumpSel) {
-    if (!fuelPumpSel.tomselect) initSearchableDropdowns(fuelPumpSel.parentNode);
-    fuelPumpSel.addEventListener('change', function() {
-      fetchPriceHistory();
-      fetchSuggestedPrice();
-    });
-  }
+  /* fuelTypeSelect price refresh + fuel pump TS re-init/price refresh moved
+     into window.wireFuelCascade (js/fuel_cascade.js). */
 
   if (vehicleSelect) {
     vehicleSelect.dispatchEvent(new Event('change'));

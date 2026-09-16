@@ -579,7 +579,16 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Driver District</label>
-                {{ form.driver_district(class="form-control", required=True, list="districtOptions", placeholder="e.g. Lahore") }}
+                {% set _curDriverDistrict = form.driver_district.data or '' %}
+                <select name="driver_district" id="driver_district" class="form-select search-select" required>
+                  <option value="" {% if not _curDriverDistrict %}selected{% endif %}>-- Select District --</option>
+                  {% for _d in all_districts %}
+                    <option value="{{ _d.name }}" {% if _curDriverDistrict == _d.name %}selected{% endif %}>{{ _d.name }}</option>
+                  {% endfor %}
+                  {% if _curDriverDistrict and _curDriverDistrict not in (all_districts | map(attribute='name') | list) %}
+                    <option value="{{ _curDriverDistrict }}" selected>{{ _curDriverDistrict }}</option>
+                  {% endif %}
+                </select>
                 {% for error in form.driver_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}
@@ -638,7 +647,16 @@
               </div>
               <div class="col-md-3">
                 <label class="form-label required">Issue District</label>
-                {{ form.issue_district(class="form-control", required=True, list="districtOptions", placeholder="e.g. Lahore") }}
+                {% set _curIssueDistrict = form.issue_district.data or '' %}
+                <select name="issue_district" id="issue_district" class="form-select search-select" required>
+                  <option value="" {% if not _curIssueDistrict %}selected{% endif %}>-- Select District --</option>
+                  {% for _d in all_districts %}
+                    <option value="{{ _d.name }}" {% if _curIssueDistrict == _d.name %}selected{% endif %}>{{ _d.name }}</option>
+                  {% endfor %}
+                  {% if _curIssueDistrict and _curIssueDistrict not in (all_districts | map(attribute='name') | list) %}
+                    <option value="{{ _curIssueDistrict }}" selected>{{ _curIssueDistrict }}</option>
+                  {% endif %}
+                </select>
                 {% for error in form.issue_district.errors %}
                   <div class="text-danger small">{{ error }}</div>
                 {% endfor %}

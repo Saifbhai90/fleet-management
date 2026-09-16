@@ -45,7 +45,16 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label class="form-label fw-bold">{{ form.district.label.text }}</label>
-                {{ form.district(class="form-control " + ("is-invalid" if form.district.errors else ""), placeholder="District Name", list="districtOptions") }}
+                {% set _curParkingDistrict = form.district.data or '' %}
+                <select name="district" id="district" class="form-select search-select {{ 'is-invalid' if form.district.errors else '' }}">
+                  <option value="" {% if not _curParkingDistrict %}selected{% endif %}>-- Select District --</option>
+                  {% for _d in all_districts %}
+                    <option value="{{ _d.name }}" {% if _curParkingDistrict == _d.name %}selected{% endif %}>{{ _d.name }}</option>
+                  {% endfor %}
+                  {% if _curParkingDistrict and _curParkingDistrict not in (all_districts | map(attribute='name') | list) %}
+                    <option value="{{ _curParkingDistrict }}" selected>{{ _curParkingDistrict }}</option>
+                  {% endif %}
+                </select>
                 {% for error in form.district.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
               </div>
               <div class="col-md-6 mb-3">

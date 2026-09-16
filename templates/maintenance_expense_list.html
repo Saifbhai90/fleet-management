@@ -321,49 +321,9 @@
   </div>
 </div>
 
-<div class="modal fade" id="maintApprovalModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="maintApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Maintenance Approval Text</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="small text-muted mb-2">Text ko WhatsApp par approval ke liye direct copy ya open karein.</div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Text Type</label>
-            <select id="maintApprovalHeadingSelect" class="form-select form-select-sm">
-              <option value="approval_required" selected>Approval Required</option>
-              <option value="work_done">Work done</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small mb-1">Driver</label>
-            <select id="maintApprovalDriverSelect" class="form-select form-select-sm">
-              <option value="">-</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small mb-1">Location</label>
-            <input type="text" id="maintApprovalLocationInput" class="form-control form-control-sm" list="maintApprovalLocationList" placeholder="Enter location">
-            <datalist id="maintApprovalLocationList"></datalist>
-          </div>
-        </div>
-        <textarea id="maintApprovalText" class="form-control" rows="15" readonly placeholder="Approval text loading..."></textarea>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" id="maintApprovalCopyBtn">
-          <i class="bi bi-clipboard me-1"></i>Copy Text
-        </button>
-        <button type="button" class="btn btn-success btn-sm" id="maintApprovalWhatsappBtn">
-          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+{% from "partials/whatsapp_approval_modal.html" import whatsapp_approval_modal %}
+{{ whatsapp_approval_modal('maintApproval', 'Maintenance Approval Text',
+     'Text ko WhatsApp par approval ke liye direct copy ya open karein.') }}
 
 {# Floating panel (not Bootstrap modal): no dimmed backdrop, no body scroll lock #}
 <div id="mwoOpenListPanel" class="mwo-open-wo-panel d-none" role="dialog" aria-modal="false" aria-labelledby="mwoOpenListTitle" aria-hidden="true">

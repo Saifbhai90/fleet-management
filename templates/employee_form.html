@@ -115,7 +115,16 @@
                   </div>
                   <div class="col-12 col-md-6">
                     <label class="form-label lbl">District</label>
-                    {{ form1.district(class="form-control form-control-sm " + ("is-invalid" if form1.district.errors else ""), placeholder="District", list="districtOptions") }}
+                    {% set _curEmpDistrict = form1.district.data or '' %}
+                    <select name="district" id="district" class="form-select form-select-sm search-select {{ 'is-invalid' if form1.district.errors else '' }}">
+                      <option value="" {% if not _curEmpDistrict %}selected{% endif %}>-- Select District --</option>
+                      {% for _d in all_districts %}
+                        <option value="{{ _d.name }}" {% if _curEmpDistrict == _d.name %}selected{% endif %}>{{ _d.name }}</option>
+                      {% endfor %}
+                      {% if _curEmpDistrict and _curEmpDistrict not in (all_districts | map(attribute='name') | list) %}
+                        <option value="{{ _curEmpDistrict }}" selected>{{ _curEmpDistrict }}</option>
+                      {% endif %}
+                    </select>
                     {% for e in form1.district.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                   </div>
                   <div class="col-12 col-md-6">

@@ -1,0 +1,87 @@
+{# ═══════════════════════════════════════════════════════════════════
+   Shared WhatsApp approval modal (oil / maintenance / work-order lists).
+   The three list pages used to carry near-identical inline copies; the
+   element ids are generated from `prefix` so each page's existing JS
+   (getElementById by exact id string) keeps working unchanged.
+
+   Usage:
+     {% from "partials/whatsapp_approval_modal.html" import whatsapp_approval_modal %}
+     {{ whatsapp_approval_modal('oilApproval', 'Oil Change WhatsApp Text',
+          'Driver, payment mode ...', second='payment_mode',
+          dialog_class='modal-lg modal-dialog-scrollable',
+          dialog_style='margin-top: 12vh;', rows=15,
+          textarea_placeholder='Oil change text loading...') }}
+
+   Ids produced: {prefix}Modal, {prefix}ModalTitle, {prefix}DriverSelect,
+     {prefix}HeadingSelect | {prefix}PaymentModeSelect,
+     {prefix}LocationInput, {prefix}LocationList, {prefix}Text,
+     {prefix}CopyBtn, {prefix}WhatsappBtn
+   ═══════════════════════════════════════════════════════════════════ #}
+{% macro whatsapp_approval_modal(prefix, title, hint, second='heading', dialog_class='modal-lg modal-dialog-scrollable modal-dialog-centered', dialog_style='', rows=15, textarea_placeholder='Approval text loading...') %}
+<div class="modal fade" id="{{ prefix }}Modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog {{ dialog_class }}"{% if dialog_style %} style="{{ dialog_style }}"{% endif %}>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="{{ prefix }}ModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>{{ title }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small text-muted mb-2">{{ hint }}</div>
+        <div class="row g-2 mb-2">
+        {% if second == 'payment_mode' %}
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Driver</label>
+            <select id="{{ prefix }}DriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Payment Mode</label>
+            <select id="{{ prefix }}PaymentModeSelect" class="form-select form-select-sm">
+              <option value="Cash" selected>Cash</option>
+              <option value="Credit">Credit</option>
+              <option value="Card">Card</option>
+              <option value="In Hand Stock">In Hand Stock</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Location</label>
+            <input type="text" id="{{ prefix }}LocationInput" class="form-control form-control-sm" list="{{ prefix }}LocationList" placeholder="Enter location">
+            <datalist id="{{ prefix }}LocationList"></datalist>
+          </div>
+        {% else %}
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Text Type</label>
+            <select id="{{ prefix }}HeadingSelect" class="form-select form-select-sm">
+              <option value="approval_required" selected>Approval Required</option>
+              <option value="work_done">Work done</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Driver</label>
+            <select id="{{ prefix }}DriverSelect" class="form-select form-select-sm">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Location</label>
+            <input type="text" id="{{ prefix }}LocationInput" class="form-control form-control-sm" list="{{ prefix }}LocationList" placeholder="Enter location">
+            <datalist id="{{ prefix }}LocationList"></datalist>
+          </div>
+        {% endif %}
+        </div>
+        <textarea id="{{ prefix }}Text" class="form-control" rows="{{ rows }}" readonly placeholder="{{ textarea_placeholder }}"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-outline-primary btn-sm" id="{{ prefix }}CopyBtn">
+          <i class="bi bi-clipboard me-1"></i>Copy Text
+        </button>
+        <button type="button" class="btn btn-success btn-sm" id="{{ prefix }}WhatsappBtn">
+          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endmacro %}

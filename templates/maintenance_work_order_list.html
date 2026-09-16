@@ -294,49 +294,10 @@
   </div>
   </div>
 </div>
-<div class="modal fade" id="mwoApprovalModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="mwoApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Work Order Approval Summary</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="small text-muted mb-2">Driver select karein, location edit karein, phir text copy ya WhatsApp open karein.</div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Text Type</label>
-            <select id="mwoApprovalHeadingSelect" class="form-select form-select-sm">
-              <option value="approval_required" selected>Approval Required</option>
-              <option value="work_done">Work done</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small mb-1">Driver</label>
-            <select id="mwoApprovalDriverSelect" class="form-select form-select-sm">
-              <option value="">-</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small mb-1">Location</label>
-            <input type="text" id="mwoApprovalLocationInput" class="form-control form-control-sm" list="mwoApprovalLocationList" placeholder="Enter location">
-            <datalist id="mwoApprovalLocationList"></datalist>
-          </div>
-        </div>
-        <textarea id="mwoApprovalText" class="form-control" rows="14" readonly placeholder="Approval text loading..."></textarea>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" id="mwoApprovalCopyBtn">
-          <i class="bi bi-clipboard me-1"></i>Copy Text
-        </button>
-        <button type="button" class="btn btn-success btn-sm" id="mwoApprovalWhatsappBtn">
-          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+{% from "partials/whatsapp_approval_modal.html" import whatsapp_approval_modal %}
+{{ whatsapp_approval_modal('mwoApproval', 'Work Order Approval Summary',
+     'Driver select karein, location edit karein, phir text copy ya WhatsApp open karein.',
+     rows=14) }}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

@@ -358,51 +358,14 @@
     </div>
   </div>
 </div>
-<div class="modal fade" id="oilApprovalModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable" style="margin-top: 12vh;">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="oilApprovalModalTitle"><i class="bi bi-whatsapp me-1 text-success"></i>Oil Change WhatsApp Text</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="small text-muted mb-2">Driver, payment mode aur location select karein; text auto update ho jayega.</div>
-        <div class="row g-2 mb-2">
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Driver</label>
-            <select id="oilApprovalDriverSelect" class="form-select form-select-sm">
-              <option value="">-</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Payment Mode</label>
-            <select id="oilApprovalPaymentModeSelect" class="form-select form-select-sm">
-              <option value="Cash" selected>Cash</option>
-              <option value="Credit">Credit</option>
-              <option value="Card">Card</option>
-              <option value="In Hand Stock">In Hand Stock</option>
-            </select>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label small mb-1">Location</label>
-            <input type="text" id="oilApprovalLocationInput" class="form-control form-control-sm" list="oilApprovalLocationList" placeholder="Enter location">
-            <datalist id="oilApprovalLocationList"></datalist>
-          </div>
-        </div>
-        <textarea id="oilApprovalText" class="form-control" rows="15" readonly placeholder="Oil change text loading..."></textarea>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
-        <button type="button" class="btn btn-outline-primary btn-sm" id="oilApprovalCopyBtn">
-          <i class="bi bi-clipboard me-1"></i>Copy Text
-        </button>
-        <button type="button" class="btn btn-success btn-sm" id="oilApprovalWhatsappBtn">
-          <i class="bi bi-whatsapp me-1"></i>Open WhatsApp
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+{% from "partials/whatsapp_approval_modal.html" import whatsapp_approval_modal %}
+{{ whatsapp_approval_modal('oilApproval', 'Oil Change WhatsApp Text',
+     'Driver, payment mode aur location select karein; text auto update ho jayega.',
+     second='payment_mode',
+     dialog_class='modal-lg modal-dialog-scrollable',
+     dialog_style='margin-top: 12vh;',
+     rows=15,
+     textarea_placeholder='Oil change text loading...') }}
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
