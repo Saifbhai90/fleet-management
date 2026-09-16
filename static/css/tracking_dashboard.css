@@ -186,6 +186,20 @@
     line-height: 1.25;
     margin-bottom: 3px;
   }
+  .vmarker-dist {
+    display: inline-block;
+    white-space: nowrap;
+    background: rgba(15,25,35,.94);
+    color: #93c5fd;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 8px;
+    border: 1px solid #2a3a4a;
+    margin-bottom: 3px;
+    line-height: 1.25;
+    box-shadow: 0 2px 8px rgba(0,0,0,.35);
+  }
   .vmarker-car-slot {
     position: relative;
     width: 40px;

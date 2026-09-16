@@ -382,6 +382,13 @@
     return meters != null && meters <= nearbyState.meters;
   }
 
+  function nearbyLabelFor(regNo) {
+    if (!nearbyState) return '';
+    var meters = nearbyDistanceMeters(posByReg[regNo]);
+    if (meters == null) return '';
+    return formatParkingDistance(meters) + ' away';
+  }
+
   function setNearbyHint(text) {
     var hint = document.getElementById('tkNearbyHint');
     if (hint) hint.textContent = text || 'Vehicles around your current location';
@@ -390,22 +397,18 @@
   function syncNearbyTips() {
     Object.keys(markers).forEach(function(reg) {
       var marker = markers[reg];
-      if (!marker) return;
-      var show = nearbyState && map.hasLayer(marker);
-      var meters = show ? nearbyDistanceMeters(posByReg[reg]) : null;
-      if (meters == null) {
-        if (marker.getTooltip()) marker.unbindTooltip();
-        return;
-      }
-      var text = formatParkingDistance(meters) + ' away';
-      if (marker.getTooltip()) marker.setTooltipContent(text);
-      else marker.bindTooltip(text, {
-        permanent: true,
-        direction: 'top',
-        offset: [0, -22],
-        className: 'tk-nearby-tip',
-        opacity: 1
-      });
+      var prev = markerState[reg];
+      var v = posByReg[reg];
+      if (!marker || !prev || !v) return;
+      if (marker.getTooltip()) marker.unbindTooltip();
+      var color = colorFor(v.VehicleStatus || 'Idle');
+      var hasTask = !!activeUfoneTask(reg);
+      var gpsSt = gpsStatusOf(v);
+      var keys = iconKeys(color, hasTask, reg, prev.applied, gpsSt);
+      if (prev.icon === keys.full) return;
+      marker.setIcon(carIcon(color, prev.applied, hasTask, reg, gpsSt));
+      prev.icon = keys.full;
+      prev.iconBase = keys.base;
     });
   }
 
@@ -479,6 +482,7 @@
     setNearbyHint('Getting your location…');
     getMyLocation(function(lat, lon) {
       applyNearbyFilter(lat, lon, km);
+      closeNearbyPop({ restoreLegend: !isMobile() });
       haptic();
     }, function() {
       setNearbyHint('Location unavailable. Allow GPS and try again.');
@@ -785,7 +789,7 @@
   }
 
   function iconKeys(color, hasTask, regNo, appliedDeg, gpsStatus) {
-    var base = color + '|' + hasTask + '|' + (showLabels ? regNo : '') + '|' + (gpsStatus || '');
+    var base = color + '|' + hasTask + '|' + (showLabels ? regNo : '') + '|' + (gpsStatus || '') + '|' + nearbyLabelFor(regNo);
     return { base: base, full: base + '|' + Math.round(appliedDeg) };
   }
 
@@ -823,10 +827,12 @@
     var label = (showLabels && regNo)
       ? '<div class="vmarker-label" style="color:' + color + ';">' + safeReg + '</div>'
       : '';
+    var dist = nearbyLabelFor(regNo);
+    var distHtml = dist ? '<div class="vmarker-dist">' + escapeHtml(dist) + '</div>' : '';
     var pulseHtml = hasUfoneTask ? '<div class="vmarker-task-pulse" aria-hidden="true"></div>' : '';
     return L.divIcon({
       className: 'fleet-vmarker' + (hasUfoneTask ? ' has-ufone-task' : ''),
-      html: '<div class="vmarker-wrap">' + label +
+      html: '<div class="vmarker-wrap">' + label + distHtml +
             '<div class="vmarker-car-slot">' +
             pulseHtml +
             '<div class="vmarker-car" style="transform:rotate(' + rotate + 'deg);">' +
@@ -1562,6 +1568,13 @@
     if (fab) fab.classList.remove('active');
   }
 
+  function openLegend() {
+    var legend = document.getElementById('mapLegend');
+    var fab = document.getElementById('tkFabInfo');
+    if (legend) legend.classList.add('tk-open');
+    if (fab) fab.classList.add('active');
+  }
+
   /* Hand navigation off to the device's maps app when running natively */
   function openRoute(lat, lon) {
     if (!lat || !lon) return;
@@ -1649,8 +1662,9 @@
 
   var nearbyPop = document.getElementById('tkNearbyPop');
   var fabNearby = document.getElementById('tkFabNearby');
-  function closeNearbyPop() {
+  function closeNearbyPop(opts) {
     if (nearbyPop) nearbyPop.classList.remove('open');
+    if (opts && opts.restoreLegend && !isMobile()) openLegend();
   }
 
   if (fabLayers) {
@@ -1739,9 +1753,13 @@
   if (fabNearby && nearbyPop) {
     fabNearby.addEventListener('click', function(e) {
       e.stopPropagation();
-      closeLegend();
       closeLayerPop();
-      nearbyPop.classList.toggle('open');
+      if (nearbyPop.classList.contains('open')) {
+        closeNearbyPop({ restoreLegend: !isMobile() });
+      } else {
+        closeLegend();
+        nearbyPop.classList.add('open');
+      }
     });
     nearbyPop.addEventListener('click', function(e) { e.stopPropagation(); });
     nearbyPop.addEventListener('click', function(e) {
@@ -1759,6 +1777,7 @@
     });
     document.getElementById('tkNearbyClear').addEventListener('click', function() {
       clearNearbyFilter();
+      closeNearbyPop({ restoreLegend: !isMobile() });
       haptic();
     });
   }
@@ -1768,9 +1787,10 @@
     if (t && t.closest && (t.closest('.leaflet-popup') || t.closest('.modal') || t.closest('.tk-detail'))) {
       return;
     }
+    var nearbyWasOpen = nearbyPop && nearbyPop.classList.contains('open');
     closeLayerPop();
-    closeNearbyPop();
-    closeLegend();
+    closeNearbyPop({ restoreLegend: nearbyWasOpen && !isMobile() });
+    if (!(nearbyWasOpen && !isMobile())) closeLegend();
     if (isMobile() && detailReg) closeDetail();
   });
   /* Manual panning cancels follow mode, like every good tracking app */
@@ -1807,12 +1827,14 @@
     }
     if (mobile) {
       setSnap(currentSnap, true);
+      closeLegend();
     } else {
       sheet.classList.remove('tk-peek', 'tk-full', 'tk-dragging');
       sheet.style.removeProperty('transform');
       closeDetail();
       closeLayerPop();
       closeNearbyPop();
+      openLegend();
     }
     syncFabOffset();
     setTimeout(resyncMap, 260);
@@ -1820,6 +1842,7 @@
   if (mq.addEventListener) mq.addEventListener('change', onViewportChange);
   else if (mq.addListener) mq.addListener(onViewportChange);
   if (isMobile()) setSnap('peek', true);
+  else openLegend();
 
   // ── Events ──
   var searchDebounce = null;

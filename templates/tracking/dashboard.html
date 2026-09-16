@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1009" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1012" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ufone_task_modal.css') }}?v=1001" />
 {% endblock %}
 
@@ -117,7 +117,7 @@
       <div class="refresh-indicator" id="refreshIndicator" style="display:none;">
         <span class="spinner"></span> Updating...
       </div>
-      <div class="map-legend tk-open" id="mapLegend">
+      <div class="map-legend" id="mapLegend">
         <div class="row"><span class="dot" style="background:#22c55e"></span> Moving</div>
         <div class="row"><span class="dot" style="background:#111827;box-shadow:0 0 0 1px rgba(255,255,255,.35)"></span> Stopped (ign off)</div>
         <div class="row"><span class="dot" style="background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,.45);animation:vmarker-pulse 2s ease-out infinite"></span> Active Ufone Task</div>
@@ -142,7 +142,7 @@
         <div class="tk-fab" id="tkFabFit" role="button" aria-label="Fit all vehicles" data-tip="Fit all vehicles"><i class="bi bi-bounding-box"></i></div>
         <div class="tk-fab" id="tkFabLocate" role="button" aria-label="My location" data-tip="My location"><i class="bi bi-crosshair"></i></div>
         <div class="tk-fab" id="tkFabNearby" role="button" aria-label="Nearby vehicles" data-tip="Nearby vehicles"><i class="bi bi-radar"></i></div>
-        <div class="tk-fab tk-fab-info active" id="tkFabInfo" role="button" aria-label="Map legend" data-tip="Map legend"><i class="bi bi-info-lg"></i></div>
+        <div class="tk-fab tk-fab-info" id="tkFabInfo" role="button" aria-label="Map legend" data-tip="Map legend"><i class="bi bi-info-lg"></i></div>
       </div>
 
       <div class="tk-layer-pop" id="tkLayerPop">
@@ -220,7 +220,7 @@
   'ufone_tasks_by_reg': ufone_tasks_by_reg,
   'parking_by_reg': parking_by_reg
 } | tojson }}</script>
-<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1011"></script>
+<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1013"></script>
 <script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1006"></script>
 <script>
 if (window.UfoneTaskDetail) {
