@@ -8,6 +8,8 @@ import logging
 import time as _time
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
+
 _firebase_app = None
 _initialized = False
 
@@ -433,11 +435,26 @@ def broadcast_push_all(title, body, data=None, link=None, notification_id=None):
 
 
 def get_user_id_for_driver(driver):
-    """Find user_id for a driver (linked by cnic_no == username)."""
+    """Find user_id for a driver (linked by cnic_no == username, dash-insensitive)."""
     if not driver or not driver.cnic_no:
         return None
     from models import User
-    user = User.query.filter_by(username=driver.cnic_no, is_active=True).first()
+
+    cnic = (driver.cnic_no or '').strip()
+    if not cnic:
+        return None
+    digits = cnic.replace('-', '')
+    user = User.query.filter_by(username=cnic, is_active=True).first()
+    if user:
+        return user.id
+    if digits and digits != cnic:
+        user = User.query.filter_by(username=digits, is_active=True).first()
+        if user:
+            return user.id
+    user = User.query.filter(
+        User.is_active.is_(True),
+        func.replace(User.username, '-', '') == digits,
+    ).first()
     return user.id if user else None
 
 

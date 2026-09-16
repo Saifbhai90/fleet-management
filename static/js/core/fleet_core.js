@@ -7530,6 +7530,8 @@
         }
         function hideBioOverlay() {
             isLocked = false;
+            cancelPendingBioAuth();
+            _ignoreResumeUntil = Date.now() + UNLOCK_GRACE_MS;
             if (bioOverlay) bioOverlay.style.display = 'none';
         }
         function showPINOverlay(mode) {
@@ -7549,22 +7551,56 @@
             if (pinOverlay) pinOverlay.style.display = 'none';
         }
 
+        var _bioAuthInFlight = false;
+        var _bioAuthGen = 0;
+        var _ignoreResumeUntil = 0;
+        var _resumeLockTimer = null;
+        var RESUME_LOCK_DELAY_MS = 600;
+        var UNLOCK_GRACE_MS = 2500;
+
+        function cancelPendingBioAuth() {
+            _bioAuthGen += 1;
+            _bioAuthInFlight = false;
+        }
+
         /* ── Core: trigger biometric auth ── */
         function triggerBioLock() {
+            if (_bioAuthInFlight) return;
             if (!bioPlugin) { fallbackToPin(); return; }
+            _bioAuthInFlight = true;
+            var gen = ++_bioAuthGen;
             var check = (typeof bioPlugin.checkBiometry === 'function')
                 ? bioPlugin.checkBiometry()
                 : Promise.resolve({ isAvailable: true });
             check.then(function(info) {
+                if (gen !== _bioAuthGen) return;
                 var avail = info && (info.strongBiometryIsAvailable || info.biometryIsAvailable || info.isAvailable);
-                if (!avail) { fallbackToPin(); return; }
-                showBioOverlay();
-                runLockAuth(lockAuthOptions(hasPinSet() ? 'Use PIN' : 'Cancel')).then(function() {
-                    hideBioOverlay();
-                }).catch(function() {
+                if (!avail) {
+                    _bioAuthInFlight = false;
                     fallbackToPin();
-                });
-            }).catch(function() { fallbackToPin(); });
+                    return;
+                }
+                showBioOverlay();
+                // Android BiometricPrompt needs a fully resumed activity. Recents
+                // resume plus the prompt's own pause/resume used to start a second
+                // verify that cancelled the first, so the thumb appeared to fail.
+                setTimeout(function() {
+                    if (gen !== _bioAuthGen || !_bioAuthInFlight) return;
+                    runLockAuth(lockAuthOptions(hasPinSet() ? 'Use PIN' : 'Cancel')).then(function() {
+                        if (gen !== _bioAuthGen) return;
+                        hidePINOverlay();
+                        hideBioOverlay();
+                    }).catch(function() {
+                        if (gen !== _bioAuthGen) return;
+                        _bioAuthInFlight = false;
+                        fallbackToPin();
+                    });
+                }, 280);
+            }).catch(function() {
+                if (gen !== _bioAuthGen) return;
+                _bioAuthInFlight = false;
+                fallbackToPin();
+            });
         }
 
         function fallbackToPin() {
@@ -7578,7 +7614,8 @@
         /* "Use PIN instead" link on bio overlay */
         if (bioUsePIN) {
             bioUsePIN.addEventListener('click', function() {
-                hideBioOverlay();
+                cancelPendingBioAuth();
+                if (bioOverlay) bioOverlay.style.display = 'none';
                 fallbackToPin();
             });
         }
@@ -7587,9 +7624,7 @@
         if (bioLockBtn) {
             bioLockBtn.addEventListener('click', function() {
                 if (!bioPlugin) { fallbackToPin(); return; }
-                runLockAuth(lockAuthOptions(hasPinSet() ? 'Use PIN' : 'Cancel')).then(function() {
-                    hideBioOverlay();
-                }).catch(function() { fallbackToPin(); });
+                triggerBioLock();
             });
         }
 
@@ -7598,6 +7633,10 @@
 
         AppPlugin.addListener('appStateChange', function(state) {
             if (state && !state.isActive) {
+                if (_resumeLockTimer) {
+                    clearTimeout(_resumeLockTimer);
+                    _resumeLockTimer = null;
+                }
                 return;
             }
 
@@ -7606,13 +7645,22 @@
             _fleetCameraReturnSweep();
 
             if (_firstActivation) { _firstActivation = false; return; }
+            if (_bioAuthInFlight) return;
+            if (Date.now() < _ignoreResumeUntil) return;
 
-            var hasBio = isBioEnrolled();
-            if (hasBio) {
-                triggerBioLock();
-            } else {
-                if (hasPinSet()) { isLocked = true; fallbackToPin(); }
-            }
+            if (_resumeLockTimer) clearTimeout(_resumeLockTimer);
+            _resumeLockTimer = setTimeout(function() {
+                _resumeLockTimer = null;
+                if (_bioAuthInFlight) return;
+                if (Date.now() < _ignoreResumeUntil) return;
+                var hasBio = isBioEnrolled();
+                if (hasBio) {
+                    triggerBioLock();
+                } else if (hasPinSet()) {
+                    isLocked = true;
+                    fallbackToPin();
+                }
+            }, RESUME_LOCK_DELAY_MS);
         });
 
         /* Shake CSS */

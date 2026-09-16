@@ -32,6 +32,7 @@ from utils import (
     normalize_vehicle_reg_key,
 )
 from vehicle_sort_utils import vehicle_order_by, sort_vehicles_in_memory
+from notification_service import notify_task_report_saved
 import re
 import os
 import csv
@@ -1180,12 +1181,21 @@ def task_report_new():
                 ))
         try:
             db.session.commit()
-            try:
-                from notification_service import notify_task_report_saved
-                for v, existing, close_reading, tasks_count, start_reading in to_save:
-                    notify_task_report_saved(v, task_date)
-            except Exception:
-                pass
+            for v, existing, close_reading, tasks_count, start_reading in to_save:
+                try:
+                    notify_task_report_saved(
+                        v, task_date,
+                        close_reading=close_reading,
+                        tasks_count=tasks_count,
+                        district_id=getattr(v, 'district_id', None) or district_id,
+                        project_id=getattr(v, 'project_id', None) or project_id,
+                        defer_push=True,
+                    )
+                except Exception:
+                    app.logger.exception(
+                        'Task report notify failed vehicle=%s date=%s',
+                        getattr(v, 'id', None), task_date,
+                    )
             saved_msg = '%s vehicle(s) save ho gayi.' % len(to_save)
             if skipped_empty:
                 saved_msg += ' %s khali Close wale rows skip kiye gaye.' % skipped_empty

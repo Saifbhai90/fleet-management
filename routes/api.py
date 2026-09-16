@@ -29,6 +29,7 @@ from auth_utils import (
     login_lockout_remaining_seconds, login_lockout_key, LOGIN_MAX_FAILURES,
 )
 from models import User, LoginAttempt
+from notification_service import notify_gps_checkin, notify_gps_checkout
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -485,10 +486,15 @@ def mobile_checkin():
                 })
             return _err('Check-out pending for current session. Duplicate check-in blocked.', 409)
         try:
-            from notification_service import dismiss_driver_attendance_reminders
-            dismiss_driver_attendance_reminders(driver, 'checkin')
+            notify_gps_checkin(
+                driver, photo_url,
+                vehicle=getattr(driver, 'vehicle', None),
+                defer_push=True,
+            )
         except Exception:
-            pass
+            current_app.logger.exception(
+                'JWT GPS check-in notify failed driver=%s', driver.id
+            )
         return _ok({'message': f'Check-in recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
         db.session.rollback()
@@ -586,10 +592,15 @@ def mobile_checkout():
                 })
             return _err('Check-out already completed or another request won the update.', 409)
         try:
-            from notification_service import dismiss_driver_attendance_reminders
-            dismiss_driver_attendance_reminders(driver, 'checkout')
+            notify_gps_checkout(
+                driver, photo_url,
+                vehicle=getattr(driver, 'vehicle', None),
+                defer_push=True,
+            )
         except Exception:
-            pass
+            current_app.logger.exception(
+                'JWT GPS check-out notify failed driver=%s', driver.id
+            )
         return _ok({'message': f'Check-out recorded for {driver.name}', 'time': str(now_utc.time())[:5]})
     except Exception as e:
         db.session.rollback()

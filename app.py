@@ -1248,6 +1248,11 @@ if _run_startup_tasks:
         except Exception as e:
             app.logger.warning('Memory guard failed to start: %s', e)
         try:
+            from notification_service import warmup_fcm_executor
+            warmup_fcm_executor()
+        except Exception as e:
+            app.logger.warning('FCM notify pool failed to start: %s', e)
+        try:
             from services.ufone_service import rewrap_ufone_account_passwords
             n = rewrap_ufone_account_passwords(app)
             if n:

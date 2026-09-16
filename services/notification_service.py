@@ -9,6 +9,7 @@ Fleet Manager notification service (v2).
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from sqlalchemy import func
@@ -16,6 +17,40 @@ from sqlalchemy import func
 logger = logging.getLogger(__name__)
 
 NOTIFICATIONS_V2_SETTING_KEY = 'notifications_v2_purged'
+
+# Process-lifetime workers (started at boot). Per-request daemon threads are
+# dropped by gunicorn gthread after the GPS submit response, so FCM never left.
+_fcm_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='fcm-push')
+
+
+def warmup_fcm_executor():
+    """Start pool threads at boot so GPS FCM is not tied to a request thread."""
+    _fcm_executor.submit(lambda: None)
+
+
+def _enqueue_fcm(app_obj, user_id, title, message, link, notification_id, dismiss_reminder_kind):
+    def _run():
+        ctx = app_obj.app_context() if app_obj is not None else None
+        if ctx is not None:
+            ctx.push()
+        try:
+            from push_notifications import send_push
+            send_push(
+                int(user_id), title, message or '', link=link,
+                notification_id=notification_id,
+                dismiss_reminder_kind=dismiss_reminder_kind,
+            )
+        except Exception as exc:
+            logger.warning('Deferred FCM failed user %s: %s', user_id, exc)
+        finally:
+            if ctx is not None:
+                ctx.pop()
+
+    try:
+        _fcm_executor.submit(_run)
+    except Exception:
+        logger.warning('FCM executor submit failed user %s; sending inline', user_id)
+        _run()
 
 
 def _invalidate_notif_cache(user_ids):
@@ -25,11 +60,6 @@ def _invalidate_notif_cache(user_ids):
             _notif_cache.pop(f'notif_{uid}', None)
     except Exception:
         pass
-
-
-def _is_cloud_media_url(path):
-    p = (path or '').strip().lower()
-    return p.startswith('http://') or p.startswith('https://')
 
 
 def _is_parking_full_notification(notification):
@@ -246,7 +276,7 @@ def get_dto_user_ids_for_scope(district_id, project_id):
 
 
 def _vehicle_scope_from_driver(driver, vehicle=None):
-    from models import Vehicle
+    from models import Vehicle, db
 
     v = vehicle
     if not v and driver and getattr(driver, 'vehicle_id', None):
@@ -262,6 +292,7 @@ def _vehicle_scope_from_driver(driver, vehicle=None):
 def notify_user(
     user_id, title, message, *, link=None, link_text=None,
     notification_type='info', push=True, dismiss_reminder_kind=None,
+    defer_push=False,
 ):
     """Create in-app notification for one user and optionally send FCM."""
     if not user_id:
@@ -291,29 +322,47 @@ def notify_user(
         raise
     if push:
         try:
-            from push_notifications import send_push
-            send_push(
-                int(user_id), title, message or '', link=link, notification_id=n.id,
-                dismiss_reminder_kind=dismiss_reminder_kind,
-            )
+            if defer_push:
+                from flask import current_app
+                _enqueue_fcm(
+                    current_app._get_current_object(),
+                    int(user_id), title, message or '', link, n.id,
+                    dismiss_reminder_kind,
+                )
+            else:
+                from push_notifications import send_push
+                send_push(
+                    int(user_id), title, message or '', link=link, notification_id=n.id,
+                    dismiss_reminder_kind=dismiss_reminder_kind,
+                )
         except Exception as exc:
             logger.warning('FCM push failed user %s: %s', user_id, exc)
     _invalidate_notif_cache([user_id])
     return n
 
 
-def _notify_driver_user(driver, title, message, link=None, dismiss_reminder_kind=None):
+def _notify_driver_user(
+    driver, title, message, link=None, dismiss_reminder_kind=None, defer_push=False,
+):
     from push_notifications import get_user_id_for_driver
 
     uid = get_user_id_for_driver(driver)
     if uid:
         notify_user(
             uid, title, message, link=link, notification_type='success',
-            dismiss_reminder_kind=dismiss_reminder_kind,
+            dismiss_reminder_kind=dismiss_reminder_kind, defer_push=defer_push,
+        )
+    else:
+        logger.info(
+            'Driver notify skipped: no linked user for driver=%s',
+            getattr(driver, 'id', None),
         )
 
 
-def _notify_dtos(district_id, project_id, driver, vehicle_no, title, message, link=None):
+def _notify_dtos(
+    district_id, project_id, driver, vehicle_no, title, message, link=None,
+    defer_push=False,
+):
     driver_name = (driver.name or '').strip() if driver else ''
     v_no = (vehicle_no or '').strip()
     body = message
@@ -329,7 +378,10 @@ def _notify_dtos(district_id, project_id, driver, vehicle_no, title, message, li
         else:
             body = ' | '.join(parts)
     for uid in get_dto_user_ids_for_scope(district_id, project_id):
-        notify_user(uid, title, body, link=link, notification_type='info')
+        notify_user(
+            uid, title, body, link=link, notification_type='info',
+            defer_push=defer_push,
+        )
 
 
 ATTENDANCE_CHECKIN_REMINDER_TITLE = 'Check-in reminder'
@@ -481,8 +533,8 @@ def dismiss_driver_attendance_reminders(driver, kind):
     return mark_unread_titles_read(uid, [title])
 
 
-def notify_gps_checkin(driver, photo_path, *, vehicle=None):
-    """After GPS+Camera check-in with photo stored (prefer R2/cloud URL)."""
+def notify_gps_checkin(driver, photo_path, *, vehicle=None, defer_push=True):
+    """After GPS+Camera check-in. In-app row is created now; FCM can be queued."""
     from models import AttendanceSettings
 
     # Always clear stale pending reminders, even if success push is skipped.
@@ -491,14 +543,14 @@ def notify_gps_checkin(driver, photo_path, *, vehicle=None):
     except Exception as exc:
         logger.warning('dismiss check-in reminders after GPS check-in: %s', exc)
 
-    if not driver or not _is_cloud_media_url(photo_path):
+    if not driver:
+        logger.info('GPS check-in notify skipped: no driver')
         return
     att = AttendanceSettings.query.first()
     if not att or not att.notify_on_attendance_mark:
+        logger.info('GPS check-in notify skipped: notify_on_attendance_mark off')
         return
     district_id, project_id, v_no = _vehicle_scope_from_driver(driver, vehicle)
-    if not district_id or not project_id:
-        return
     driver_title = 'Attendance Marked'
     driver_msg = (
         f'{driver.name}, aap ki attendance check-in mark ho chuki hai. '
@@ -517,12 +569,22 @@ def notify_gps_checkin(driver, photo_path, *, vehicle=None):
         pass
     _notify_driver_user(
         driver, driver_title, driver_msg, link=link, dismiss_reminder_kind='checkin',
+        defer_push=defer_push,
     )
-    _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
+    if district_id and project_id:
+        _notify_dtos(
+            district_id, project_id, driver, v_no, dto_title, dto_msg, link=link,
+            defer_push=defer_push,
+        )
+    else:
+        logger.info(
+            'GPS check-in DTO notify skipped: missing district/project driver=%s',
+            getattr(driver, 'id', None),
+        )
 
 
-def notify_gps_checkout(driver, photo_path, *, vehicle=None):
-    """After GPS+Camera check-out with photo stored (prefer R2/cloud URL)."""
+def notify_gps_checkout(driver, photo_path, *, vehicle=None, defer_push=True):
+    """After GPS+Camera check-out. In-app row is created now; FCM can be queued."""
     from models import AttendanceSettings
 
     # Always clear stale pending reminders, even if success push is skipped.
@@ -531,14 +593,14 @@ def notify_gps_checkout(driver, photo_path, *, vehicle=None):
     except Exception as exc:
         logger.warning('dismiss check-out reminders after GPS check-out: %s', exc)
 
-    if not driver or not _is_cloud_media_url(photo_path):
+    if not driver:
+        logger.info('GPS check-out notify skipped: no driver')
         return
     att = AttendanceSettings.query.first()
     if not att or not att.notify_on_attendance_mark:
+        logger.info('GPS check-out notify skipped: notify_on_attendance_mark off')
         return
     district_id, project_id, v_no = _vehicle_scope_from_driver(driver, vehicle)
-    if not district_id or not project_id:
-        return
     driver_title = 'Check-out Complete'
     driver_msg = (
         f'{driver.name}, aap ka check-out upload ho gaya hai aur duty successfully end ho gayi hai. '
@@ -557,8 +619,18 @@ def notify_gps_checkout(driver, photo_path, *, vehicle=None):
         pass
     _notify_driver_user(
         driver, driver_title, driver_msg, link=link, dismiss_reminder_kind='checkout',
+        defer_push=defer_push,
     )
-    _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
+    if district_id and project_id:
+        _notify_dtos(
+            district_id, project_id, driver, v_no, dto_title, dto_msg, link=link,
+            defer_push=defer_push,
+        )
+    else:
+        logger.info(
+            'GPS check-out DTO notify skipped: missing district/project driver=%s',
+            getattr(driver, 'id', None),
+        )
     try:
         from attendance_reminder_service import notify_vehicle_peers_after_checkout
         notify_vehicle_peers_after_checkout(driver, vehicle=vehicle)
@@ -566,29 +638,51 @@ def notify_gps_checkout(driver, photo_path, *, vehicle=None):
         logger.warning('notify_vehicle_peers_after_checkout: %s', exc)
 
 
-def notify_task_report_saved(vehicle, task_date, *, driver=None):
-    """After New Task Entry save for a vehicle."""
-    from models import Driver, Vehicle
+def notify_task_report_saved(
+    vehicle, task_date, *, driver=None,
+    close_reading=None, tasks_count=None,
+    district_id=None, project_id=None, defer_push=True,
+):
+    """After New Task Entry save for a vehicle (Close reading / Tasks)."""
+    from models import Driver, db
 
     if not vehicle:
+        logger.info('Task report notify skipped: no vehicle')
         return
-    if not driver:
-        if vehicle.driver_id:
-            driver = db.session.get(Driver, vehicle.driver_id)
-        else:
-            driver = Driver.query.filter_by(
-                vehicle_id=vehicle.id, status='Active'
-            ).first()
-    district_id = vehicle.district_id
-    project_id = vehicle.project_id
-    if not district_id or not project_id:
-        return
+    district_id = district_id or getattr(vehicle, 'district_id', None)
+    project_id = project_id or getattr(vehicle, 'project_id', None)
     v_no = (vehicle.vehicle_no or '').strip()
     date_s = task_date.strftime('%d-%m-%Y') if task_date else ''
+    extras = []
+    if close_reading is not None and close_reading != '':
+        extras.append('Close: %s' % close_reading)
+    if tasks_count is not None and tasks_count != '':
+        extras.append('Tasks: %s' % tasks_count)
+    extra_s = ' | '.join(extras)
     driver_title = 'Task Report Saved'
-    driver_msg = f'Aap ki vehicle {v_no} ki task report {date_s} par save ho gayi hai.'
+    driver_msg = (
+        f'Aap ki vehicle {v_no} ki task report {date_s} par save ho gayi hai.'
+    )
+    if extra_s:
+        driver_msg = f'{driver_msg} {extra_s}.'
     dto_title = 'Task Report Saved'
     dto_msg = f'Task report save ho gayi ({date_s}).'
+    if extra_s:
+        dto_msg = f'{dto_msg} {extra_s}.'
+    drivers = []
+    seen = set()
+    if driver and getattr(driver, 'id', None):
+        drivers.append(driver)
+        seen.add(driver.id)
+    if getattr(vehicle, 'driver_id', None) and vehicle.driver_id not in seen:
+        assigned = db.session.get(Driver, vehicle.driver_id)
+        if assigned:
+            drivers.append(assigned)
+            seen.add(assigned.id)
+    for d in Driver.query.filter_by(vehicle_id=vehicle.id, status='Active').all():
+        if d.id not in seen:
+            drivers.append(d)
+            seen.add(d.id)
     link = None
     try:
         from flask import url_for
@@ -601,9 +695,26 @@ def notify_task_report_saved(vehicle, task_date, *, driver=None):
         )
     except Exception:
         pass
-    if driver:
-        _notify_driver_user(driver, driver_title, driver_msg, link=link)
-    _notify_dtos(district_id, project_id, driver, v_no, dto_title, dto_msg, link=link)
+    for d in drivers:
+        _notify_driver_user(
+            d, driver_title, driver_msg, link=link, defer_push=defer_push,
+        )
+    if not drivers:
+        logger.info(
+            'Task report driver notify skipped: no driver on vehicle=%s',
+            getattr(vehicle, 'id', None),
+        )
+    if district_id and project_id:
+        _notify_dtos(
+            district_id, project_id,
+            drivers[0] if drivers else None,
+            v_no, dto_title, dto_msg, link=link, defer_push=defer_push,
+        )
+    else:
+        logger.info(
+            'Task report DTO notify skipped: missing district/project vehicle=%s',
+            getattr(vehicle, 'id', None),
+        )
 
 
 def pk_time_str():

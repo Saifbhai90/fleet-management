@@ -47,6 +47,7 @@ from utils import (
 )
 from r2_storage import upload_image_file, upload_image_bytes
 from auth_utils import user_can_access
+from notification_service import notify_gps_checkin, notify_gps_checkout
 
 # Import shared helpers from routes.py
 from routes import (
@@ -3403,33 +3404,19 @@ def _upload_attendance_photo_from_form_or_b64(photo_file, photo_b64, *, required
 
 
 def _defer_gps_attendance_notify(kind, driver_id, photo_path, vehicle_id=None):
-    """FCM / reminder cleanup after response — do not block GPS submit on push latency."""
-    import threading
-
-    app_obj = app._get_current_object()
+    """Create in-app success notify in this request; FCM is queued off the worker."""
     kind_l = (kind or '').strip().lower()
     did = int(driver_id or 0)
     vid = int(vehicle_id or 0) or None
-    path = photo_path
-
-    def _runner():
-        with app_obj.app_context():
-            try:
-                from notification_service import notify_gps_checkin, notify_gps_checkout
-                driver = db.session.get(Driver, did)
-                vehicle = db.session.get(Vehicle, vid) if vid else None
-                if kind_l in ('checkout', 'check-out', 'out'):
-                    notify_gps_checkout(driver, path, vehicle=vehicle)
-                else:
-                    notify_gps_checkin(driver, path, vehicle=vehicle)
-            except Exception:
-                app_obj.logger.exception(
-                    'Deferred GPS %s notify failed driver=%s', kind_l, did
-                )
-
-    threading.Thread(
-        target=_runner, daemon=True, name=f'gps-{kind_l or "checkin"}-notify-{did}'
-    ).start()
+    try:
+        driver = db.session.get(Driver, did)
+        vehicle = db.session.get(Vehicle, vid) if vid else None
+        if kind_l in ('checkout', 'check-out', 'out'):
+            notify_gps_checkout(driver, photo_path, vehicle=vehicle, defer_push=True)
+        else:
+            notify_gps_checkin(driver, photo_path, vehicle=vehicle, defer_push=True)
+    except Exception:
+        app.logger.exception('GPS %s notify failed driver=%s', kind_l, did)
 
 
 @app.route('/api/attendance/gps-checkin-submit', methods=['POST'])
