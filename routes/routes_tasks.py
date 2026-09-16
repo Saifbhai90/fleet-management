@@ -1705,12 +1705,20 @@ def api_tracker_detail():
             if not s:
                 return ''
             from datetime import datetime as _dt
+            t = str(s).strip()
             for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%H:%M:%S', '%H:%M', '%d/%m/%Y %H:%M:%S'):
                 try:
-                    return _dt.strptime(s.strip(), fmt).strftime('%I:%M %p')
+                    return _dt.strptime(t, fmt).strftime('%I:%M %p')
                 except (ValueError, AttributeError):
                     continue
-            return s
+            # Portal rows often carry a date with no end time — nothing to show.
+            for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+                try:
+                    _dt.strptime(t, fmt)
+                    return ''
+                except ValueError:
+                    continue
+            return t
 
         return jsonify({
             'range': True,
@@ -1749,12 +1757,20 @@ def api_tracker_detail():
         if not s:
             return ''
         from datetime import datetime as _dt
+        t = str(s).strip()
         for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M', '%H:%M:%S', '%H:%M', '%d/%m/%Y %H:%M:%S'):
             try:
-                return _dt.strptime(s.strip(), fmt).strftime('%I:%M %p')
+                return _dt.strptime(t, fmt).strftime('%I:%M %p')
             except (ValueError, AttributeError):
                 continue
-        return s
+        # Portal rows often carry a date with no end time — nothing to show.
+        for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y'):
+            try:
+                _dt.strptime(t, fmt)
+                return ''
+            except ValueError:
+                continue
+        return t
     return jsonify({
         'id': rec.id,
         'reg_no': rec.reg_no or '',
