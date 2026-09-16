@@ -20,10 +20,10 @@
 
   var map = L.map('trackingMap', { zoomControl: !isMobile(), preferCanvas: false, zoomAnimation: true, fadeAnimation: true, tap: true }).setView([30.15, 71.0], 8);
 
-  // OSM is the default basemap. Unofficial Google tiles stay optional.
+  // Google Streets is the default basemap; other tiles stay available in the layer picker.
   var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+  });
 
   var voyagerLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 20, attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd'
@@ -43,7 +43,7 @@
 
   var googleStreetsLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
     maxZoom: 20, attribution: '&copy; Google', subdomains: ['mt0','mt1','mt2','mt3']
-  });
+  }).addTo(map);
 
   var baseLayers = [
     { name: 'OSM Standard', layer: osmLayer },
@@ -53,7 +53,7 @@
     { name: 'Esri Street', layer: esriStreetLayer },
     { name: 'Google Streets', layer: googleStreetsLayer }
   ];
-  var activeBaseName = 'OSM Standard';
+  var activeBaseName = 'Google Streets';
 
   if (!isMobile()) {
     var ctrlLayers = {};
@@ -89,10 +89,16 @@
   var feedMeta = boot.feed || {};
   var feedReceivedAt = Date.now();
   var ufoneTasksByReg = boot.ufone_tasks_by_reg || {};
+  var parkingByReg = boot.parking_by_reg || {};
+  var ufoneLastClosedByReg = {};
+  var ufoneLastClosedPending = {};
   var POSITIONS_TIMEOUT_MS = 25000;
   var nearestLayer = L.layerGroup();
   var nearestMarkers = {};
   var nearestState = null;
+  var parkingLayer = L.layerGroup();
+  var parkingState = null;
+  var AT_PARKING_M = 500;
 
   function fetchUfoneTaskMap() {
     var ctrl = new AbortController();
@@ -126,6 +132,44 @@
 
   function activeUfoneTask(regNo) {
     return ufoneTasksByReg[normalizeRegKey(regNo)] || null;
+  }
+
+  function lastClosedUfoneTask(regNo) {
+    var key = normalizeRegKey(regNo);
+    if (!key || !Object.prototype.hasOwnProperty.call(ufoneLastClosedByReg, key)) return null;
+    return ufoneLastClosedByReg[key] || null;
+  }
+
+  function lastClosedKnown(regNo) {
+    return Object.prototype.hasOwnProperty.call(ufoneLastClosedByReg, normalizeRegKey(regNo));
+  }
+
+  function refreshOpenVehicleDetail(regNo) {
+    var v = posByReg[regNo];
+    if (!v) return;
+    var m = markers[regNo];
+    if (m && m.isPopupOpen && m.isPopupOpen()) m.setPopupContent(popupHtml(v));
+    if (detailReg === regNo) renderDetail(v);
+  }
+
+  function requestLastClosedTask(regNo) {
+    var key = normalizeRegKey(regNo);
+    if (!key || activeUfoneTask(regNo) || lastClosedKnown(regNo) || ufoneLastClosedPending[key]) return;
+    ufoneLastClosedPending[key] = true;
+    refreshOpenVehicleDetail(regNo);
+    fetch('/api/tracking/ufone-last-closed-task?reg=' + encodeURIComponent(regNo) + '&_=' + Date.now(), {
+      credentials: 'same-origin'
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        ufoneLastClosedByReg[key] = (d && d.task) ? d.task : null;
+        refreshOpenVehicleDetail(regNo);
+      })
+      .catch(function() { /* keep placeholder */ })
+      .then(function() {
+        delete ufoneLastClosedPending[key];
+        if (!lastClosedKnown(regNo)) refreshOpenVehicleDetail(regNo);
+      });
   }
 
   function escapeHtml(value) {
@@ -262,6 +306,7 @@
 
   function openNearest(regno) {
     if (!regno) return;
+    clearParkingOverlay();
     closeDetail();
     closeLegend();
     var panel = document.getElementById('tkNearestPanel');
@@ -302,6 +347,151 @@
         document.getElementById('tkNearestList').innerHTML =
           '<div class="tk-nearest-empty">' + escapeNearest(error.message) + '</div>';
       });
+  }
+
+  function parkingOf(regNo) {
+    return parkingByReg[normalizeRegKey(regNo)] || null;
+  }
+
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    var r = 6371000;
+    var p1 = lat1 * Math.PI / 180;
+    var p2 = lat2 * Math.PI / 180;
+    var dp = (lat2 - lat1) * Math.PI / 180;
+    var dl = (lon2 - lon1) * Math.PI / 180;
+    var h = Math.sin(dp / 2) * Math.sin(dp / 2) +
+      Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function formatParkingDistance(meters) {
+    if (meters == null || !isFinite(meters)) return '';
+    if (meters < 1000) return Math.round(meters) + ' m';
+    var km = meters / 1000;
+    return km.toFixed(km < 10 ? 1 : 0) + ' km';
+  }
+
+  function parkingDistanceInfo(v) {
+    var parking = v && parkingOf(v.RegNo);
+    if (!parking) return null;
+    var lat = parseFloat(v.LAT);
+    var lon = parseFloat(v.LON);
+    if (!isFinite(lat) || !isFinite(lon) || lat === 0 || lon === 0) {
+      return { parking: parking, meters: null, at: false, label: 'GPS unavailable' };
+    }
+    var meters = haversineMeters(lat, lon, parking.latitude, parking.longitude);
+    return {
+      parking: parking,
+      meters: meters,
+      at: meters <= AT_PARKING_M,
+      label: formatParkingDistance(meters)
+    };
+  }
+
+  function parkingIcon() {
+    return L.divIcon({
+      className: 'tk-nearest-divicon',
+      html: '<div class="tk-parking-marker">P</div>',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+  }
+
+  function updateParkingBanner(info) {
+    var title = document.getElementById('tkParkingTitle');
+    var sub = document.getElementById('tkParkingSub');
+    if (!title || !sub || !info) return;
+    title.textContent = info.parking.name || 'Assigned parking';
+    if (info.meters == null) {
+      sub.textContent = 'Parking location set · vehicle GPS unavailable';
+      return;
+    }
+    sub.textContent = (info.at ? 'At parking' : 'Away from parking') +
+      ' · ' + info.label + ' · ' + AT_PARKING_M + ' m yard';
+  }
+
+  function clearParkingOverlay() {
+    parkingLayer.clearLayers();
+    parkingState = null;
+    if (map.hasLayer(parkingLayer)) map.removeLayer(parkingLayer);
+    var banner = document.getElementById('tkParkingBanner');
+    if (banner) banner.classList.remove('open');
+  }
+
+  function drawParkingOverlay(v, info) {
+    parkingLayer.clearLayers();
+    var parkLatLng = [info.parking.latitude, info.parking.longitude];
+    L.circle(parkLatLng, {
+      radius: AT_PARKING_M,
+      color: info.at ? '#16a34a' : '#f59e0b',
+      weight: 2,
+      fillColor: info.at ? '#16a34a' : '#f59e0b',
+      fillOpacity: 0.12
+    }).addTo(parkingLayer);
+    L.marker(parkLatLng, { icon: parkingIcon(), zIndexOffset: 1100 })
+      .bindTooltip('Parking · ' + (info.parking.name || ''), { direction: 'top' })
+      .addTo(parkingLayer);
+    var vLat = parseFloat(v.LAT);
+    var vLon = parseFloat(v.LON);
+    if (isFinite(vLat) && isFinite(vLon) && vLat !== 0 && vLon !== 0) {
+      L.polyline([parkLatLng, [vLat, vLon]], {
+        color: info.at ? '#22c55e' : '#f59e0b',
+        weight: 3,
+        dashArray: '8 6',
+        opacity: 0.9
+      }).addTo(parkingLayer);
+    }
+    if (!map.hasLayer(parkingLayer)) parkingLayer.addTo(map);
+  }
+
+  function syncParkingOverlay() {
+    if (!parkingState || !parkingState.regno) return;
+    var v = posByReg[parkingState.regno];
+    if (!v) return;
+    var info = parkingDistanceInfo(v);
+    if (!info) return;
+    parkingState.info = info;
+    updateParkingBanner(info);
+    drawParkingOverlay(v, info);
+  }
+
+  function openParking(regno) {
+    var v = posByReg[regno];
+    var info = parkingDistanceInfo(v);
+    if (!info) return;
+    clearNearestOverlay();
+    closeDetail();
+    closeLegend();
+    parkingState = { regno: regno, info: info };
+    updateParkingBanner(info);
+    drawParkingOverlay(v, info);
+    var banner = document.getElementById('tkParkingBanner');
+    if (banner) banner.classList.add('open');
+    var points = [[info.parking.latitude, info.parking.longitude]];
+    var vLat = parseFloat(v.LAT);
+    var vLon = parseFloat(v.LON);
+    if (isFinite(vLat) && isFinite(vLon) && vLat !== 0 && vLon !== 0) {
+      points.push([vLat, vLon]);
+    }
+    if (points.length > 1) {
+      map.fitBounds(L.latLngBounds(points), { padding: [70, 70], maxZoom: 16, animate: true });
+    } else {
+      map.setView(points[0], Math.max(map.getZoom(), 15), { animate: true });
+    }
+  }
+
+  function popupParkingBlock(v) {
+    var info = parkingDistanceInfo(v);
+    if (!info) return '';
+    var badge = info.at ? 'At parking' : 'Away from parking';
+    var dist = info.meters == null ? 'GPS unavailable' : (info.label + ' from assigned parking');
+    return '<div class="pop-parking-block">' +
+      '<span class="pop-parking-badge ' + (info.at ? 'at' : 'away') + '">' + badge + '</span>' +
+      '<div class="pop-parking-name">' + escapeHtml(info.parking.name) +
+        (info.parking.district ? ' · ' + escapeHtml(info.parking.district) : '') + '</div>' +
+      '<div class="pop-parking-dist">' + escapeHtml(dist) + '</div></div>' +
+      '<button type="button" class="pop-link pop-parking-btn" data-parking-reg="' + encodeURIComponent(v.RegNo) + '">' +
+      '<i class="bi bi-geo-alt"></i> Show parking on map</button>';
   }
 
   function matchesListFilter(regNo, status) {
@@ -513,15 +703,33 @@
 
   function popupTaskBlock(regNo) {
     var task = activeUfoneTask(regNo);
-    if (!task) {
-      return '<div class="pop-task-block pop-no-task">No active Ufone task on this vehicle</div>';
+    if (task) {
+      var label = escapeHtml(task.task_id_display || ('PHF-' + task.task_id));
+      var sub = task.patient_name ? (' — ' + escapeHtml(task.patient_name)) : '';
+      return '<div class="pop-task-block">' +
+        '<span class="pop-ufone-badge"><i class="bi bi-exclamation-circle"></i> Active Ufone Task</span>' +
+        '<a href="#" class="pop-task-link task-detail-btn" data-id="' + escapeHtml(task.task_id) + '">' +
+        'View ' + label + sub + '</a></div>';
     }
-    var label = escapeHtml(task.task_id_display || ('PHF-' + task.task_id));
-    var sub = task.patient_name ? (' — ' + escapeHtml(task.patient_name)) : '';
-    return '<div class="pop-task-block">' +
-      '<span class="pop-ufone-badge"><i class="bi bi-exclamation-circle"></i> Active Ufone Task</span>' +
-      '<a href="#" class="pop-task-link task-detail-btn" data-id="' + escapeHtml(task.task_id) + '">' +
-      'View ' + label + sub + '</a></div>';
+    var closed = lastClosedUfoneTask(regNo);
+    if (closed) {
+      var clabel = escapeHtml(closed.task_id_display || ('PHF-' + closed.task_id));
+      var csub = closed.patient_name ? (' — ' + escapeHtml(closed.patient_name)) : '';
+      var metaParts = [];
+      if (closed.status) metaParts.push(escapeHtml(closed.status));
+      if (closed.closed_at) metaParts.push(escapeHtml(closed.closed_at));
+      var meta = metaParts.length
+        ? '<span class="pop-task-meta">' + metaParts.join(' · ') + '</span>'
+        : '';
+      return '<div class="pop-task-block">' +
+        '<span class="pop-ufone-badge closed"><i class="bi bi-check-circle"></i> Last Closed Task</span>' +
+        '<a href="#" class="pop-task-link pop-task-link-closed task-detail-btn" data-id="' + escapeHtml(closed.task_id) + '">' +
+        'View ' + clabel + csub + '</a>' + meta + '</div>';
+    }
+    if (!lastClosedKnown(regNo) && ufoneLastClosedPending[normalizeRegKey(regNo)]) {
+      return '<div class="pop-task-block pop-no-task">Checking last Ufone task...</div>';
+    }
+    return '<div class="pop-task-block pop-no-task">No active Ufone task on this vehicle</div>';
   }
 
   function popupHtml(v) {
@@ -541,6 +749,7 @@
       '<div class="pop-row"><b>Landmark:</b> ' + (lm || 'n/a') + '</div>' +
       '<div class="pop-row"><b>Time:</b> ' + escapeHtml(v.RDT || 'N/A') + '</div>' +
       '<div class="pop-row"><b>Coords:</b> ' + escapeHtml(v.LAT) + ', ' + escapeHtml(v.LON) + '</div>' +
+      popupParkingBlock(v) +
       popupTaskBlock(v.RegNo) +
       '<button type="button" class="pop-link pop-nearest-btn" data-nearest-reg="' + encodeURIComponent(v.RegNo) + '">' +
       '<i class="bi bi-broadcast-pin"></i> Find nearest vehicles</button>' +
@@ -849,6 +1058,7 @@
         if (!isMobile()) m.bindPopup(popupHtml(v), { maxWidth: 300 });
         var mReg = v.RegNo;
         m.on('click', function() { selectVehicle(mReg, isMobile()); });
+        m.on('popupopen', function() { requestLastClosedTask(mReg); });
         markers[v.RegNo] = m;
         var newKeys = iconKeys(color, hasTask, v.RegNo, applied, gpsSt);
         markerState[v.RegNo] = { lat: lat, lon: lon, icon: newKeys.full, iconBase: newKeys.base, applied: applied };
@@ -873,6 +1083,7 @@
       if (dv) renderDetail(dv); else closeDetail();
     }
     syncNearestMarkerPositions();
+    syncParkingOverlay();
   }
 
   function selectVehicle(reg, pan) {
@@ -1106,8 +1317,31 @@
     var lm = escapeHtml((v.LandMark || '').replace(/^0\|\|/, ''));
     var time = v.RDT ? String(v.RDT).substr(11, 5) : '--';
     var task = activeUfoneTask(v.RegNo);
+    var closed = task ? null : lastClosedUfoneTask(v.RegNo);
+    var info = parkingDistanceInfo(v);
+    var parkingHtml = '';
+    if (info) {
+      parkingHtml =
+        '<button type="button" class="tk-parking-card ' + (info.at ? 'at' : 'away') + '" data-tk="parking">' +
+          '<div class="tk-parking-card-k">Parking</div>' +
+          '<div class="tk-parking-card-v">' + (info.at ? 'At parking' : 'Away') +
+            (info.label ? ' · ' + escapeHtml(info.label) : '') + '</div>' +
+          '<div class="tk-parking-card-n">' + escapeHtml(info.parking.name) + '</div>' +
+        '</button>';
+    }
     var following = (followReg === v.RegNo);
-    var taskLabel = task ? escapeHtml(task.task_id_display || ('PHF-' + task.task_id)) : '';
+    var shownTask = task || closed;
+    var taskLabel = shownTask ? escapeHtml(shownTask.task_id_display || ('PHF-' + shownTask.task_id)) : '';
+    var taskHtml = '';
+    if (task) {
+      taskHtml = '<a href="#" class="tk-detail-task task-detail-btn" data-id="' + escapeHtml(task.task_id) + '">' +
+        '<i class="bi bi-exclamation-circle"></i> Active Ufone Task &middot; ' + taskLabel + '</a>';
+    } else if (closed) {
+      taskHtml = '<a href="#" class="tk-detail-task closed task-detail-btn" data-id="' + escapeHtml(closed.task_id) + '">' +
+        '<i class="bi bi-check-circle"></i> Last Closed Task &middot; ' + taskLabel + '</a>';
+    } else if (!lastClosedKnown(v.RegNo) && ufoneLastClosedPending[normalizeRegKey(v.RegNo)]) {
+      taskHtml = '<div class="tk-detail-task closed">Checking last Ufone task...</div>';
+    }
     detailEl.innerHTML =
       '<div class="tk-detail-head">' +
         '<div style="min-width:0;">' +
@@ -1123,6 +1357,7 @@
         '<div class="tk-detail-cell"><div class="k">GPS</div><div class="v" data-gps-age="' + escapeHtml(v.RegNo) + '">' + formatGpsAge(displayGpsAgeSec(v)) + '</div></div>' +
         detailCell('Data', gpsStatusOf(v) === 'delayed' ? 'GPS Stale' : (gpsStatusOf(v) === 'offline' ? 'Offline' : (gpsStatusOf(v) === 'live' ? 'Live' : 'Unknown'))) +
       '</div>' +
+      parkingHtml +
       '<div class="tk-detail-actions">' +
         '<button type="button" class="tk-act follow' + (following ? ' on' : '') + '" data-tk="follow">' +
           '<i class="bi bi-broadcast-pin"></i> ' + (following ? 'Following' : 'Follow') + '</button>' +
@@ -1135,10 +1370,7 @@
         '<a class="tk-act primary" href="/tracking/vehicle/' + encodeURIComponent(v.RegNo) + '">' +
           '<i class="bi bi-graph-up"></i> Details</a>' +
       '</div>' +
-      (task
-        ? '<a href="#" class="tk-detail-task task-detail-btn" data-id="' + escapeHtml(task.task_id) + '">' +
-          '<i class="bi bi-exclamation-circle"></i> Active Ufone Task &middot; ' + taskLabel + '</a>'
-        : '');
+      taskHtml;
     if (detailReg) syncFabOffset();
   }
 
@@ -1161,6 +1393,7 @@
     var v = posByReg[reg];
     if (!v || !detailEl) return;
     detailReg = reg;
+    requestLastClosedTask(reg);
     renderDetail(v);
     detailEl.classList.add('open');
     closeLegend();
@@ -1210,6 +1443,7 @@
       if (hit.dataset.tk === 'close') { closeDetail(); haptic(); }
       else if (hit.dataset.tk === 'follow') { toggleFollow(detailReg); }
       else if (hit.dataset.tk === 'nearest') { openNearest(detailReg); haptic(); }
+      else if (hit.dataset.tk === 'parking') { openParking(detailReg); haptic(); }
       else if (hit.dataset.tk === 'route') { openRoute(hit.dataset.lat, hit.dataset.lon); }
     });
   }
@@ -1219,6 +1453,12 @@
     if (nearestButton) {
       e.preventDefault();
       openNearest(decodeURIComponent(nearestButton.dataset.nearestReg || ''));
+      haptic();
+    }
+    var parkingButton = e.target.closest('.pop-parking-btn');
+    if (parkingButton) {
+      e.preventDefault();
+      openParking(decodeURIComponent(parkingButton.dataset.parkingReg || ''));
       haptic();
     }
     var nearestRow = e.target.closest('.tk-nearest-row');
@@ -1235,6 +1475,13 @@
     clearNearestOverlay();
     haptic();
   });
+  var parkingClose = document.getElementById('tkParkingClose');
+  if (parkingClose) {
+    parkingClose.addEventListener('click', function() {
+      clearParkingOverlay();
+      haptic();
+    });
+  }
   document.getElementById('tkNearestFreeOnly').addEventListener('change', function() {
     if (nearestState) {
       nearestState.onlyFree = this.checked;

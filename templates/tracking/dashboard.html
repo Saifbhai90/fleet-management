@@ -3,7 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
-<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1002" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/tracking_dashboard.css') }}?v=1004" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/ufone_task_modal.css') }}?v=1001" />
 {% endblock %}
 
@@ -164,6 +164,16 @@
         </label>
         <div class="tk-nearest-list" id="tkNearestList"></div>
       </section>
+
+      <section class="tk-parking-banner" id="tkParkingBanner" aria-live="polite">
+        <div>
+          <div class="tk-parking-title" id="tkParkingTitle">Parking</div>
+          <div class="tk-parking-sub" id="tkParkingSub">Assigned station</div>
+        </div>
+        <button type="button" class="tk-nearest-close" id="tkParkingClose" aria-label="Close parking overlay">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </section>
     </div>
 
     <!-- Vehicle detail card (mobile) -->
@@ -196,9 +206,10 @@
 <script type="application/json" id="tkDashboardBoot">{{ {
   'vehicles': vehicles,
   'feed': feed or {},
-  'ufone_tasks_by_reg': ufone_tasks_by_reg
+  'ufone_tasks_by_reg': ufone_tasks_by_reg,
+  'parking_by_reg': parking_by_reg
 } | tojson }}</script>
-<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1002"></script>
+<script src="{{ url_for('static', filename='js/tracking_dashboard.js') }}?v=1005"></script>
 <script src="{{ url_for('static', filename='js/ufone_task_detail.js') }}?v=1006"></script>
 <script>
 if (window.UfoneTaskDetail) {

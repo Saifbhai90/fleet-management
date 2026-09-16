@@ -24,6 +24,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
+from services.utils import strip_ufone_reg_tag
+
 logger = logging.getLogger(__name__)
 
 # ── Password encryption ──────────────────────────────────────────────────────
@@ -2112,6 +2114,101 @@ def build_active_ufone_tasks_by_reg() -> dict:
         logger.warning('build_active_ufone_tasks_by_reg cache fallback failed: %s', e)
 
     return out
+
+
+_UFONE_REG_LOOKUP_TAGS = ('COW', 'USG+P', 'USG', 'RAS', 'MNHC', 'EMS', 'NHP')
+
+
+def _ufone_reg_lookup_values(reg: str) -> list:
+    """Exact amb_reg_no values for index-friendly last-closed lookup."""
+    raw = (reg or '').strip()
+    if not raw:
+        return []
+    base = strip_ufone_reg_tag(raw) or raw
+    values = {raw, base}
+    for tag in _UFONE_REG_LOOKUP_TAGS:
+        values.add(base + ' ' + tag)
+        values.add(base + '-' + tag)
+    return [v for v in values if v]
+
+
+def _last_closed_task_payload(tid_raw, patient, status, district='',
+                              address='', closed_at='') -> dict:
+    tid_num = _task_id_digits(tid_raw)
+    if not tid_num:
+        return {}
+    return {
+        'task_id': tid_num,
+        'task_id_display': f'PHF-{tid_num}',
+        'patient_name': (patient or '').strip(),
+        'status': (status or '').strip(),
+        'district': (district or '').strip(),
+        'address': (address or '').strip()[:160],
+        'closed_at': (closed_at or '').strip(),
+    }
+
+
+def get_last_closed_ufone_task_for_reg(reg: str) -> dict:
+    """Most recently closed Ufone/EMG task for one vehicle.
+
+    Fleet Tracking vehicle-detail popup/card only. Empty dict when none.
+    """
+    from models import EmergencyTaskRecord, UfoneTaskCache
+
+    values = _ufone_reg_lookup_values(reg)
+    if not values:
+        return {}
+
+    try:
+        rows = (
+            EmergencyTaskRecord.query
+            .filter(EmergencyTaskRecord.amb_reg_no.in_(values))
+            .order_by(
+                EmergencyTaskRecord.task_date.desc(),
+                EmergencyTaskRecord.id.desc(),
+            )
+            .limit(80)
+            .all()
+        )
+        for row in rows:
+            if not _status_is_closed(row.status):
+                continue
+            closed_at = (row.completed_date_time or '').strip()
+            if not closed_at and row.task_date:
+                closed_at = str(row.task_date)
+            payload = _last_closed_task_payload(
+                row.task_id_ext, row.name, row.status,
+                row.district_name, row.address or '', closed_at,
+            )
+            if payload:
+                return payload
+    except Exception as e:
+        logger.warning('get_last_closed_ufone_task_for_reg EMG query failed: %s', e)
+
+    try:
+        cache_rows = (
+            UfoneTaskCache.query
+            .filter(UfoneTaskCache.ambulance_reg.in_(values))
+            .order_by(UfoneTaskCache.updated_at.desc())
+            .limit(40)
+            .all()
+        )
+        for row in cache_rows:
+            if not _status_is_closed(row.status):
+                continue
+            closed_at = ''
+            if row.updated_at:
+                closed_at = row.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+            payload = _last_closed_task_payload(
+                row.task_id, row.patient_name, row.status,
+                row.district, row.address or '', closed_at,
+            )
+            if payload:
+                return payload
+    except Exception as e:
+        logger.warning('get_last_closed_ufone_task_for_reg cache fallback failed: %s', e)
+
+    return {}
 
 
 def get_cached_positions(account_id: int) -> list:

@@ -13,7 +13,7 @@ from flask import (
 from app import app, db, csrf
 from models import (
     PortalXSAccount, PortalXSVehicleMapping,
-    Vehicle,
+    Vehicle, ParkingStation,
 )
 from services.portalxs_service import (
     fetch_live_positions, fetch_mileage,
@@ -83,6 +83,8 @@ import csv
 import io
 import json
 
+from sqlalchemy.orm import contains_eager
+
 from routes import _nav_back_ctx
 
 import logging
@@ -96,6 +98,73 @@ def _ufone_tasks_for_tracking() -> dict:
         return build_active_ufone_tasks_by_reg()
     except Exception as e:
         logger.warning('ufone tasks for tracking map failed: %s', e)
+        return {}
+
+
+def _ufone_last_closed_for_reg(reg: str) -> dict:
+    try:
+        from services.ufone_service import get_last_closed_ufone_task_for_reg
+        return get_last_closed_ufone_task_for_reg(reg)
+    except Exception as e:
+        logger.warning('ufone last-closed task for tracking detail failed: %s', e)
+        return {}
+
+
+def _parking_stations_for_tracking() -> dict:
+    """Normalized vehicle reg → assigned parking coords for the live map.
+
+    Distance is computed on the client from live GPS, the same way fleet apps
+    show At yard / Away from home on the vehicle card.
+    """
+    try:
+        out = {}
+        vehicles = (
+            Vehicle.query
+            .join(ParkingStation, Vehicle.parking_station_id == ParkingStation.id)
+            .filter(ParkingStation.latitude.isnot(None))
+            .filter(ParkingStation.longitude.isnot(None))
+            .options(contains_eager(Vehicle.parking_station))
+            .all()
+        )
+        by_id = {}
+        for v in vehicles:
+            ps = v.parking_station
+            if not ps:
+                continue
+            try:
+                lat = float(ps.latitude) if ps.latitude is not None else None
+                lon = float(ps.longitude) if ps.longitude is not None else None
+            except (TypeError, ValueError):
+                continue
+            if lat is None or lon is None:
+                continue
+            if abs(lat) < 0.000001 and abs(lon) < 0.000001:
+                continue
+            payload = {
+                'name': (ps.name or '').strip(),
+                'district': (ps.district or '').strip(),
+                'latitude': round(lat, 6),
+                'longitude': round(lon, 6),
+            }
+            by_id[v.id] = payload
+            key = normalize_reg_key(v.vehicle_no)
+            if key:
+                out[key] = payload
+        if not by_id:
+            return out
+        mappings = PortalXSVehicleMapping.query.filter(
+            PortalXSVehicleMapping.vehicle_id.in_(list(by_id.keys()))
+        ).all()
+        for m in mappings:
+            payload = by_id.get(m.vehicle_id)
+            if not payload:
+                continue
+            key = normalize_reg_key(m.portalxs_regno)
+            if key:
+                out[key] = payload
+        return out
+    except Exception as e:
+        logger.warning('parking stations for tracking map failed: %s', e)
         return {}
 
 
@@ -209,6 +278,7 @@ def tracking_dashboard():
             'warning': feed.get('warning'),
         },
         ufone_tasks_by_reg=_ufone_tasks_for_tracking(),
+        parking_by_reg=_parking_stations_for_tracking(),
         **_nav_back_ctx(url_for('tracking_dashboard')),
     )
 
@@ -217,6 +287,16 @@ def tracking_dashboard():
 def api_tracking_ufone_active_tasks():
     """Today's open Ufone tasks keyed by normalized vehicle reg (Fleet map pulse)."""
     return jsonify({'tasks_by_reg': _ufone_tasks_for_tracking()})
+
+
+@app.route('/api/tracking/ufone-last-closed-task')
+def api_tracking_ufone_last_closed_task():
+    """Last closed Ufone task for one vehicle (Fleet map detail popup only)."""
+    reg = (request.args.get('reg') or '').strip()
+    if not reg:
+        return jsonify({'task': None})
+    task = _ufone_last_closed_for_reg(reg)
+    return jsonify({'task': task or None})
 
 
 def _nearest_dispatch_data(acct_id: int, regno: str,
