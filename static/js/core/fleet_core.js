@@ -4358,6 +4358,17 @@
         var rect = control.getBoundingClientRect();
         if (!rect.width && !rect.height) return;
 
+        /* Keep wheel/touch scroll on the option list (do not scroll page behind). */
+        if (dropdown.getAttribute('data-fleet-scroll-armed') !== '1') {
+            dropdown.setAttribute('data-fleet-scroll-armed', '1');
+            dropdown.addEventListener('wheel', function(ev) {
+                ev.stopPropagation();
+            }, { passive: true });
+            dropdown.addEventListener('touchmove', function(ev) {
+                ev.stopPropagation();
+            }, { passive: true });
+        }
+
         var vv = window.visualViewport;
         var vpTop = (vv && vv.offsetTop) || 0;
         var vpLeft = (vv && vv.offsetLeft) || 0;
@@ -4399,14 +4410,20 @@
 
         if (openBelow) {
             var maxBelow = Math.max(72, Math.min(prefMax, spaceBelow - gap));
-            if (content) content.style.maxHeight = maxBelow + 'px';
+            if (content) {
+                content.style.maxHeight = maxBelow + 'px';
+                content.style.overflowY = 'auto';
+            }
             dropdown.style.top = (rect.bottom + gap) + 'px';
             dropdown.style.bottom = 'auto';
             return;
         }
 
         var maxAbove = Math.max(72, Math.min(prefMax, spaceAbove - gap));
-        if (content) content.style.maxHeight = maxAbove + 'px';
+        if (content) {
+            content.style.maxHeight = maxAbove + 'px';
+            content.style.overflowY = 'auto';
+        }
         dropdown.style.top = 'auto';
         dropdown.style.bottom = (window.innerHeight - rect.top + gap) + 'px';
     };
@@ -5248,7 +5265,13 @@
         var _tsLayoutMo = null;
         var _tsLayoutWatchStarted = false;
 
-        window.fleetRepositionOpenTomSelects = function() {
+        window.fleetRepositionOpenTomSelects = function(ev) {
+            /* Scrolling inside the open option list must not reposition/jitter the menu. */
+            try {
+                if (ev && ev.target && ev.target.closest && ev.target.closest('.ts-dropdown')) {
+                    return;
+                }
+            } catch (eSkip) {}
             if (_tsRepositionScheduled) return;
             _tsRepositionScheduled = true;
             requestAnimationFrame(function() {

@@ -51,6 +51,15 @@ html.capacitor-native #dashAppStatusLine {
             margin: 0 !important;
             overflow: hidden;
         }
+        /* Option list must scroll with mouse wheel / touch; contain overscroll
+           so the page behind (#mainContent) does not steal the gesture. */
+        body > .ts-dropdown .ts-dropdown-content {
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+        }
         body > .ts-dropdown.ts-dropdown-up {
             box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.16);
         }

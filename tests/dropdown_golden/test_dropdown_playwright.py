@@ -308,6 +308,16 @@ def test_camera_resume_guard_and_dropdown_parent_body():
     assert 'openOnFocus: false' in src
 
 
+def test_tom_select_list_scroll_armed():
+    """Open TS option lists must keep mouse-wheel scroll (not scroll the page behind)."""
+    js = open(os.path.join(ROOT, 'static', 'js', 'core', 'fleet_core.js'), encoding='utf-8').read()
+    css = open(os.path.join(ROOT, 'static', 'css', 'core', 'fleet_styles.css'), encoding='utf-8').read()
+    assert "data-fleet-scroll-armed" in js
+    assert "ev.stopPropagation()" in js
+    assert 'overscroll-behavior: contain' in css
+    assert 'body > .ts-dropdown .ts-dropdown-content' in css
+
+
 @pytest.mark.parametrize('viewport', _VIEWPORTS, ids=lambda v: v['name'])
 def test_logbook_cover_has_cascade_attrs(live_server, auth_cookie, viewport):
     playwright = pytest.importorskip('playwright.sync_api')
