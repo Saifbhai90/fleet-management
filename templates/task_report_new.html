@@ -3587,6 +3587,8 @@
         .then(function (d) {
           disarmBackGuard();
           resetSaveUi();
+          if (window.fleetTopLoadBarFinish) window.fleetTopLoadBarFinish();
+          if (window.fleetTopLoadBarFinishUi) window.fleetTopLoadBarFinishUi();
           if (!d || !d.ok) {
             hideSaveOverlay();
             window.taskEntryNotice('Save nahi hua', (d && d.message) || 'Unknown error');
@@ -3601,6 +3603,8 @@
           disarmBackGuard();
           hideSaveOverlay();
           resetSaveUi();
+          if (window.fleetTopLoadBarFinish) window.fleetTopLoadBarFinish();
+          if (window.fleetTopLoadBarFinishUi) window.fleetTopLoadBarFinishUi();
           window.taskEntryNotice('Save nahi hua', 'Network masla — dubara Save All dabayen. Masla barhta rahe to pehle Reload karein.');
         });
     }

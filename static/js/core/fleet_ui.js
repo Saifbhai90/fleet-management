@@ -43,12 +43,17 @@
         start();
     }, true);
 
-    /* Show bar on form submit */
+    /* Show bar on form submit — but the bar is NAVIGATION feedback. AJAX
+       submits (New Task Entry save) and validation-blocked submits call
+       preventDefault and never navigate, so the bar must not start for them
+       (it would stall at ~90% on phones — there is no page load to finish it).
+       Defer one tick: if the submit settled un-prevented, navigation is real. */
     document.addEventListener('submit', function(e) {
         var form = e.target;
-        if (form && form.method && form.method.toLowerCase() !== 'get') {
-            start();
-        }
+        if (!(form && form.method && form.method.toLowerCase() !== 'get')) return;
+        setTimeout(function() {
+            if (!e.defaultPrevented) start();
+        }, 0);
     }, true);
 
     /* Finish immediately when this page's DOM loaded */
@@ -57,6 +62,9 @@
     } else {
         document.addEventListener('DOMContentLoaded', finish);
     }
+
+    /* AJAX flows that skip navigation can force-finish a running bar. */
+    window.fleetTopLoadBarFinishUi = finish;
 })();
 
 /* ── Section separator ── */

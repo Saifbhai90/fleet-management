@@ -2646,8 +2646,19 @@
             tlbStart();
         }, true);
 
-        // Catch form submissions
-        document.addEventListener('submit', tlbStart, true);
+        // Catch form submissions — but the bar is NAVIGATION feedback, and many
+        // forms (New Task Entry AJAX save, validation-blocked submits) never
+        // navigate. Start it only after the submit settles un-prevented; if a
+        // handler called preventDefault (AJAX save / warning popup), skip so
+        // the bar never stalls half-drawn on phones.
+        document.addEventListener('submit', function(e) {
+            setTimeout(function() {
+                if (!e.defaultPrevented) tlbStart();
+            }, 0);
+        }, true);
+
+        // AJAX flows that skip navigation can force-finish a running bar.
+        window.fleetTopLoadBarFinish = tlbFinish;
     })();
 
     // Sidebar Toggle + Workspace lock behavior
