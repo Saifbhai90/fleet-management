@@ -105,12 +105,25 @@ window.FleetConfig = {
     <script>
     // Safety net: if TomSelect failed to load, unhide native selects so the page is usable
     (function(){
-        if (typeof TomSelect !== 'undefined') return;
-        document.addEventListener('DOMContentLoaded', function(){
-            document.querySelectorAll('select.search-select').forEach(function(sel){
-                sel.style.display = '';
-                sel.classList.remove('search-select');
+        function _unhide(sel){
+            sel.style.display = '';
+            sel.classList.remove('search-select');
+        }
+        if (typeof TomSelect === 'undefined') {
+            document.addEventListener('DOMContentLoaded', function(){
+                document.querySelectorAll('select.search-select').forEach(_unhide);
             });
+            return;
+        }
+        /* Vendor loaded but fleet_core.js may have failed to execute — CSS hides
+           .search-select until Tom Select wraps them, so 3s after DOMContentLoaded
+           unhide any still-unwrapped select (native dropdown beats invisible one). */
+        document.addEventListener('DOMContentLoaded', function(){
+            setTimeout(function(){
+                document.querySelectorAll('select.search-select').forEach(function(sel){
+                    if (!sel.tomselect) _unhide(sel);
+                });
+            }, 3000);
         });
     })();
     </script>
@@ -148,7 +161,7 @@ window.FleetConfig = {
     <!-- Lucide: version-pinned + self-hosted (was unpkg @latest — uncacheable,
          so icons always arrived late and popped in after first paint). -->
     <script src="/static/vendor/lucide/1.43.0/lucide.min.js?v=8006" defer></script>
-    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8024" defer></script>
+    <script src="{{ url_for('static', filename='js/core/fleet_core.js') }}?v=8025" defer></script>
     <script src="{{ url_for('static', filename='js/core/fleet_ui.js') }}?v=8012" defer></script>
     <script src="{{ url_for('static', filename='js/legacy_android_gpu.js') }}?v=8009" defer></script>
     {% block extra_head %}{% endblock %}

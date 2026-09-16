@@ -638,6 +638,13 @@
           try{ window.dispatchEvent(new CustomEvent('fleet:after-filter')); }catch(_e){}
         }
         document.addEventListener('click',function(e){if(!e.target.closest('.ft-filter-dd')&&!e.target.closest('.ft-filter-btn')&&!e.target.closest('.ft-af-overlay'))_closeAllDd()});
+        /* Scrolling the page must not leave the fixed filter dropdown floating
+           detached from its column (scrolling inside its own list is exempt). */
+        window.addEventListener('scroll',function(e){
+            if(!_openDd) return;
+            if(_openDd.contains(e.target)) return;
+            _closeAllDd();
+        },true);
       };
 
       window.fleetEnhanceAllListTables=function(root){
@@ -989,8 +996,15 @@
         function posDD(){
             var r = btn.getBoundingClientRect();
             dd.style.left = r.left + 'px';
-            dd.style.top = (r.bottom + 3) + 'px';
             dd.style.width = Math.max(r.width, 240) + 'px';
+            /* Keep the panel inside the visual viewport — the on-screen keyboard
+               shrinks visualViewport below window.innerHeight on phones. */
+            var vvH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+            var ddH = dd.offsetHeight || 260;
+            var top = r.bottom + 3;
+            if (top + ddH > vvH - 8) top = Math.max(8, r.top - ddH - 3);
+            if (top + ddH > vvH - 8) top = Math.max(8, vvH - ddH - 8);
+            dd.style.top = top + 'px';
         }
         function showDD(){
             open = true; dd.style.display = 'block';
@@ -4475,7 +4489,8 @@
                 })();
                 var _emptyLabelCap = _emptyLabel.charAt(0).toUpperCase() + _emptyLabel.slice(1);
                 var isFilterSelect = _fleetTsIsFilterSelect(el);
-                var lockAfterPick = isFilterSelect || _fleetTsIsCoarsePointer();
+                var _isMulti = !!el.multiple;
+                var lockAfterPick = !_isMulti && (isFilterSelect || _fleetTsIsCoarsePointer());
 
                 /* Always attach dropdown to body — card-body parent clips/hides list while typing on mobile;
                  * visualViewport handlers below avoid closing while keyboard is adjusting (see scroll helpers). */
@@ -4483,7 +4498,7 @@
                     create: el.classList.contains('create-mode'),
                     allowEmptyOption: false,
                     openOnFocus: false,
-                    closeAfterSelect: true,
+                    closeAfterSelect: !_isMulti,
                     selectOnTab: true,
                     maxOptions: 300,
                     dropdownParent: 'body',
@@ -4527,6 +4542,11 @@
                                 ph.style.visibility  = 'visible';
                                 ph.style.color       = '#6c757d';
                             }
+                        }
+                        /* Screen readers: the visible control_input has no label
+                           association once TS hides the native select. */
+                        if (_self.control_input && !_self.control_input.getAttribute('aria-label')) {
+                            _self.control_input.setAttribute('aria-label', placeholder);
                         }
                     }
                 });
@@ -4619,7 +4639,8 @@
                     // focus routine has settled — fixes Shift+Tab first-attempt miss.
                     setTimeout(function() {
                         if (!ts.wrapper.classList.contains('focus')) return; // blurred already
-                        if (ts.getValue()) {
+                        /* multi: typing must ADD an option, never wipe existing picks */
+                        if (ts.getValue() && !_isMulti) {
                             _setOverwriteReady(true);
                         } else {
                             _setOverwriteReady(false);
@@ -4637,6 +4658,8 @@
                 });
 
                 ts.on('item_add', function() {
+                    /* multi: keep the list open for more picks; TS manages its own focus */
+                    if (_isMulti) { return; }
                     ts._justSelected = true;
                     ts._selectLockUntil = Date.now() + 500;
                     _setOverwriteReady(false);
@@ -6972,26 +6995,9 @@
         window.location.reload();
     };
 
-    // ── Mobile Input Enhancements ─────────────────────────────────────────
-    (function() {
-        var _cap = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
-        if (window.innerWidth > 768 && !_cap) return;
-        document.querySelectorAll('input[type="text"]').forEach(function(el) {
-            if (el.classList && el.classList.contains('datepicker')) return;
-            var name = (el.name || el.id || '').toLowerCase();
-            if (/phone|mobile|contact|cell/.test(name)) {
-                el.setAttribute('inputmode', 'tel');
-            } else if (/cnic|nic|id_no|id_number/.test(name)) {
-                el.setAttribute('inputmode', 'numeric');
-                el.setAttribute('pattern', '[0-9-]*');
-            } else if (/amount|price|cost|liters|km|quantity|fuel/.test(name)) {
-                el.setAttribute('inputmode', 'decimal');
-            }
-        });
-        document.querySelectorAll('input[type="number"]').forEach(function(el) {
-            el.setAttribute('inputmode', 'decimal');
-        });
-    })();
+    /* Mobile inputmode handling lives in fleet_mobile.js (setInputModes) — it
+       keeps Tom Select search inputs on the TEXT keyboard; this file must not
+       set inputmode by name or TS search boxes can get a numeric keypad. */
 
     // ── Lucide Icons Init ──────────────────────────────────────────────────
     if (window.lucide) { lucide.createIcons(); }
