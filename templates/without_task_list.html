@@ -2,6 +2,7 @@
 {% block title %}Vehicle Move without Task{% endblock %}
 {% block content %}
 <div class="container-fluid">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% from 'partials/nav_back_button.html' import nav_back_button with context %}
@@ -37,7 +38,9 @@
             data-cascade-value-key="id"
             data-cascade-text-key="name"
             data-cascade-placeholder="-- All Projects --"
-            data-cascade-placeholder-value="0">
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}

@@ -63,6 +63,7 @@ from routes import (
     _decode_attendance_photo_b64,
     _default_task_entry_date_for_project,
     _filter_pending_task_rows,
+    _fuel_expense_location_cascade_dict,
     _html_to_pdf_bytes,
     _json_task_date,
     _logbook_vehicle_aggregate,
@@ -740,9 +741,7 @@ def task_report_logbook_cover():
     form.to_date.data = to_date
     form.district_id.data = district_id
     form.project_id.data = project_id
-    if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
+    # MEL: keep full project list on first paint (cascade narrows on change)
     rows = []
     if project_id:
         q = Vehicle.query.filter(Vehicle.project_id == project_id)
@@ -787,6 +786,7 @@ def task_report_logbook_cover():
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('logbook_cover_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          location_cascade=_fuel_expense_location_cascade_dict(),
                           **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
@@ -1484,9 +1484,11 @@ def task_report_pending():
         project_id=project_id,
         vehicle_id=vehicle_id,
         districts=districts,
-        projects=_projects_ui(district_id),
+        # MEL: full scoped project list on first paint (cascade narrows on change)
+        projects=_projects_ui(0),
         task_entry_filter=task_entry_filter,
         pending_filter_qs=pending_qs,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )
 

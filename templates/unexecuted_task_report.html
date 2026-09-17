@@ -17,6 +17,7 @@
 </style>
 
 <div class="container-fluid py-3 px-3 px-md-4">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="mb-2">{% from 'partials/nav_back_button.html' import nav_back_button with context %}{{ nav_back_button() }}</div>
   <div class="tsd-header">
     <div class="d-flex flex-wrap align-items-center gap-2">
@@ -54,7 +55,10 @@
             data-cascade-value-key="id"
             data-cascade-text-key="name"
             data-cascade-placeholder="-- All --"
-            data-cascade-placeholder-value="0">
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#vehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             <option value="0">-- All --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -63,7 +67,16 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#vehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#districtSelect">
             <option value="0">-- All --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -72,7 +85,7 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Vehicle</label>
-          <select name="vehicle_id" class="form-select form-select-sm search-select">
+          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
             <option value="0">-- All --</option>
             {% for v in vehicles %}
             <option value="{{ v.id }}" {% if vehicle_id == v.id %}selected{% endif %}>{{ v.vehicle_no }}</option>

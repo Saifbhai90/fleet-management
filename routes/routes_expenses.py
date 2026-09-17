@@ -602,6 +602,7 @@ def vehicle_reading_setup_list():
         vehicles=vehicles,
         baseline_counts=baseline_counts,
         overdue_counts=overdue_counts,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -1370,8 +1371,21 @@ def fuel_expense_list():
         (d.id, d.name) for d in district_q.order_by(District.name).all()
     ]
 
-    form.project_id.choices = [(0, '-- Select Project --')]
-    form.vehicle_id.choices = [(0, '-- All Vehicles --')]
+    # MEL-style: full scoped Project/Vehicle lists on first paint.
+    # Linked refill happens on change via declarative data-cascade-* + locationCascadeData.
+    project_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
+    form.project_id.choices = [(0, '-- Select Project --')] + [
+        (p.id, p.name) for p in project_q.order_by(Project.name).all()
+    ]
+
+    vehicle_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [
+        (v.id, v.vehicle_no) for v in vehicle_q.order_by(*vehicle_order_by()).all()
+    ]
     today = pk_date()
     from_date = request.args.get('from_date')
     to_date = request.args.get('to_date')
@@ -1420,24 +1434,6 @@ def fuel_expense_list():
     form.district_id.data = district_id
     form.project_id.data = project_id
     form.vehicle_id.data = vehicle_id
-    if district_id:
-        projects = (
-            Project.query.join(project_district)
-            .filter(project_district.c.district_id == district_id)
-            .order_by(Project.name)
-            .all()
-        )
-        if not is_master_or_admin and allowed_projects:
-            projects = [p for p in projects if p.id in allowed_projects]
-        form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
-    if project_id:
-        veh_q = Vehicle.query.filter(Vehicle.project_id == project_id)
-        if district_id:
-            veh_q = veh_q.filter(Vehicle.district_id == district_id)
-        if not is_master_or_admin and allowed_vehicles:
-            veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-        vehicles = veh_q.order_by(*vehicle_order_by()).all()
-        form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
 
     # Locked chip labels
     sel_district = None
@@ -7609,6 +7605,7 @@ def maintenance_expense_history():
         repeat_summary=repeat_summary,
         pagination=pagination,
         per_page=per_page,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -7803,6 +7800,7 @@ def maintenance_baseline_alert_report():
         job_category=job_category,
         status=status,
         job_category_choices=job_category_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 

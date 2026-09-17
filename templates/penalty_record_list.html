@@ -60,6 +60,7 @@
 </style>
 
 <div class="container-fluid py-4 px-4">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
     <div class="page-header-gradient">
         <div class="d-flex justify-content-between align-items-center">
             <div>
@@ -100,7 +101,9 @@
             data-cascade-value-key="id"
             data-cascade-text-key="name"
             data-cascade-placeholder="-- All Projects --"
-            data-cascade-placeholder-value="0">
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
                         {% for val, label in form.district_id.choices %}
                         <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}

@@ -2,6 +2,7 @@
 {% block title %}Vehicle Period Task Detail Report{% endblock %}
 {% block content %}
 <div class="container-fluid">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
@@ -39,7 +40,10 @@
             data-cascade-value-key="id"
             data-cascade-text-key="name"
             data-cascade-placeholder="-- Select Project --"
-            data-cascade-placeholder-value="0">
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#taskReportVehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -52,7 +56,16 @@
           <input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">
           <div class="form-control bg-light text-body-secondary">{% for val, label in form.project_id.choices %}{% if val == form.project_id.data %}{{ label }}{% endif %}{% endfor %}</div>
           {% else %}
-          <select name="project_id" id="taskReportProjectSelect" class="form-select search-select">
+          <select name="project_id" id="taskReportProjectSelect" class="form-select search-select"
+            data-cascade-child="#taskReportVehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}taskReportDistrictSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#taskReportDistrictSelect">
             {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -346,7 +359,7 @@
 <script>
 function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page',n);window.location.search=u.toString();}
 (function() {
-  /* District→Project cascade: declarative data-cascade-* on #taskReportDistrictSelect
+  /* District→Project→Vehicle: declarative data-cascade-* + locationCascadeData
      (wired by window.fleetWireDeclarativeCascades in fleet_core.js). */
 })();
 (function() {

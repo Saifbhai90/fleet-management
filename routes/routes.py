@@ -8571,10 +8571,7 @@ def _task_report_vehicle_period_detail_impl(redirect_endpoint, template_name, ex
         vehicle_q = _vehicle_query_task_report_scope(
             is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles
         )
-        if did:
-            vehicle_q = vehicle_q.filter(Vehicle.district_id == did)
-        if pid:
-            vehicle_q = vehicle_q.filter(Vehicle.project_id == pid)
+        # MEL: full scoped vehicle list on first paint (cascade narrows on change)
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [
             (v.id, v.vehicle_no) for v in vehicle_q.order_by(*vehicle_order_by()).all()
         ]
@@ -8726,6 +8723,7 @@ def _task_report_vehicle_period_detail_impl(redirect_endpoint, template_name, ex
         search=search,
         all_vehicle_nos=all_vehicle_nos,
         task_report_filter_lock=task_report_filter_lock,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
     )
 

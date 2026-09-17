@@ -2,6 +2,7 @@
 {% block title %}Pending Task Report{% endblock %}
 {% block content %}
 <div class="container-fluid px-2 px-md-3">
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
       {% from 'partials/nav_back_button.html' import nav_back_button with context %}
@@ -39,7 +40,9 @@
             data-cascade-value-key="id"
             data-cascade-text-key="name"
             data-cascade-placeholder="-- All Projects --"
-            data-cascade-placeholder-value="0">
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>

@@ -43,6 +43,7 @@ from routes import (
     SimplePagination,
     _ensure_unexecuted_task_table,
     _filter_unexecuted_rows_by_search,
+    _fuel_expense_location_cascade_dict,
     _norm_district_name_key,
     _penalty_record_query,
     _unexecuted_task_rows,
@@ -139,11 +140,8 @@ def red_task_list():
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.district_id.data = district_id
-    if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- All Projects --')]
+    # MEL: full project list on first paint (cascade narrows on change)
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.project_id.data = project_id
     query = RedTask.query.filter(RedTask.task_date >= from_date, RedTask.task_date <= to_date)
     if district_id:
@@ -170,6 +168,7 @@ def red_task_list():
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('red_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          location_cascade=_fuel_expense_location_cascade_dict(),
                           **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
@@ -660,11 +659,8 @@ def red_task_edit(pk):
     form = RedTaskForm(obj=rec)
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(*vehicle_order_by()).all()]
-    if rec.district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == rec.district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- Select Project --')]
+    # MEL: full project list on first paint (cascade narrows on change)
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     if request.method == 'GET':
         form.task_date.data = rec.task_date
         form.task_id.data = rec.task_id or ''
@@ -701,6 +697,7 @@ def red_task_edit(pk):
         flash('Red Task updated.', 'success')
         return redirect(url_for('red_task_list'))
     return render_template('red_task_edit.html', form=form, title='Edit Red Task', rec=rec,
+                          location_cascade=_fuel_expense_location_cascade_dict(),
                           **_nav_back_ctx(url_for('red_task_list'), show_without_nav_from=True))
 
 
@@ -733,11 +730,8 @@ def without_task_list():
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.district_id.data = district_id
-    if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- All Projects --')]
+    # MEL: full project list on first paint (cascade narrows on change)
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.project_id.data = project_id
     query = VehicleMoveWithoutTask.query.options(
         db.joinedload(VehicleMoveWithoutTask.district),
@@ -772,6 +766,7 @@ def without_task_list():
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
     return render_template('without_task_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, pagination=pagination, per_page=per_page, search=search,
+                          location_cascade=_fuel_expense_location_cascade_dict(),
                           **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
@@ -934,12 +929,7 @@ def unexecuted_task_report():
         district_q = district_q.filter(District.id.in_(district_ids_from_vehicle or [-1]))
         project_q = project_q.filter(Project.id.in_(project_ids_from_vehicle or [-1]))
 
-    if district_id:
-        project_q = project_q.join(project_district).filter(project_district.c.district_id == district_id)
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     districts = district_q.all()
     projects = project_q.all()
     vehicles = vehicle_q.all()
@@ -984,6 +974,7 @@ def unexecuted_task_report():
         districts=districts,
         projects=projects,
         vehicles=vehicles,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -1330,11 +1321,8 @@ def without_task_edit(pk):
     form = VehicleMoveWithoutTaskForm(obj=rec)
     form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
     form.vehicle_id.choices = [(0, '-- Select Vehicle --')] + [(v.id, v.vehicle_no) for v in Vehicle.query.order_by(*vehicle_order_by()).all()]
-    if rec.district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == rec.district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- Select Project --')]
+    # MEL: full project list on first paint (cascade narrows on change)
+    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     if request.method == 'GET':
         form.move_date.data = rec.move_date
         form.district_id.data = rec.district_id or 0
@@ -1375,6 +1363,7 @@ def without_task_edit(pk):
         flash('Vehicle Move without Task updated.', 'success')
         return redirect(url_for('without_task_list'))
     return render_template('without_task_edit.html', form=form, title='Edit Vehicle Move without Task', rec=rec,
+                          location_cascade=_fuel_expense_location_cascade_dict(),
                           **_nav_back_ctx(url_for('without_task_list'), show_without_nav_from=True))
 
 
@@ -1407,11 +1396,8 @@ def penalty_record_list():
     form.from_date.data = from_date
     form.to_date.data = to_date
     form.district_id.data = district_id
-    if district_id:
-        projects = Project.query.join(project_district).filter(project_district.c.district_id == district_id).order_by(Project.name).all()
-        form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = [(0, '-- All Projects --')]
+    # MEL: full project list on first paint (cascade narrows on change)
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     form.project_id.data = project_id
     query = PenaltyRecord.query.filter(
         PenaltyRecord.record_date >= from_date,
@@ -1440,7 +1426,7 @@ def penalty_record_list():
     per_page = request.args.get('per_page', 20, type=int)
     pagination = SimplePagination(rows, page, per_page)
     rows = pagination.items
-    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page, search=search, **_workforce_nav_back())
+    return render_template('penalty_record_list.html', form=form, rows=rows, from_date=from_date, to_date=to_date, district_id=district_id, project_id=project_id, pagination=pagination, per_page=per_page, search=search, location_cascade=_fuel_expense_location_cascade_dict(), **_workforce_nav_back())
 
 
 
