@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Driver Salary Slip (Bank){% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="container-fluid py-3 px-3 px-md-4" id="salarySlipPage">
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 no-print">
     <div>
@@ -20,7 +21,16 @@
           <form method="get" action="{{ url_for('driver_salary_slip') }}" class="row g-2" id="slipFilterForm">
             <div class="col-12">
               <label class="form-label small mb-0">1. District <span class="text-danger">*</span></label>
-              <select name="district_id" id="ssDistrict" class="form-select form-select-sm{% if not disable_district %} search-select{% endif %}" data-placeholder="Search district…" {% if disable_district %}disabled{% endif %}>
+              <select name="district_id" id="ssDistrict" class="form-select form-select-sm{% if not disable_district %} search-select{% endif %}" data-placeholder="Search district…" {% if disable_district %}disabled{% endif %}
+                data-cascade-child="#ssProject"
+                data-cascade-url="/api/cascade/projects?parent={value}"
+                data-cascade-value-key="id"
+                data-cascade-text-key="name"
+                data-cascade-placeholder="— Select project —"
+                data-cascade-placeholder-value="0"
+                data-cascade-also-clear="#ssVehicle,#ssDriver"
+                data-cascade-source="locationCascadeData"
+                data-cascade-cache-prefix="proj_d">
                 {% for val, label in district_choices %}
                 <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -29,7 +39,17 @@
             </div>
             <div class="col-12">
               <label class="form-label small mb-0">2. Project <span class="text-danger">*</span></label>
-              <select name="project_id" id="ssProject" class="form-select form-select-sm{% if not disable_project %} search-select{% endif %}" data-placeholder="Search project…" {% if disable_project %}disabled{% endif %}>
+              <select name="project_id" id="ssProject" class="form-select form-select-sm{% if not disable_project %} search-select{% endif %}" data-placeholder="Search project…" {% if disable_project %}disabled{% endif %}
+                data-cascade-child="#ssVehicle"
+                data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}ssDistrict}"
+                data-cascade-value-key="id"
+                data-cascade-text-key="vehicle_no"
+                data-cascade-placeholder="— Select vehicle —"
+                data-cascade-placeholder-value="0"
+                data-cascade-also-clear="#ssDriver"
+                data-cascade-source="locationCascadeData"
+                data-cascade-cache-prefix="veh_p"
+                data-cascade-cache-district="#ssDistrict">
                 {% for val, label in project_choices %}
                 <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -316,61 +336,6 @@
     syncManualToSlip();
   }
 
-  function loadProjects(did) {
-    if (locked.district) return;
-    if (!did || did === '0') {
-      fleetFillSelect(pEl, [], { placeholder: '— Select district first —', placeholderValue: '0' });
-      fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
-      fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
-      setDashAuto();
-      syncManualToSlip();
-      return;
-    }
-    fetch('/api/filter/projects-by-district?district_id=' + encodeURIComponent(did))
-      .then(function(x) { return x.json(); })
-      .then(function(arr) {
-        fleetFillSelectRows(pEl, arr, 'id', 'name', {
-          placeholder: arr.length ? '— Select project —' : '— No project in this district —',
-          placeholderValue: '0'
-        });
-        fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
-        fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
-        setDashAuto();
-        syncManualToSlip();
-      });
-  }
-
-  function loadVehicles() {
-    if (locked.vehicle) return;
-    var pid = getSelVal(pEl);
-    var did = getSelVal(dEl);
-    var keepVid = getSelVal(vEl);
-    if (!pid || pid === '0' || !did || did === '0') {
-      fleetFillSelect(vEl, [], { placeholder: '— Select district & project first —', placeholderValue: '0' });
-      fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
-      return;
-    }
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
-      .then(function(x) { return x.json(); })
-      .then(function(arr) {
-        var selected = (keepVid && keepVid !== '0' && (arr || []).some(function(v) { return String(v.id) === String(keepVid); })) ? keepVid : null;
-        fleetFillSelect(vEl, (arr || []).map(function(v) {
-          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
-        }), {
-          placeholder: arr.length ? '— Select vehicle —' : '— No vehicle —',
-          placeholderValue: '0',
-          selected: selected
-        });
-        if (selected) {
-          loadDrivers();
-        } else {
-          fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
-          setDashAuto();
-          syncManualToSlip();
-        }
-      });
-  }
-
   function loadDrivers() {
     var vid = getSelVal(vEl);
     var keepRid = getSelVal(rEl);
@@ -394,11 +359,17 @@
       });
   }
 
+  /* D→P→V: declarative data-cascade-* + locationCascadeData (fleet_core). KEEP vehicle→driver. */
+  function clearDriverDash() {
+    fleetFillSelect(rEl, [], { placeholder: '— Select driver —', placeholderValue: '0' });
+    setDashAuto();
+    syncManualToSlip();
+  }
   if (!locked.district) {
-    dEl.addEventListener('change', function() { loadProjects(getSelVal(dEl)); });
+    dEl.addEventListener('change', clearDriverDash);
   }
   if (!locked.project) {
-    pEl.addEventListener('change', function() { loadVehicles(); });
+    pEl.addEventListener('change', clearDriverDash);
   }
   if (!locked.vehicle) {
     vEl.addEventListener('change', function() { loadDrivers(); });

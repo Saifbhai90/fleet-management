@@ -1693,6 +1693,7 @@
   {% set sel_vehicle = (vehicles | selectattr('id', 'equalto', vehicle_id) | map(attribute='vehicle_no') | first) if vehicle_id else none %}
   {% set mpg_today = today if today is defined and today else to_date %}
 
+  <script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
   <div class="card border-0 shadow-sm mb-3 mpg-filters-card fm-no-card-press is-collapsible"
        id="mpgFiltersCard"
        data-pk-today="{{ mpg_today.strftime('%d-%m-%Y') if mpg_today else '' }}">
@@ -1732,9 +1733,9 @@
           </div>
         </div>
         {% if all_locked %}
-        <input type="hidden" name="district_id" value="{{ district_id }}">
-        <input type="hidden" name="project_id" value="{{ project_id }}">
-        <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+        <input type="hidden" id="mpgDistrictFilter" name="district_id" value="{{ district_id }}">
+        <input type="hidden" id="mpgProjectFilter" name="project_id" value="{{ project_id }}">
+        <input type="hidden" id="mpgVehicleFilter" name="vehicle_id" value="{{ vehicle_id }}">
         <div class="col-md-6 mpg-m-field mpg-m-field--locked-only">
           <label class="form-label small fw-semibold text-secondary">Assigned scope</label>
           <div class="mpg-locked-chips-row">
@@ -1747,12 +1748,21 @@
         <div class="col-md-2 mpg-m-field{% if disable_district %} mpg-m-field--locked{% endif %}">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-geo-alt me-1"></i>District</label>
           {% if disable_district %}
-          <input type="hidden" name="district_id" value="{{ district_id }}">
+          <input type="hidden" id="mpgDistrictFilter" name="district_id" value="{{ district_id }}">
           <div class="mpg-locked-chip" title="Aap ko sirf yeh district assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_district or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
             <i class="bi bi-geo-alt mpg-m-input-icon"></i>
-            <select class="form-select search-select mpg-m-input" id="mpgDistrictFilter" name="district_id">
+            <select class="form-select search-select mpg-m-input" id="mpgDistrictFilter" name="district_id"
+              data-cascade-child="#mpgProjectFilter"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- All Projects --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#mpgVehicleFilter"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -1764,12 +1774,21 @@
         <div class="col-md-2 mpg-m-field{% if disable_project %} mpg-m-field--locked{% endif %}">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-folder2 me-1"></i>Project</label>
           {% if disable_project %}
-          <input type="hidden" name="project_id" value="{{ project_id }}">
+          <input type="hidden" id="mpgProjectFilter" name="project_id" value="{{ project_id }}">
           <div class="mpg-locked-chip" title="Aap ko sirf yeh project assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_project or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
             <i class="bi bi-folder2-open mpg-m-input-icon"></i>
-            <select class="form-select search-select mpg-m-input" id="mpgProjectFilter" name="project_id">
+            <select class="form-select search-select mpg-m-input" id="mpgProjectFilter" name="project_id"
+              data-cascade-child="#mpgVehicleFilter"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}mpgDistrictFilter}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="veh_p"
+              data-cascade-cache-district="#mpgDistrictFilter">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
@@ -1781,7 +1800,7 @@
         <div class="col-md-2 mpg-m-field{% if disable_vehicle %} mpg-m-field--locked{% endif %}">
           <label class="form-label small fw-semibold text-secondary"><i class="bi bi-truck me-1"></i>Vehicle No.</label>
           {% if disable_vehicle %}
-          <input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">
+          <input type="hidden" id="mpgVehicleFilter" name="vehicle_id" value="{{ vehicle_id }}">
           <div class="mpg-locked-chip" title="Aap ko sirf yeh vehicle assign hai"><i class="bi bi-lock-fill"></i><span>{{ sel_vehicle or 'â€”' }}</span></div>
           {% else %}
           <div class="mpg-m-input-wrap">
@@ -2531,90 +2550,7 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   })();
 
-  const districtSelect = document.getElementById('mpgDistrictFilter');
-  const projectSelect = document.getElementById('mpgProjectFilter');
-  const vehicleSelect = document.getElementById('mpgVehicleFilter');
-  const mpgFiltersLocked = {
-    district: {{ disable_district|default(false)|tojson }},
-    project: {{ disable_project|default(false)|tojson }},
-    vehicle: {{ disable_vehicle|default(false)|tojson }}
-  };
-  const initialProjectOptions = projectSelect ? projectSelect.innerHTML : '';
-  const initialVehicleOptions = vehicleSelect ? vehicleSelect.innerHTML : '';
-
-  function reinitSearchSelect(selectEl){
-    if(!selectEl) return;
-    if(selectEl.tomselect) return;
-    if(window.initSearchableDropdowns){
-      window.initSearchableDropdowns(selectEl.parentNode || document);
-    }
-  }
-
-  function setOptions(selectEl, defaultLabel, rows, valueKey, textKey, selected){
-    if(!selectEl) return;
-    fleetFillSelectRows(selectEl, rows, valueKey, textKey, {
-      placeholder: defaultLabel,
-      placeholderValue: '0',
-      selected: selected
-    });
-  }
-
-  if(districtSelect && projectSelect && !mpgFiltersLocked.district){
-    districtSelect.addEventListener('change', function(){
-      const did = districtSelect.value || '0';
-
-      if(did === '0'){
-        fleetFillSelectFromHtml(projectSelect, initialProjectOptions);
-        if(vehicleSelect) fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
-        return;
-      }
-
-      fetch('/api/cascade/projects?parent=' + encodeURIComponent(did))
-        .then(function(resp){ return resp.json(); })
-        .then(function(projects){
-          const previousProjectValue = projectSelect.value || '0';
-          const hasPreviousProject = projects.some(function(p){ return String(p.id) === String(previousProjectValue); });
-          setOptions(projectSelect, '-- All Projects --', projects, 'id', 'name', hasPreviousProject ? previousProjectValue : '0');
-          projectSelect.dispatchEvent(new Event('change'));
-        })
-        .catch(function(){
-          fleetFillSelectFromHtml(projectSelect, initialProjectOptions);
-        });
-    });
-  }
-
-  if(projectSelect && vehicleSelect && !mpgFiltersLocked.project){
-    projectSelect.addEventListener('change', function(){
-      const pid = projectSelect.value || '0';
-      const did = districtSelect ? (districtSelect.value || '0') : '0';
-
-      if(pid === '0'){
-        fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
-        return;
-      }
-
-      let url = '/api/cascade/vehicles?parent=' + encodeURIComponent(pid);
-      if(did !== '0'){
-        url += '&district_id=' + encodeURIComponent(did);
-      }
-      fetch(url)
-        .then(function(resp){ return resp.json(); })
-        .then(function(vehicles){
-          const previousVehicleValue = vehicleSelect.value || '0';
-          const hasPreviousVehicle = vehicles.some(function(v){ return String(v.id) === String(previousVehicleValue); });
-          setOptions(vehicleSelect, '-- All Vehicles --', vehicles, 'id', 'vehicle_no', hasPreviousVehicle ? previousVehicleValue : '0');
-        })
-        .catch(function(){
-          fleetFillSelectFromHtml(vehicleSelect, initialVehicleOptions);
-        });
-    });
-  }
-
-  if(!mpgFiltersLocked.district && districtSelect && districtSelect.value && districtSelect.value !== '0'){
-    districtSelect.dispatchEvent(new Event('change'));
-  } else if(!mpgFiltersLocked.project && projectSelect && projectSelect.value && projectSelect.value !== '0'){
-    projectSelect.dispatchEvent(new Event('change'));
-  }
+  /* D→P→V cascade: declarative data-cascade-* + locationCascadeData (fleet_core). */
 });
 </script>
 {% endblock %}

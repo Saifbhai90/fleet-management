@@ -2,6 +2,7 @@
 {% block title %}TRA Attendance Sheet{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
   .tra-table { font-size: 0.75rem; }
   .tra-table th { font-size: 0.7rem; padding: 6px 5px !important; white-space: nowrap; text-align: center; vertical-align: middle; }
@@ -51,22 +52,41 @@
             <input type="number" name="year" class="form-control" min="2020" max="2030" value="{{ form.year.data or '' }}" placeholder="2025" required>
           </div>
           <div class="col-md-2 col-lg-2">
-            <label class="form-label">Project</label>
-            <select name="project_id" id="traProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}>
-              {% for val, label in form.project_id.choices %}
-                <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
-          </div>
-          <div class="col-md-2 col-lg-2">
             <label class="form-label">District</label>
-            <select name="district_id" id="traDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}>
+            <select name="district_id" id="traDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}
+              data-cascade-child="#traProjectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- All Projects --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#traVehicleSelect,#traDriverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
               {% for val, label in form.district_id.choices %}
                 <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
             {% if disable_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Project</label>
+            <select name="project_id" id="traProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}
+              data-cascade-child="#traVehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}traDistrictSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#traDriverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="veh_p"
+              data-cascade-cache-district="#traDistrictSelect">
+              {% for val, label in form.project_id.choices %}
+                <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Vehicle</label>
@@ -224,46 +244,7 @@
   };
   var hasSingle = scope.projects.length === 1 && scope.districts.length === 1 && scope.vehicles.length === 1 && scope.shifts.length === 1;
 
-  function loadDistricts(projectId) {
-    if (hasSingle) return;
-    districtSelect.innerHTML = '<option value="0">-- All Districts --</option>';
-    if (!projectId || projectId === '0') {
-      vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-      return;
-    }
-    fetch('/api/filter/districts-by-project?project_id=' + projectId)
-      .then(function(r) { return r.json(); })
-      .then(function(districts) {
-        districts.forEach(function(d) {
-          var opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.name;
-          districtSelect.appendChild(opt);
-        });
-        loadVehicles();
-      });
-  }
-
-  function loadVehicles() {
-    var pid = projectSelect.value || '0';
-    var did = districtSelect.value || '0';
-    vehicleSelect.innerHTML = '<option value="0">-- All Vehicles --</option>';
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
-      .then(function(r) { return r.json(); })
-      .then(function(vehicles) {
-        vehicles.forEach(function(v) {
-          var opt = document.createElement('option');
-          opt.value = v.id;
-          opt.textContent = v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '');
-          vehicleSelect.appendChild(opt);
-        });
-        if (hasSingle && scope.vehicles.length === 1) {
-          vehicleSelect.value = String(scope.vehicles[0]);
-          vehicleSelect.disabled = true;
-        }
-      });
-  }
-
+  /* D→P→V declarative (fleet_core). KEEP driver refresh. */
   function refreshDriverDropdown(onDone) {
     var pid = projectSelect.value || '0';
     var did = districtSelect.value || '0';
@@ -290,8 +271,8 @@
       }).catch(function() { if (typeof onDone === 'function') onDone(); });
   }
 
-  if (projectSelect) projectSelect.addEventListener('change', function() { loadDistricts(this.value); });
-  if (districtSelect) districtSelect.addEventListener('change', function() { loadVehicles(); refreshDriverDropdown(); });
+  if (districtSelect) districtSelect.addEventListener('change', function() { refreshDriverDropdown(); });
+  if (projectSelect) projectSelect.addEventListener('change', function() { refreshDriverDropdown(); });
   if (vehicleSelect) vehicleSelect.addEventListener('change', function() { refreshDriverDropdown(); });
   if (shiftSelect) shiftSelect.addEventListener('change', function() { refreshDriverDropdown(); });
 

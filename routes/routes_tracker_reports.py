@@ -58,6 +58,7 @@ from routes import (
     _filter_task_start_delay_rows,
     _filter_task_turnaround_rows,
     _filter_unauthorized_movement_rows,
+    _fuel_expense_location_cascade_dict,
     _get_vehicle_family_oil_change_limits,
     _mileage_report_preview_context,
     _mileage_report_rows,
@@ -169,45 +170,25 @@ def driver_salary_slip():
         district_id, project_id, vehicle_id, selected_driver_id, user_context
     )
 
-    # District: all in scope
+    # District / project / vehicle: full scoped lists on first paint (MEL); cascade narrows on change
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '— Select district —')] + [(d.id, d.name) for d in dist_q.all()]
 
-    # Project: only if linked to selected district
-    if not district_id:
-        project_choices = [(0, '— Select district first —')]
-    else:
-        proj_q = (
-            Project.query.join(project_district, Project.id == project_district.c.project_id)
-            .filter(project_district.c.district_id == district_id)
-        )
-        if not is_master_or_admin and allowed_projects:
-            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
-        p_rows = proj_q.order_by(Project.name).all()
-        if not p_rows:
-            project_choices = [(0, '— No project in this district —')]
-        else:
-            project_choices = [(0, '— Select project —')] + [(p.id, p.name) for p in p_rows]
+    proj_q = Project.query.order_by(Project.name)
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    project_choices = [(0, '— Select project —')] + [(p.id, p.name) for p in proj_q.all()]
 
-    # Vehicle: same district + project as master assignment (all-vehicles query)
-    if not district_id or not project_id:
-        vehicle_choices = [(0, '— Select district & project first —')]
-    else:
-        veh_q = Vehicle.query.filter(
-            Vehicle.project_id == project_id,
-            Vehicle.district_id == district_id,
-        )
-        if not is_master_or_admin and allowed_vehicles:
-            veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-        v_rows = veh_q.order_by(*vehicle_order_by()).all()
-        if not v_rows:
-            vehicle_choices = [(0, '— No vehicle for this project & district —')]
-        else:
-            vehicle_choices = [(0, '— Select vehicle —')] + [(v.id, v.vehicle_no) for v in v_rows]
+    veh_q = Vehicle.query
+    if not is_master_or_admin and allowed_vehicles:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    vehicle_choices = [(0, '— Select vehicle —')] + [
+        (v.id, v.vehicle_no) for v in veh_q.order_by(*vehicle_order_by()).all()
+    ]
 
-    # Driver: only on selected vehicle
+    # Driver: only on selected vehicle (KEEP vehicle→driver chain)
     if not vehicle_id:
         driver_choices = []
     else:
@@ -231,6 +212,7 @@ def driver_salary_slip():
         disable_district=disable_district,
         disable_vehicle=disable_vehicle,
         cert_date_default=pk_date().strftime('%d-%m-%Y'),
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 

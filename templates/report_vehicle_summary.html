@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Vehicle Summary Report{% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.6/dataTables.bootstrap5.min.css?v=8006">
 <link rel="stylesheet" href="/static/vendor/datatables/buttons/2.4.1/buttons.bootstrap5.min.css?v=8006">
 <style>
@@ -218,20 +219,38 @@
         <input id="vs-to-date" type="text" name="to_date" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" value="{{ to_date or '' }}">
       </div>
       <div class="col-6 col-md-4 col-lg-2">
-        <label class="vs-label" for="vsProjectSelect">Project</label>
-        {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-        <select id="vsProjectSelect" name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
-          {% for val, label in project_choices %}
-            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+        <label class="vs-label" for="vsDistrictSelect">District</label>
+        {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+        <select id="vsDistrictSelect" name="district_id" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}
+          data-cascade-child="#vsProjectSelect"
+          data-cascade-url="/api/cascade/projects?parent={value}"
+          data-cascade-value-key="id"
+          data-cascade-text-key="name"
+          data-cascade-placeholder="-- All Projects --"
+          data-cascade-placeholder-value="0"
+          data-cascade-also-clear="#vsVehicleSelect"
+          data-cascade-source="locationCascadeData"
+          data-cascade-cache-prefix="proj_d">
+          {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="col-6 col-md-4 col-lg-2">
-        <label class="vs-label" for="vsDistrictSelect">District</label>
-        {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
-        <select id="vsDistrictSelect" name="district_id" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
-          {% for val, label in district_choices %}
-            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+        <label class="vs-label" for="vsProjectSelect">Project</label>
+        {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+        <select id="vsProjectSelect" name="project_id" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}
+          data-cascade-child="#vsVehicleSelect"
+          data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}vsDistrictSelect}"
+          data-cascade-value-key="id"
+          data-cascade-text-key="vehicle_no"
+          data-cascade-placeholder="-- All Vehicles --"
+          data-cascade-placeholder-value="0"
+          data-cascade-source="locationCascadeData"
+          data-cascade-cache-prefix="veh_p"
+          data-cascade-cache-district="#vsDistrictSelect">
+          {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -359,56 +378,7 @@
 </script>
 
 <script>
-(function() {
-  var projSel = document.getElementById('vsProjectSelect');
-  var distSel = document.getElementById('vsDistrictSelect');
-  var vehSel  = document.getElementById('vsVehicleSelect');
-  if (!projSel || !distSel) return;
-
-  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
-    if (!sel) return;
-   var opts = (items || []).map(function(item) {
-      return { value: item[valueKey], text: item[labelKey] };
-    });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(sel, opts, { placeholder: allLabel, placeholderValue: '0' });
-      return;
-    }
-    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
-    opts.forEach(function(item) {
-      var opt = document.createElement('option');
-      opt.value = item.value;
-      opt.textContent = item.text;
-      sel.appendChild(opt);
-    });
-    initSearchableDropdowns(sel.parentNode);
-  }
-
-  function loadVehicles(pid, did) {
-    if (!vehSel) return;
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
-      .then(function(r) { return r.json(); })
-      .then(function(data) { rebuildSelect(vehSel, data, 'id', 'vehicle_no', '-- All Vehicles --'); })
-      .catch(function() {});
-  }
-
-  function loadDistricts(pid) {
-    if (!pid || pid === '0') {
-      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
-      loadVehicles('0', '0');
-      return;
-    }
-    fetch('/api/filter/districts-by-project?project_id=' + pid)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
-        loadVehicles(pid, '0');
-      }).catch(function() {});
-  }
-
-  projSel.addEventListener('change', function() { loadDistricts(this.value); });
-  distSel.addEventListener('change', function() { loadVehicles(projSel ? projSel.value : '0', this.value); });
-})();
+/* D→P→V: declarative data-cascade-* + locationCascadeData (fleet_core). */
 </script>
 
 {% endblock %}

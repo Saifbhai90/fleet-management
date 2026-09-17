@@ -35,6 +35,7 @@ from services.driver_job_history import build_driver_job_history, job_history_co
 from routes import (
     _multi_word_filter,
     _build_driver_update_whatsapp_parts,
+    _fuel_expense_location_cascade_dict,
     _oil_change_alert_rows,
     SimplePagination,
     _nav_back_ctx,
@@ -961,27 +962,21 @@ def report_vehicle_summary():
 
     vehicles = query.order_by(*vehicle_order_by()).all()
 
-    # Dropdown choices (scoped + cascaded)
+    # Dropdown choices: full scoped lists on first paint (MEL); cascade narrows on change
     pq = Project.query
     if not is_master_or_admin and allowed_projects:
         pq = pq.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
 
     dq = District.query
-    if project_id:
-        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         dq = dq.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
 
     vcq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
-    if project_id:
-        vcq = vcq.filter(Vehicle.project_id == project_id)
-    elif not is_master_or_admin and allowed_projects:
+    if not is_master_or_admin and allowed_projects:
         vcq = vcq.filter(Vehicle.project_id.in_(list(allowed_projects)))
-    if district_id:
-        vcq = vcq.filter(Vehicle.district_id == district_id)
-    elif not is_master_or_admin and allowed_districts:
+    if not is_master_or_admin and allowed_districts:
         vcq = vcq.filter(Vehicle.district_id.in_(list(allowed_districts)))
     if not is_master_or_admin and allowed_vehicles:
         vcq = vcq.filter(Vehicle.id.in_(list(allowed_vehicles)))
@@ -998,6 +993,9 @@ def report_vehicle_summary():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        disable_project=disable_project,
+        disable_district=disable_district,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -1265,28 +1263,27 @@ def report_expiry():
 
         expiring.append(row)
 
-    # Dropdown choices (scoped to user's assignments)
+    # Dropdown choices: full scoped lists on first paint (MEL); cascade narrows on change
     project_q = Project.query
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
-    
+
     district_q = District.query
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
-    
-    vehicle_choices = [(0, '-- All Vehicles --')]
+
     base_vehicle_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
     if not is_master_or_admin and allowed_vehicles:
         base_vehicle_q = base_vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        base_vehicle_q = base_vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        base_vehicle_q = base_vehicle_q.filter(Vehicle.district_id == district_id)
-    vehicle_choices += [(v.id, v.vehicle_no) for v in base_vehicle_q.order_by(*vehicle_order_by()).all()]
+    if not is_master_or_admin and allowed_projects:
+        base_vehicle_q = base_vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        base_vehicle_q = base_vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    vehicle_choices = [(0, '-- All Vehicles --')] + [
+        (v.id, v.vehicle_no) for v in base_vehicle_q.order_by(*vehicle_order_by()).all()
+    ]
 
     # Shift list from active drivers (scoped)
     shift_q = db.session.query(Driver.shift).filter(Driver.shift.isnot(None), Driver.shift != '')
@@ -1311,6 +1308,7 @@ def report_expiry():
         vehicle_id=vehicle_id,
         shift=shift,
         user_context=user_context,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -1358,34 +1356,28 @@ def report_parking_utilization():
         vq = vq.filter(Vehicle.parking_station_id == parking_station_id)
     vehicles = vq.order_by(*vehicle_order_by()).all()
 
-    # Project choices
+    # Project choices — full scoped (MEL)
     pq = Project.query
     if not is_master_or_admin and allowed_projects:
         pq = pq.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
 
-    # District choices (cascaded by project)
+    # District choices — full scoped (MEL)
     dq = District.query
-    if project_id:
-        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         dq = dq.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
 
-    # Vehicle choices (only parking-assigned vehicles, scoped + cascaded)
+    # Vehicle choices (parking-assigned, full scoped; cascade narrows on change)
     vcq = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if not is_master_or_admin:
         if allowed_projects:
             vcq = vcq.filter(Vehicle.project_id.in_(list(allowed_projects)))
         if allowed_districts:
             vcq = vcq.filter(Vehicle.district_id.in_(list(allowed_districts)))
-    if project_id:
-        vcq = vcq.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vcq = vcq.filter(Vehicle.district_id == district_id)
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vcq.order_by(*vehicle_order_by()).all()]
 
-    # Parking station choices (cascaded by project/district/vehicle)
+    # Parking station choices (KEEP: still filtered by current D/P/V for first paint)
     ps_vq = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if not is_master_or_admin and allowed_projects:
         ps_vq = ps_vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
@@ -1414,6 +1406,7 @@ def report_parking_utilization():
         parking_station_choices=parking_station_choices,
         disable_project=disable_project,
         disable_district=disable_district,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 # ════════════════════════════════════════════════════════════════════════════════
 
@@ -1882,27 +1875,21 @@ def report_engine_chassis():
 
     vehicles = query.order_by(*vehicle_order_by()).all()
 
-    # Dropdown choices (scoped + cascaded)
+    # Dropdown choices: full scoped lists on first paint (MEL); cascade narrows on change
     pq = Project.query
     if not is_master_or_admin and allowed_projects:
         pq = pq.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in pq.order_by(Project.name).all()]
 
     dq = District.query
-    if project_id:
-        dq = dq.join(project_district).filter(project_district.c.project_id == project_id)
     if not is_master_or_admin and allowed_districts:
         dq = dq.filter(District.id.in_(list(allowed_districts)))
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dq.order_by(District.name).all()]
 
     vcq = Vehicle.query
-    if project_id:
-        vcq = vcq.filter(Vehicle.project_id == project_id)
-    elif not is_master_or_admin and allowed_projects:
+    if not is_master_or_admin and allowed_projects:
         vcq = vcq.filter(Vehicle.project_id.in_(list(allowed_projects)))
-    if district_id:
-        vcq = vcq.filter(Vehicle.district_id == district_id)
-    elif not is_master_or_admin and allowed_districts:
+    if not is_master_or_admin and allowed_districts:
         vcq = vcq.filter(Vehicle.district_id.in_(list(allowed_districts)))
     if not is_master_or_admin and allowed_vehicles:
         vcq = vcq.filter(Vehicle.id.in_(list(allowed_vehicles)))
@@ -1927,5 +1914,6 @@ def report_engine_chassis():
         vehicle_family_choices=vehicle_family_choices,
         disable_project=disable_project,
         disable_district=disable_district,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 # ════════════════════════════════════════════════════════════════════════════════

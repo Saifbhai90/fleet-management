@@ -108,6 +108,7 @@ from routes import (
     _maintenance_attachment_local_full_path,
     _maintenance_attachment_read_bytes,
     media_url_filter,
+    _fuel_expense_location_cascade_dict,
 )
 
 import re
@@ -1310,16 +1311,11 @@ def driver_attendance_bulk_off():
                 project_id = next(iter(allowed_projects))
             disable_project = True
     projects = []
-    if district_id:
-        proj_q = Project.query.join(project_district).filter(project_district.c.district_id == district_id)
-        if not is_master_or_admin and allowed_projects:
-            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
-        projects = proj_q.order_by(Project.name).all()
-    else:
-        proj_q = Project.query
-        if not is_master_or_admin and allowed_projects:
-            proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
-        projects = proj_q.order_by(Project.name).all()
+    # MEL: full scoped project list on first paint (cascade narrows on district change)
+    proj_q = Project.query
+    if not is_master_or_admin and allowed_projects:
+        proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
+    projects = proj_q.order_by(Project.name).all()
 
     drivers_query = Driver.query.filter(
         Driver.status == 'Active',
@@ -1526,6 +1522,7 @@ def driver_attendance_bulk_off():
         last_bulk_action=last_bulk_action,
         bulk_history=bulk_history,
         status_choices=ATTENDANCE_STATUS_CHOICES,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('driver_attendance_list'), show_without_nav_from=True),
     )
 
@@ -4386,56 +4383,35 @@ def driver_attendance_report():
     if disable_district:
         form.district_id.data = scope_districts[0]
 
-    # District choices: project ke hisaab se, warna scope/districts ke hisaab se
-    if request.method == 'POST':
-        try:
-            pid = request.form.get('project_id', type=int) or 0
-        except (TypeError, ValueError):
-            pid = 0
-        # If project select was disabled, value not submitted - use scoped value
-        if not pid and disable_project and scope_projects:
-            pid = scope_projects[0]
-        if pid and pid != 0:
-            districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid)
-        else:
-            districts_query = District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-    else:
-        districts_query = District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
+    # District / vehicle: full scoped lists on first paint (MEL); cascade narrows on change
+    districts_query = District.query
+    if scope_districts:
+        districts_query = districts_query.filter(District.id.in_(scope_districts))
+    districts = districts_query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
     today = pk_date()
     form.month.data = form.month.data or today.month
     form.year.data = form.year.data or today.year
     report = []
     selected_vehicle_id = 0
     selected_shift = ''
-    vehicle_choices = []  # [(id, label), ...] for multi-scope POST so dropdown retains selection
+    vehicle_choices = []
+    vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if scope_vehicles:
+        vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+    if scope_projects:
+        vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+    if scope_districts:
+        vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+    for v in vq.order_by(*vehicle_order_by()).all():
+        label = v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')
+        vehicle_choices.append((v.id, label))
     if request.method == 'POST':
         try:
             selected_vehicle_id = request.form.get('vehicle_id', type=int) or 0
         except (TypeError, ValueError):
             selected_vehicle_id = 0
         selected_shift = (request.form.get('shift') or '').strip()
-        # Build vehicle options for POST so template can render them (no reset)
-        pid = form.project_id.data or 0
-        did = form.district_id.data or 0
-        if pid and did:
-            vq = Vehicle.query.filter(Vehicle.project_id == pid, Vehicle.district_id == did)
-            if scope_vehicles:
-                vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-            if scope_projects:
-                vq = vq.filter(Vehicle.project_id.in_(scope_projects))
-            if scope_districts:
-                vq = vq.filter(Vehicle.district_id.in_(scope_districts))
-            for v in vq.order_by(*vehicle_order_by()).all():
-                label = v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')
-                vehicle_choices.append((v.id, label))
     if request.method == 'POST' and form.validate_on_submit():
         month = form.month.data
         year = form.year.data
@@ -4534,7 +4510,7 @@ def driver_attendance_report():
         vd_q = vd_q.filter(Driver.vehicle_id.in_(scope_vehicles))
     vehicle_drivers = vd_q.order_by(Driver.name).all()
     selected_driver_id = (request.form.get('driver_id', type=int) or 0) if request.method == 'POST' else 0
-    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id, **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
+    return render_template('driver_attendance_report.html', form=form, report=report, single_vehicle=single_vehicle, has_single_scope=has_single_scope, selected_vehicle_id=selected_vehicle_id, selected_shift=selected_shift, vehicle_choices=vehicle_choices, disable_project=disable_project, disable_district=disable_district, vehicle_drivers=vehicle_drivers, selected_driver_id=selected_driver_id, location_cascade=_fuel_expense_location_cascade_dict(), **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True))
 
 
 def _build_driver_daily_attendance_report_payload(
@@ -5015,27 +4991,12 @@ def driver_attendance_daily_report():
     if disable_district:
         form.district_id.data = scope_districts[0]
 
-    if request.method == 'POST':
-        try:
-            pid = request.form.get('project_id', type=int) or 0
-        except (TypeError, ValueError):
-            pid = 0
-        if not pid and disable_project and scope_projects:
-            pid = scope_projects[0]
-        if pid and pid != 0:
-            districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid)
-        else:
-            districts_query = District.query.filter(False)
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
-    else:
-        districts_query = District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
+    # District: full scoped list on first paint (MEL)
+    districts_query = District.query
+    if scope_districts:
+        districts_query = districts_query.filter(District.id.in_(scope_districts))
+    districts = districts_query.order_by(District.name).all()
+    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
 
     today = pk_date()
     form.month.data = form.month.data or today.month
@@ -5051,7 +5012,7 @@ def driver_attendance_daily_report():
     grand_totals = {}
     status_columns = ['Present', 'Absent', 'Leave', 'Late', 'Half-Day', 'Off']
 
-    def _build_vehicle_choices(pid, did):
+    def _build_vehicle_choices(pid=0, did=0):
         vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
         if scope_projects:
             vq = vq.filter(Vehicle.project_id.in_(scope_projects))
@@ -5059,16 +5020,14 @@ def driver_attendance_daily_report():
             vq = vq.filter(Vehicle.district_id.in_(scope_districts))
         if scope_vehicles:
             vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-        if pid:
-            vq = vq.filter(Vehicle.project_id == pid)
-        if did:
-            vq = vq.filter(Vehicle.district_id == did)
+        # MEL: ignore pid/did for first-paint full list (params kept for call-site compat)
         out = []
         for v in vq.order_by(*vehicle_order_by()).all():
             label = v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')
             out.append((v.id, label))
         return out
 
+    vehicle_choices = _build_vehicle_choices()
     if request.method == 'POST':
         try:
             selected_vehicle_id = request.form.get('vehicle_id', type=int) or 0
@@ -5166,6 +5125,7 @@ def driver_attendance_daily_report():
         status_columns=status_columns,
         filter_message=filter_message,
         cal_today_day=cal_today_day,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -6444,19 +6404,11 @@ def driver_attendance_tra_report():
     if disable_district:
         form.district_id.data = scope_districts[0]
 
-    if request.method == 'POST':
-        pid = request.form.get('project_id', type=int) or 0
-        if not pid and disable_project and scope_projects:
-            pid = scope_projects[0]
-        districts_query = District.query.join(project_district).filter(project_district.c.project_id == pid) if pid else District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.order_by(District.name).all()]
-    else:
-        districts_query = District.query
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.order_by(District.name).all()]
+    # District / vehicle: full scoped lists on first paint (MEL)
+    districts_query = District.query
+    if scope_districts:
+        districts_query = districts_query.filter(District.id.in_(scope_districts))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.order_by(District.name).all()]
 
     today = pk_date()
     form.month.data = form.month.data or today.month
@@ -6466,18 +6418,19 @@ def driver_attendance_tra_report():
     selected_shift = ''
     vehicle_choices = []
     report_title = ''
+    vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if scope_vehicles:
+        vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+    if scope_projects:
+        vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+    if scope_districts:
+        vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+    for v in vq.order_by(*vehicle_order_by()).all():
+        vehicle_choices.append((v.id, v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')))
 
     if request.method == 'POST':
         selected_vehicle_id = request.form.get('vehicle_id', type=int) or 0
         selected_shift = (request.form.get('shift') or '').strip()
-        pid = form.project_id.data or 0
-        did = form.district_id.data or 0
-        if pid and did:
-            vq = Vehicle.query.filter(Vehicle.project_id == pid, Vehicle.district_id == did)
-            if scope_vehicles:
-                vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-            for v in vq.order_by(*vehicle_order_by()).all():
-                vehicle_choices.append((v.id, v.vehicle_no + ((' (' + v.vehicle_type + ')') if v.vehicle_type else '')))
 
     if request.method == 'POST' and form.validate_on_submit():
         month = form.month.data
@@ -6604,5 +6557,6 @@ def driver_attendance_tra_report():
         vehicle_choices=vehicle_choices, disable_project=disable_project,
         disable_district=disable_district, vehicle_drivers=vehicle_drivers,
         selected_driver_id=selected_driver_id,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )

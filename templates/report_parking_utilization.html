@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Parking Utilization Report{% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.6/dataTables.bootstrap5.min.css?v=8006">
 <link rel="stylesheet" href="/static/vendor/datatables/buttons/2.4.1/buttons.bootstrap5.min.css?v=8006">
 <style>
@@ -267,22 +268,41 @@
     <form method="GET" action="{{ url_for('report_parking_utilization') }}">
       <div class="row g-3 align-items-end">
         <div class="col-md-2">
-          <label class="pu-field-label" for="puProjectSelect">Project</label>
-          <select id="puProjectSelect" name="project_id" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}>
-            {% for val, label in project_choices %}
-            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-        </div>
-        <div class="col-md-2">
           <label class="pu-field-label" for="puDistrictSelect">District</label>
-          <select id="puDistrictSelect" name="district_id" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}>
+          <select id="puDistrictSelect" name="district_id" class="form-select form-select-sm search-select" {% if disable_district %}disabled{% endif %}
+            data-cascade-child="#puProjectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#puVehicleSelect,#puParkingSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in district_choices %}
             <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
           {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+        </div>
+        <div class="col-md-2">
+          <label class="pu-field-label" for="puProjectSelect">Project</label>
+          <select id="puProjectSelect" name="project_id" class="form-select form-select-sm search-select" {% if disable_project %}disabled{% endif %}
+            data-cascade-child="#puVehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}puDistrictSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#puParkingSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#puDistrictSelect">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
         </div>
         <div class="col-md-3">
           <label class="pu-field-label" for="puVehicleSelect">Vehicle</label>
@@ -442,11 +462,13 @@
 
 <script>
 (function() {
+  /* D→P→V: declarative data-cascade-* + locationCascadeData (fleet_core).
+     KEEP parking-station reload on D/P/V change. */
   var projSel    = document.getElementById('puProjectSelect');
   var distSel    = document.getElementById('puDistrictSelect');
   var vehSel     = document.getElementById('puVehicleSelect');
   var parkingSel = document.getElementById('puParkingSelect');
-  if (!projSel) return;
+  if (!projSel || !parkingSel) return;
 
   function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
     if (!sel) return;
@@ -469,48 +491,22 @@
   }
 
   function loadParkingStations(pid, did, vid) {
-    if (!parkingSel) return;
     fetch('/api/filter/parking-stations?project_id=' + (pid||'0') + '&district_id=' + (did||'0') + '&vehicle_id=' + (vid||'0'))
       .then(function(r) { return r.json(); })
       .then(function(data) { rebuildSelect(parkingSel, data, 'id', 'name', '-- All Parking Stations --'); })
       .catch(function() {});
   }
 
-  function loadVehicles(pid, did) {
-    if (!vehSel) return;
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid||'0') + '&district_id=' + (did||'0'))
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        rebuildSelect(vehSel, data, 'id', 'vehicle_no', '-- All Vehicles --');
-        loadParkingStations(pid, did, '0');
-      }).catch(function() {});
-  }
-
-  function loadDistricts(pid) {
-    if (!distSel) return;
-    if (!pid || pid === '0') {
-      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
-      loadVehicles('0', '0');
-      return;
-    }
-    fetch('/api/filter/districts-by-project?project_id=' + pid)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
-        loadVehicles(pid, '0');
-      }).catch(function() {});
-  }
-
-  projSel.addEventListener('change', function() { loadDistricts(this.value); });
-  if (distSel) distSel.addEventListener('change', function() {
-    var pid = projSel ? projSel.value : '0';
-    loadVehicles(pid, this.value);
-  });
-  if (vehSel) vehSel.addEventListener('change', function() {
+  function refreshParking() {
     var pid = projSel ? projSel.value : '0';
     var did = distSel ? distSel.value : '0';
-    loadParkingStations(pid, did, this.value);
-  });
+    var vid = vehSel ? vehSel.value : '0';
+    loadParkingStations(pid, did, vid);
+  }
+
+  if (distSel) distSel.addEventListener('change', refreshParking);
+  projSel.addEventListener('change', refreshParking);
+  if (vehSel) vehSel.addEventListener('change', refreshParking);
 })();
 </script>
 

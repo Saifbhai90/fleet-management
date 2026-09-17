@@ -24,6 +24,7 @@
 {% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
   .daily-attn-page {
     --daily-accent: #059669;
@@ -1694,22 +1695,41 @@
             <input type="number" name="year" class="form-control form-control-sm" min="2020" max="2030" value="{{ form.year.data or '' }}" required>
           </div>
           <div class="col-md-2 col-lg-2">
-            <label class="form-label">Project <span class="daily-filter-required">*</span></label>
-            <select name="project_id" id="dailyProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}>
-              {% for val, label in form.project_id.choices %}
-              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
-          </div>
-          <div class="col-md-2 col-lg-2">
             <label class="form-label">District <span class="daily-filter-required">*</span></label>
-            <select name="district_id" id="dailyDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}>
+            <select name="district_id" id="dailyDistrictSelect" class="form-select search-select" {% if disable_district %}disabled{% endif %}
+              data-cascade-child="#dailyProjectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- Select Project --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#dailyVehicleSelect,#dailyDriverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
               {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
             </select>
             {% if disable_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
+          </div>
+          <div class="col-md-2 col-lg-2">
+            <label class="form-label">Project <span class="daily-filter-required">*</span></label>
+            <select name="project_id" id="dailyProjectSelect" class="form-select search-select" {% if disable_project %}disabled{% endif %}
+              data-cascade-child="#dailyVehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}dailyDistrictSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="-- All Vehicles --"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#dailyDriverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="veh_p"
+              data-cascade-cache-district="#dailyDistrictSelect">
+              {% for val, label in form.project_id.choices %}
+              <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if disable_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
           </div>
           <div class="col-md-2 col-lg-2">
             <label class="form-label">Vehicle</label>
@@ -2208,7 +2228,6 @@
   var districtSelect = document.getElementById('dailyDistrictSelect');
   var vehicleSelect = document.getElementById('dailyVehicleSelect');
   var driverSelect = document.getElementById('dailyDriverSelect');
-  var hasServerVehicles = {{ 'true' if vehicle_choices else 'false' }};
   var scope = {
     projects: {{ (session.get('allowed_projects') or []) | tojson }},
     districts: {{ (session.get('allowed_districts') or []) | tojson }},
@@ -2241,54 +2260,7 @@
     }
   }
 
-  function loadDistricts(projectId) {
-    if (hasSingle || !districtSelect) return;
-    var cur = selectValue(districtSelect);
-    if (!projectId || projectId === '0') {
-      fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: '-- Select District --', placeholderValue: '0' });
-      loadVehicles();
-      return;
-    }
-    fetch('/api/filter/districts-by-project?project_id=' + encodeURIComponent(projectId))
-      .then(function(r) { return r.json(); })
-      .then(function(districts) {
-        var selected = (cur && cur !== '0' && (districts || []).some(function(d) { return String(d.id) === String(cur); })) ? cur : null;
-        fleetFillSelectRows(districtSelect, districts, 'id', 'name', {
-          placeholder: '-- Select District --',
-          placeholderValue: '0',
-          selected: selected
-        });
-        loadVehicles();
-      })
-      .catch(function() {
-        fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: '-- Select District --', placeholderValue: '0' });
-        loadVehicles();
-      });
-  }
-
-  function loadVehicles() {
-    if (!vehicleSelect) return;
-    var pid = selectValue(projectSelect);
-    var did = selectValue(districtSelect);
-    var cur = selectValue(vehicleSelect);
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + encodeURIComponent(pid) + '&district_id=' + encodeURIComponent(did))
-      .then(function(r) { return r.json(); })
-      .then(function(vehicles) {
-        var selected = (cur && cur !== '0' && (vehicles || []).some(function(v) { return String(v.id) === String(cur); })) ? cur : null;
-        if (hasSingle && scope.vehicles.length === 1) selected = String(scope.vehicles[0]);
-        fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
-          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
-        }), { placeholder: '-- All Vehicles --', placeholderValue: '0', selected: selected });
-        if (hasSingle && scope.vehicles.length === 1 && vehicleSelect.tomselect) {
-          try { vehicleSelect.tomselect.disable(); } catch (e) {}
-        }
-        refreshDriverDropdown();
-      })
-      .catch(function() {
-        fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: '-- All Vehicles --', placeholderValue: '0' });
-      });
-  }
-
+  /* D→P→V declarative (fleet_core). KEEP driver refresh. */
   function refreshDriverDropdown(onDone) {
     if (!driverSelect) {
       if (typeof onDone === 'function') onDone();
@@ -2313,15 +2285,11 @@
       });
   }
 
-  if (projectSelect) {
-    projectSelect.addEventListener('change', function() {
-      loadDistricts(this.value || '0');
-    });
-  }
   if (districtSelect) {
-    districtSelect.addEventListener('change', function() {
-      loadVehicles();
-    });
+    districtSelect.addEventListener('change', function() { refreshDriverDropdown(); });
+  }
+  if (projectSelect) {
+    projectSelect.addEventListener('change', function() { refreshDriverDropdown(); });
   }
   if (vehicleSelect) {
     vehicleSelect.addEventListener('change', refreshDriverDropdown);
@@ -2348,13 +2316,6 @@
     reinitDropdown(vehicleSelect);
     reinitDropdown(driverSelect);
     refreshDriverDropdown();
-    if (!hasServerVehicles) {
-      var pid = selectValue(projectSelect);
-      var did = selectValue(districtSelect);
-      if (pid && pid !== '0' && did && did !== '0') {
-        loadVehicles();
-      }
-    }
   }, 100);
 
   var dailyReportForm = document.getElementById('dailyReportForm');

@@ -2,6 +2,7 @@
 {% block title %}Bulk Status{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
   .bulk-off-page .card { border-radius: 12px; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
   .bulk-off-page .card-header { font-weight: 600; padding: 0.75rem 1rem; }
@@ -43,7 +44,15 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">District</label>
-            <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
+            <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="-- Select Project --"
+              data-cascade-placeholder-value=""
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
               <option value="">-- Select District --</option>
               {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -183,55 +192,17 @@
   var projectSelect = document.getElementById('projectSelect');
   var hiddenDistrictId = document.getElementById('hiddenDistrictId');
   var hiddenProjectId = document.getElementById('hiddenProjectId');
-  var projectsApiUrl = '{{ url_for("api_attendance_projects") }}';
 
   function syncHiddenInputs() {
     if (hiddenDistrictId && districtSelect) hiddenDistrictId.value = districtSelect.value || '';
     if (hiddenProjectId && projectSelect) hiddenProjectId.value = projectSelect.value || '';
   }
 
-  function rebuildSel(el, html) {
-    if (!el) return;
-    if (typeof fleetFillSelectFromHtml === 'function') {
-      fleetFillSelectFromHtml(el, html);
-      return;
-    }
-    if (el.tomselect) el.tomselect.destroy();
-    el.innerHTML = html;
-    initSearchableDropdowns(el.parentNode);
-  }
-
-  var loadProjectsTimeout = null;
-  function loadProjectsForDistrict(districtId) {
-    if (!districtId || districtId === '0' || districtId === '') return;
-    if (loadProjectsTimeout) clearTimeout(loadProjectsTimeout);
-    loadProjectsTimeout = setTimeout(function doLoad() {
-      loadProjectsTimeout = null;
-      rebuildSel(projectSelect, '<option value="">-- Select Project --</option>');
-      if (hiddenProjectId) hiddenProjectId.value = '';
-      fetch(projectsApiUrl + '?district_id=' + encodeURIComponent(districtId))
-        .then(function(r) { return r.json(); })
-        .then(function(arr) {
-          if (!Array.isArray(arr)) return;
-          var seen = {}, html = '<option value="">-- Select Project --</option>';
-          arr.forEach(function(p) {
-            if (!p || p.id === undefined || seen[p.id]) return;
-            seen[p.id] = true;
-            html += '<option value="' + p.id + '">' + p.name + '</option>';
-          });
-          rebuildSel(projectSelect, html);
-        })
-        .catch(function() { rebuildSel(projectSelect, '<option value="">-- Select Project --</option>'); });
-    }, 50);
-  }
-
+  /* D→P: declarative data-cascade-* + locationCascadeData (fleet_core). KEEP hidden sync. */
   function initBulkOffForm() {
     if (!districtSelect || !projectSelect) return;
-    districtSelect.addEventListener('change', function() {
-      syncHiddenInputs();
-      loadProjectsForDistrict(this.value);
-    });
-    projectSelect.addEventListener('change', function() { syncHiddenInputs(); });
+    districtSelect.addEventListener('change', syncHiddenInputs);
+    projectSelect.addEventListener('change', syncHiddenInputs);
     var filterForm = document.getElementById('filterForm');
     if (filterForm) {
       filterForm.addEventListener('submit', function() { syncHiddenInputs(); });

@@ -50,6 +50,7 @@ from finance_utils import (
 )
 from utils import pk_date, parse_date, generate_excel_template
 from vehicle_sort_utils import vehicle_order_by
+from routes import _fuel_expense_location_cascade_dict
 
 
 def _upload_workspace_transfer_attachment(file_storage):
@@ -4223,17 +4224,10 @@ def _workspace_mpg_scoped_dropdowns(district_id, project_id, scope):
     project_q = Project.query.order_by(Project.name.asc())
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
-    if district_id:
-        project_q = project_q.join(
-            project_district, Project.id == project_district.c.project_id
-        ).filter(project_district.c.district_id == district_id)
+    # MEL: full scoped project/vehicle lists on first paint (cascade narrows on change)
     projects = project_q.all()
 
     veh_q = Vehicle.query
-    if district_id:
-        veh_q = veh_q.filter(Vehicle.district_id == district_id)
-    if project_id:
-        veh_q = veh_q.filter(Vehicle.project_id == project_id)
     if not is_master_or_admin and allowed_vehicles:
         veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     vehicles = veh_q.order_by(*vehicle_order_by()).all()
@@ -4751,6 +4745,7 @@ def workspace_mpg_report():
         disable_district=filters["disable_district"],
         disable_project=filters["disable_project"],
         disable_vehicle=filters["disable_vehicle"],
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
