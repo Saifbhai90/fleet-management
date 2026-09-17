@@ -46,7 +46,7 @@
             <label class="form-label small mb-1">Project</label>
             <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
               data-cascade-child="#vehicleSelect"
-              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={#districtSelect}"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
               data-cascade-value-key="id"
               data-cascade-text-key="vehicle_no"
               data-cascade-placeholder="-- All Vehicles --"
