@@ -28,6 +28,7 @@ from utils import pk_now, pk_date
 
 # Import shared helpers from routes.py
 from routes import (
+    _fuel_expense_location_cascade_dict,
     _multi_word_filter,
     _transfers_nav_back,
 )
@@ -324,6 +325,7 @@ def vehicle_transfers():
         project_choices=projects,
         district_choices=districts,
         disable_project=disable_project,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         disable_district=disable_district,
     **_transfers_nav_back(),
     )
@@ -807,6 +809,7 @@ def driver_transfers():
         project_choices=projects,
         district_choices=districts,
         disable_project=disable_project,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         disable_district=disable_district,
     **_transfers_nav_back(),
     )

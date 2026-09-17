@@ -3,6 +3,7 @@ Finance & Accounting Routes
 All routes for vouchers, journal entries, ledgers, and financial reports
 """
 from flask import render_template, request, redirect, url_for, flash, jsonify, session, current_app, send_file, after_this_request
+from routes import _fuel_expense_location_cascade_dict
 import io
 import mimetypes
 import tempfile
@@ -291,6 +292,7 @@ def payment_vouchers_list():
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
                          sort_by=sort_by, sort_order=sort_order,
+                         location_cascade=_fuel_expense_location_cascade_dict(),
                          page=page, per_page=per_page, search=search, **_finance_nav())
 
 
@@ -1060,6 +1062,7 @@ def employee_expense_list():
                          from_date=from_date, to_date=to_date,
                          district_id=district_id, project_id=project_id,
                          category=category, categories=categories, total_amount=total_amount,
+                         location_cascade=_fuel_expense_location_cascade_dict(),
                          page=page, per_page=per_page, search=search)
 
 
@@ -2562,6 +2565,7 @@ def fund_transfers_list():
                            category_choices=category_choices,
                            page_amount_subtotal=page_amount_subtotal,
                            overall_amount_total=overall_amount_total,
+                           location_cascade=_fuel_expense_location_cascade_dict(),
                            show_upload_media_columns=show_upload_media_columns, **_finance_nav())
 
 

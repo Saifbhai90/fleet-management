@@ -34,6 +34,7 @@ from io import BytesIO, StringIO
 
 # Import shared helpers from routes.py
 from routes import (
+    _fuel_expense_location_cascade_dict,
     _multi_word_filter,
     media_url_filter,
     _sync_user_active_by_cnic,
@@ -794,6 +795,7 @@ def employee_lifecycle_history():
                            district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects,
                            actions=actions, per_page=per_page,
+                           location_cascade=_fuel_expense_location_cascade_dict(),
                            title='Employee Assignment History', **_workforce_nav_back())
 
 
@@ -1031,6 +1033,7 @@ def _employee_lifecycle_list(action_types, title, add_url, add_label, template_n
                            from_date=from_date, to_date=to_date,
                            districts=districts, projects=projects,
                            per_page=per_page, title=title,
+                           location_cascade=_fuel_expense_location_cascade_dict(),
                            add_url=add_url, add_label=add_label,
                            **_workforce_nav_back())
 
@@ -1092,6 +1095,7 @@ def employee_lifecycle_assign_list():
                            search=search, district_id=district_id, project_id=project_id,
                            districts=districts, projects=projects,
                            per_page=per_page, title='Employee Assignments',
+                           location_cascade=_fuel_expense_location_cascade_dict(),
                            add_url='employee_lifecycle_assign', add_label='New Assignment', **_workforce_nav_back())
 
 

@@ -2,6 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
     body { background: #f8f9fa; }
     .page-header-gradient { background: #fff; padding: 0; margin-bottom: 1rem; }
@@ -68,22 +69,30 @@
             <div class="col-md-2">
                 <input type="text" name="search" class="form-control filter-input" placeholder="Search name/code..." value="{{ search }}" autocomplete="off">
             </div>
-            <div class="col-md-2">
-                <select name="district_id" class="form-select filter-input search-select">
-                    <option value="0">All Districts</option>
-                    {% for d in districts %}
-                    <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select name="project_id" class="form-select filter-input search-select">
-                    <option value="0">All Projects</option>
-                    {% for p in projects %}
-                    <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+                            <div class="col-md-2">
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+                        <option value="0">All Districts</option>
+                        {% for d in districts %}
+                        <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select">
+                        <option value="0">All Projects</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             <div class="col-auto">
                 <select name="per_page" class="form-select filter-input" style="width:75px">
                     {% for v in [10,25,50,100] %}

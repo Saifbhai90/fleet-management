@@ -2,6 +2,7 @@
 {% block title %}Driver Seat Available{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.css?v=8006">
 <style>
     .report-header { background: linear-gradient(135deg, #e65100 0%, #bf360c 100%); color: #fff; border-radius: 10px; padding: 1.1rem 1.4rem; margin-bottom: 1rem; }
@@ -125,6 +126,23 @@
         <form method="GET" action="{{ url_for('driver_seat_available_report') }}">
             <div class="row g-2 align-items-end">
                 <div class="col-6 col-md-3">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+                </div>
+                <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
                     <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
                         {% for val, label in project_choices %}
@@ -132,15 +150,6 @@
                         {% endfor %}
                     </select>
                     {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
-                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}>
-                        {% for val, label in district_choices %}
-                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
                 </div>
                 <div class="col-6 col-md-3">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle Type</label>
@@ -284,21 +293,6 @@ $(document).ready(function () {
     $('#dtSearchInput').on('blur',  function () { $(this).css('border-color', '#ddd'); });
 });
 
-(function () {
-    var $proj = $('#projectSelect');
-    var $dist = $('#districtSelect');
-
-    $proj.on('change', function () {
-        var pid = parseInt($(this).val()) || 0;
-        if ($dist.prop('disabled')) return;
-        $dist.html('<option value="0">-- All Districts --</option>');
-        if (!pid) return;
-        $.getJSON('/api/filter/districts-by-project', { project_id: pid }, function (data) {
-            $.each(data, function (_, d) {
-                $dist.append($('<option>').val(d.id).text(d.name));
-            });
-        });
-    });
-})();
+/* D>P: declarative data-cascade-* + locationCascadeData (fleet_core). */
 </script>
 {% endblock %}

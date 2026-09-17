@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}District Summary Report{% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.6/dataTables.bootstrap5.min.css?v=8006">
 <link rel="stylesheet" href="/static/vendor/datatables/buttons/2.4.1/buttons.bootstrap5.min.css?v=8006">
 <style>
@@ -136,7 +137,15 @@
         <form method="get" action="{{ url_for('report_district_summary') }}" class="row g-2 align-items-end">
             <div class="col-6 col-md-3 col-lg-2">
                 <label class="form-label mb-1">District</label>
-                <select name="district_id" class="form-select form-select-sm search-select">
+                <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
                     {% for val, label in district_choices %}
                     <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
@@ -144,7 +153,7 @@
             </div>
             <div class="col-6 col-md-3 col-lg-2">
                 <label class="form-label mb-1">Project</label>
-                <select name="project_id" class="form-select form-select-sm search-select">
+                <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
                     {% for val, label in project_choices %}
                     <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}

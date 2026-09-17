@@ -2,6 +2,7 @@
 {% block title %}Vehicle Transfers History{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
     body { background: #f8f9fa; }
     
@@ -116,17 +117,25 @@
                     <input type="text" name="to_date" class="form-control filter-input datepicker" 
                            placeholder="To Date (dd-mm-yyyy)" value="{{ to_date or '' }}" autocomplete="off">
                 </div>
-                <div class="col-md-3">
-                    <select name="project_id" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
-                        {% for val, label in project_choices %}
-                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                                <div class="col-md-2">
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d" >
+                        {% for val, label in district_choices %}
+                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
-                    <select name="district_id" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}>
-                        {% for val, label in district_choices %}
-                        <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+                <div class="col-md-3">
+                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>

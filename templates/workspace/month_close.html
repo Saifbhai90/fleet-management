@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
@@ -67,7 +68,15 @@
         <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period Start</label><input type="text" class="form-control datepicker" id="periodStartInput" name="period_start" placeholder="dd-mm-yyyy" required></div>
         <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">Period End</label><input type="text" class="form-control datepicker" id="periodEndInput" name="period_end" placeholder="dd-mm-yyyy" required></div>
         <div class="col-lg-3 col-md-6"><label class="form-label fw-semibold">District</label>
-          <select name="district_id" id="monthCloseDistrict" class="form-select search-select" required>
+          <select name="district_id" id="monthCloseDistrict" class="form-select search-select" required
+            data-cascade-child="#monthCloseProject"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- Select Project --"
+            data-cascade-placeholder-value=""
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             <option value="">-- Select District --</option>
             {% for d in districts %}
             <option value="{{ d.id }}">{{ d.name }}</option>

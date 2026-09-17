@@ -35,6 +35,7 @@ from io import BytesIO, StringIO
 
 # Import shared helpers from routes.py
 from routes import (
+    _fuel_expense_location_cascade_dict,
     _multi_word_filter,
     media_url_filter,
     _get_user_scope,
@@ -363,6 +364,7 @@ def driver_job_left_list():
         disable_project=disable_project,
         disable_district=disable_district,
         pagination=pagination,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         per_page=per_page,
     **_workforce_nav_back(),
     )
@@ -624,6 +626,7 @@ def driver_rejoin_list():
         disable_project=disable_project,
         disable_district=disable_district,
         pagination=pagination,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         per_page=per_page,
     **_workforce_nav_back(),
     )

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Workspace Report Centre{% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="container-fluid py-3 ws-report-page">
   {% include "workspace/_nav.html" %}
   <div class="ws-report-shell p-3 p-md-4">
@@ -54,32 +55,32 @@
           <form method="get" class="row g-2 align-items-end mb-3">
             <input type="hidden" name="tab" value="w-expense">
             <input type="hidden" name="expense_summary" value="1">
-            <div class="col-lg-2 col-md-3">
-              <label class="form-label form-label-sm mb-1">From Date</label>
-              <input type="text" class="form-control form-control-sm datepicker" name="from_date" value="{{ from_date|ddmmyyyy if from_date else '' }}" placeholder="dd-mm-yyyy" autocomplete="off">
-            </div>
-            <div class="col-lg-2 col-md-3">
-              <label class="form-label form-label-sm mb-1">To Date</label>
-              <input type="text" class="form-control form-control-sm datepicker" name="to_date" value="{{ to_date|ddmmyyyy if to_date else '' }}" placeholder="dd-mm-yyyy" autocomplete="off">
-            </div>
-            <div class="col-lg-3 col-md-3">
-              <label class="form-label form-label-sm mb-1">District</label>
-              <select class="form-select form-select-sm search-select" name="district_id" data-placeholder="Search district...">
-                <option value="0">All Districts</option>
-                {% for d in districts %}
-                <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-lg-3 col-md-3">
-              <label class="form-label form-label-sm mb-1">Project</label>
-              <select class="form-select form-select-sm search-select" name="project_id" data-placeholder="Search project...">
-                <option value="0">All Projects</option>
-                {% for p in projects %}
-                <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
+                    <div class="col-lg-2 col-md-3">
+          <label class="form-label form-label-sm mb-1">From Date</label>
+          <select class="form-select form-select-sm search-select" name="district_id" id="districtSelect" data-placeholder="Search district..."
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+            <option value="0">All Districts</option>
+            {% for d in districts %}
+            <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-3">
+          <label class="form-label form-label-sm mb-1">To Date</label>
+          <select class="form-select form-select-sm search-select" name="project_id" id="projectSelect" data-placeholder="Search project...">
+            <option value="0">All Projects</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
             <div class="col-lg-2 col-md-12 d-flex gap-2">
               <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
               <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="btn btn-outline-secondary btn-sm">Reset</a>

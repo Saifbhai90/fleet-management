@@ -2,6 +2,7 @@
 {% block title %}Workspace Journal Vouchers{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="container-fluid py-3">
   {% include "workspace/_nav.html" %}
 
@@ -39,24 +40,17 @@
     <div class="card-body py-2">
       <form method="GET" action="" class="row g-2 align-items-end">
         {% if manual_only %}<input type="hidden" name="manual_only" value="1">{% endif %}
-        <div class="col-6 col-md-3">
+                <div class="col-6 col-md-3">
           <label class="form-label form-label-sm mb-1">From Date</label>
-          <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
-        </div>
-        <div class="col-6 col-md-3">
-          <label class="form-label form-label-sm mb-1">To Date</label>
-          <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
-        </div>
-        <div class="col-6 col-md-3">
-          <label class="form-label form-label-sm mb-1">Type</label>
-          <input type="hidden" name="entry_type_filter" id="typeHidden" value="{{ (selected_types or [])|join(',') }}">
-          <div id="typeMultiWrap">
-            <button type="button" class="form-select form-select-sm text-start" id="typeMultiBtn" style="overflow:hidden;text-overflow:ellipsis;padding-right:20px;line-height:1.5;">-- All Types --</button>
-          </div>
-        </div>
-        <div class="col-6 col-md-3">
-          <label class="form-label form-label-sm mb-1">District</label>
-          <select name="district_id" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();">
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             <option value="" {% if not district_id %}selected{% endif %}>-- All Districts --</option>
             {% for d in districts %}
             <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -64,8 +58,8 @@
           </select>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label form-label-sm mb-1">Project</label>
-          <select name="project_id" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();">
+          <label class="form-label form-label-sm mb-1">To Date</label>
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select" onfocus="this.tomselect && this.tomselect.open();">
             <option value="" {% if not project_id %}selected{% endif %}>-- All Projects --</option>
             {% for p in projects %}
             <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>

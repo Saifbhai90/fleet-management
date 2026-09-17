@@ -25,6 +25,7 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
 {% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="page-shell">
     <div class="page-hdr">
                 {% from 'partials/nav_back_button.html' import nav_back_button with context %}
@@ -61,22 +62,30 @@ body { background: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; }
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-auto">
-                <select name="district_id" class="form-select form-select-sm" style="width:160px;font-size:.8rem;">
-                    <option value="0">All Districts</option>
-                    {% for d in districts %}
-                    <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-auto">
-                <select name="project_id" class="form-select form-select-sm" style="width:160px;font-size:.8rem;">
-                    <option value="0">All Projects</option>
-                    {% for p in projects %}
-                    <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
+                            <div class="col-auto">
+                    <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select" style="width:160px;font-size:.8rem;"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+                        <option value="0">All Districts</option>
+                        {% for d in districts %}
+                        <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select" style="width:160px;font-size:.8rem;">
+                        <option value="0">All Projects</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             <div class="col-auto">
                 <select name="per_page" class="form-select form-select-sm" style="width:80px;font-size:.8rem;">
                     {% for v in [10,25,50,100] %}

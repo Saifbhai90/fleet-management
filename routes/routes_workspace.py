@@ -2133,6 +2133,7 @@ def workspace_opening_expenses_list():
         sort_by=sort_by,
         sort_order=sort_order,
         districts=districts,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         projects=projects,
     )
 
@@ -2607,6 +2608,7 @@ def workspace_fuel_oil_openings_list():
         overall_total_oil_change_total=overall_total_oil_change_total,
         overall_grand_total=overall_grand_total,
         districts=districts,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         projects=projects,
     )
 
@@ -3127,6 +3129,7 @@ def workspace_fuel_oil_month_close():
         projects=projects,
         spell_rows=spell_rows,
         default_company_account_id=default_company_account_id,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         can_manage_month_close=can_manage_month_close,
     )
 
@@ -3876,6 +3879,7 @@ def workspace_month_close():
                 projects=projects,
                 spell_rows=spell_rows,
                 default_company_account_id=default_company_account_id,
+                location_cascade=_fuel_expense_location_cascade_dict(),
                 can_manage_month_close=can_manage_month_close,
             )
         try:
@@ -3906,6 +3910,7 @@ def workspace_month_close():
         projects=projects,
         spell_rows=spell_rows,
         default_company_account_id=default_company_account_id,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         can_manage_month_close=can_manage_month_close,
     )
 
@@ -4127,6 +4132,7 @@ def workspace_reports():
         source_total_records=source_total_records,
         tracked_total=tracked_total,
         transfer_total=transfer_total,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         month_closes=month_closes,
     )
 
@@ -6540,6 +6546,7 @@ def workspace_journal_vouchers_list():
         projects=projects,
         totals_map=totals_map,
         line_counts=line_counts,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         manual_only=manual_only,
     )
 

@@ -898,6 +898,7 @@ def report_district_summary():
         total_drivers=total_drivers,
         total_active=total_active,
         total_parking=total_parking,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         total_vacant=total_vacant,
     )
 

@@ -433,11 +433,10 @@ def oil_change_alert_report():
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.all()]
 
+    # MEL: full scoped district list on first paint (cascade narrows projects)
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     limits = _get_vehicle_family_oil_change_limits()
@@ -464,6 +463,7 @@ def oil_change_alert_report():
         status_values=status_values,
         project_choices=project_choices,
         district_choices=district_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         family_choices=family_choices,
         custom_km=custom_km_raw,
         custom_km_mode=custom_km_mode,
@@ -1834,6 +1834,7 @@ def driver_seat_available_report():
         vehicle_type_choices=vehicle_type_choices,
         total=len(results), total_vacant=total_vacant,
         disable_project=disable_project,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         disable_district=disable_district,
     )
 
@@ -2041,6 +2042,7 @@ def missing_documents_report():
         project_id=project_id, district_id=district_id,
         doc_filters=doc_filters,
         project_choices=project_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         district_choices=district_choices,
         doc_fields=DOC_FIELDS,
         auto_project_id=auto_project_id,
@@ -2298,6 +2300,7 @@ def report_bank_account():
         district_choices=district_choices,
         missing_fields=MISSING_FIELDS,
         disable_project=disable_project,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         disable_district=disable_district,
         is_master_or_admin=is_master_or_admin,
     )

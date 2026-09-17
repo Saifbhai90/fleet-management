@@ -80,6 +80,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <div class="container-fluid">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -98,20 +99,28 @@
       <form method="get" action="{{ url_for('report_bank_account') }}" class="row g-3 align-items-end">
         {{ nav_from_hidden() }}
         <div class="col-md-2">
-          <label class="form-label">Project</label>
-          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-          <select name="project_id" id="baProjectSelect" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
-            {% for val, label in project_choices %}
-              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+          <label class="form-label">District</label>
+          {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+            {% for val, label in district_choices %}
+              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-md-2">
-          <label class="form-label">District</label>
-          {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
-          <select name="district_id" id="baDistrictSelect" class="form-select form-select-sm search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
-            {% for val, label in district_choices %}
-              <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+          <label class="form-label">Project</label>
+          {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
+            {% for val, label in project_choices %}
+              <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
@@ -424,44 +433,5 @@
 })();
 </script>
 
-<script>
-(function() {
-  var projSel = document.getElementById('baProjectSelect');
-  var distSel = document.getElementById('baDistrictSelect');
-  if (!projSel || !distSel) return;
-
-  function rebuildSelect(sel, items, valueKey, labelKey, allLabel) {
-    if (!sel) return;
-   var opts = (items || []).map(function(item) {
-      return { value: item[valueKey], text: item[labelKey] };
-    });
-    if (typeof fleetFillSelect === 'function') {
-      fleetFillSelect(sel, opts, { placeholder: allLabel, placeholderValue: '0' });
-      return;
-    }
-    sel.innerHTML = '<option value="0">' + allLabel + '</option>';
-    opts.forEach(function(item) {
-      var opt = document.createElement('option');
-      opt.value = item.value;
-      opt.textContent = item.text;
-      sel.appendChild(opt);
-    });
-    initSearchableDropdowns(sel.parentNode);
-  }
-
-  function loadDistricts(pid) {
-    if (!pid || pid === '0') {
-      rebuildSelect(distSel, [], 'id', 'name', '-- All Districts --');
-      return;
-    }
-    fetch('/api/filter/districts-by-project?project_id=' + pid)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        rebuildSelect(distSel, data, 'id', 'name', '-- All Districts --');
-      }).catch(function() {});
-  }
-
-  projSel.addEventListener('change', function() { loadDistricts(this.value); });
-})();
-</script>
+/* D>P: declarative data-cascade-* + locationCascadeData (fleet_core). */
 {% endblock %}

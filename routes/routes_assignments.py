@@ -40,6 +40,7 @@ parse_date_dmy = parse_date
 
 # Import shared helpers from routes.py
 from routes import (
+    _fuel_expense_location_cascade_dict,
     _multi_word_filter,
     _assignments_nav_back,
     _nav_back_ctx,
@@ -428,6 +429,7 @@ def assign_project_to_district():
         per_page=per_page,
         sort_by=sort_by,
         sort_order=sort_order,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_assignments_nav_back(),
     )
 
@@ -719,6 +721,7 @@ def assign_vehicle_to_district():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_assignments_nav_back(),
     )
 
@@ -1089,6 +1092,7 @@ def assign_vehicle_to_parking_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_assignments_nav_back(),
     )
 
@@ -1561,6 +1565,7 @@ def assign_driver_to_vehicle_list():
         disable_district=disable_district,
         pagination=pagination,
         per_page=per_page,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_assignments_nav_back(),
     )
 

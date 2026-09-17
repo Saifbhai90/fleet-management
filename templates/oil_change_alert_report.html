@@ -2,6 +2,7 @@
 {% block title %}Oil Change Alert Report{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.css?v=8006">
 <style>
   .oca-header { background: linear-gradient(135deg, #8e24aa 0%, #5e35b1 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
@@ -47,18 +48,26 @@
           <input type="text" name="to_date" class="form-control form-control-sm datepicker" value="{{ to_date|ddmmyyyy if to_date else '' }}">
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label mb-1 small fw-semibold">Project</label>
-          <select name="project_id" class="form-select form-select-sm search-select" id="projectSelect">
-            {% for val, label in project_choices %}
-            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+          <label class="form-label mb-1 small fw-semibold">District</label>
+          <select name="district_id" class="form-select form-select-sm search-select" id="districtSelect"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
+            {% for val, label in district_choices %}
+            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label mb-1 small fw-semibold">District</label>
-          <select name="district_id" class="form-select form-select-sm search-select" id="districtSelect">
-            {% for val, label in district_choices %}
-            <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
+          <label class="form-label mb-1 small fw-semibold">Project</label>
+          <select name="project_id" class="form-select form-select-sm search-select" id="projectSelect">
+            {% for val, label in project_choices %}
+            <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>

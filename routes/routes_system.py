@@ -40,6 +40,7 @@ from utils import pk_now, pk_date
 # Import shared monitoring state and helper functions from routes.py
 # These are mutable objects (dicts, deques) — imports are references, not copies.
 from routes import (
+    _fuel_expense_location_cascade_dict,
     _health_cache, _HEALTH_CACHE_TTL,
     _api_latency_ms, _latency_history, _session_history,
     _route_perf_log, _last_backup_ts, _health_alert_sent,
@@ -1809,6 +1810,7 @@ def driver_doc_updates_list():
         q=q,
         project_choices=project_choices,
         district_choices=district_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_master_nav_back(),
     )
 
