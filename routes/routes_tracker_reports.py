@@ -261,6 +261,7 @@ def active_drivers_report():
         allowed_districts=allowed_districts, is_master_or_admin=is_master_or_admin
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     proj_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
@@ -269,8 +270,6 @@ def active_drivers_report():
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
 
     veh_q = db.session.query(Vehicle).join(Driver, Vehicle.id == Driver.vehicle_id).filter(
@@ -278,10 +277,10 @@ def active_drivers_report():
     ).distinct().order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        veh_q = veh_q.filter(or_(Vehicle.project_id == project_id, Driver.project_id == project_id))
-    if district_id:
-        veh_q = veh_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        veh_q = veh_q.filter(or_(Vehicle.project_id.in_(list(allowed_projects)), Driver.project_id.in_(list(allowed_projects))))
+    if not is_master_or_admin and allowed_districts:
+        veh_q = veh_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
 
     return render_template(
@@ -298,6 +297,7 @@ def active_drivers_report():
         disable_district=disable_district,
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
+        location_cascade=_fuel_expense_location_cascade_dict(),
     )
 
 
@@ -691,6 +691,7 @@ def speed_monitoring_report():
             is_master_or_admin=is_master_or_admin,
         )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -699,17 +700,15 @@ def speed_monitoring_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -730,6 +729,7 @@ def speed_monitoring_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -878,6 +878,7 @@ def mileage_report():
         is_master_or_admin=is_master_or_admin,
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -886,17 +887,15 @@ def mileage_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -916,6 +915,7 @@ def mileage_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -1074,6 +1074,7 @@ def unauthorized_movement_report():
         is_master_or_admin=is_master_or_admin,
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -1082,17 +1083,15 @@ def unauthorized_movement_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -1112,6 +1111,7 @@ def unauthorized_movement_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -1317,6 +1317,7 @@ def task_start_delay_report():
         is_master_or_admin=is_master_or_admin, status=filters['status'],
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -1325,17 +1326,15 @@ def task_start_delay_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if filters['project_id']:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == filters['project_id'])
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if filters['project_id']:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == filters['project_id'])
-    if filters['district_id']:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == filters['district_id'])
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -1353,6 +1352,7 @@ def task_start_delay_report():
         delay_mode=filters['delay_mode'], time_mode=filters['time_mode'], status=filters['status'],
         filter_group='time' if filters['time_mode'] else ('delay' if filters['delay_mode'] else ''),
         project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -1492,6 +1492,7 @@ def task_turnaround_report():
         is_master_or_admin=is_master_or_admin,
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -1500,17 +1501,15 @@ def task_turnaround_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -1523,6 +1522,7 @@ def task_turnaround_report():
         from_date=from_date, to_date=to_date, project_id=project_id, district_id=district_id, vehicle_id=vehicle_id,
         check_type=check_type, duration_limit=duration_limit_raw,
         project_choices=project_choices, district_choices=district_choices, vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 
@@ -1638,6 +1638,7 @@ def tracker_difference_report():
         is_master_or_admin=is_master_or_admin,
     )
 
+    # MEL: full scoped D/P/V lists on first paint (cascade narrows on change)
     project_q = Project.query.order_by(Project.name)
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
@@ -1646,17 +1647,15 @@ def tracker_difference_report():
     district_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        district_q = district_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.all()]
 
     vehicle_q = Vehicle.query.order_by(*vehicle_order_by())
     if not is_master_or_admin and allowed_vehicles:
         vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-    if project_id:
-        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicle_q.all()]
 
     unique_vehicle_count = len({r['vehicle'].id for r in rows if r.get('vehicle')})
@@ -1676,6 +1675,7 @@ def tracker_difference_report():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('reports_index'), show_without_nav_from=True),
     )
 

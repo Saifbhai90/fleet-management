@@ -307,6 +307,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 {% from 'partials/nav_back_button.html' import nav_back_button, nav_from_hidden with context %}
 {% set lock = task_report_filter_lock if task_report_filter_lock is defined else {} %}
 {% set lock_district = lock.get('lock_district') %}
@@ -398,9 +399,9 @@
       <form method="POST" action="{{ url_for('task_report_list') }}" id="filterForm" class="row g-3 align-items-end mx-0">
         {{ form.hidden_tag() }}
         {{ nav_from_hidden() }}
-        {% if lock_district %}<input type="hidden" name="district_id" value="{{ form.district_id.data or 0 }}">{% endif %}
-        {% if lock_project %}<input type="hidden" name="project_id" value="{{ form.project_id.data or 0 }}">{% endif %}
-        {% if lock_vehicle %}<input type="hidden" name="vehicle_id" value="{{ form.vehicle_id.data or 0 }}">{% endif %}
+        {% if lock_district %}<input type="hidden" name="district_id" id="taskReportDistrictSelect" value="{{ form.district_id.data or 0 }}">{% endif %}
+        {% if lock_project %}<input type="hidden" name="project_id" id="taskReportProjectSelect" value="{{ form.project_id.data or 0 }}">{% endif %}
+        {% if lock_vehicle %}<input type="hidden" name="vehicle_id" id="taskReportVehicleSelect" value="{{ form.vehicle_id.data or 0 }}">{% endif %}
         <div class="col-6 {% if unlocked_count == 0 %}col-md-3{% else %}col-md-2{% endif %}">
           <label class="form-label">From Date</label>
           {{ form.from_date(class="form-control datepicker task-batch-date-input") }}
@@ -412,7 +413,16 @@
         {% if not lock_district %}
         <div class="col-6 col-md-2">
           <label class="form-label">District</label>
-          <select name="district_id" id="taskReportDistrictSelect" class="form-select search-select">
+          <select name="district_id" id="taskReportDistrictSelect" class="form-select search-select"
+            data-cascade-child="#taskReportProjectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#taskReportVehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in form.district_id.choices %}
               <option value="{{ val }}" {% if form.district_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -422,7 +432,16 @@
         {% if not lock_project %}
         <div class="col-6 col-md-2">
           <label class="form-label">Project</label>
-          <select name="project_id" id="taskReportProjectSelect" class="form-select search-select">
+          <select name="project_id" id="taskReportProjectSelect" class="form-select search-select"
+            data-cascade-child="#taskReportVehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}taskReportDistrictSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#taskReportDistrictSelect">
             {% for val, label in form.project_id.choices %}
               <option value="{{ val }}" {% if form.project_id.data == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}

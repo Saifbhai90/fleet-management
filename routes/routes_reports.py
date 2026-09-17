@@ -1439,19 +1439,17 @@ def report_uniform_sizes():
         proj_q = proj_q.filter(Project.id.in_(list(allowed_projects)))
     project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
 
+    # MEL: full scoped D/P/V lists on first paint
     dist_q = District.query.order_by(District.name)
     if not is_master_or_admin and allowed_districts:
         dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-    if project_id:
-        dist_q = dist_q.join(project_district).filter(project_district.c.project_id == project_id)
     district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
 
-    # Vehicle choices — filtered by project/district if selected
     veh_q = Vehicle.query.order_by(Vehicle.vehicle_no)
-    if project_id:
-        veh_q = veh_q.filter(Vehicle.project_id == project_id)
-    if district_id:
-        veh_q = veh_q.join(vehicle_district).filter(vehicle_district.c.district_id == district_id)
+    if not is_master_or_admin and allowed_projects:
+        veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        veh_q = veh_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in veh_q.all()]
 
     # Status filter — 'Inactive' maps to DB status 'Left' (left = inactive)
@@ -1555,6 +1553,7 @@ def report_uniform_sizes():
         project_choices=project_choices,
         district_choices=district_choices,
         vehicle_choices=vehicle_choices,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         total=len(drivers),
         shirt_counts=shirt_counts, trouser_counts=trouser_counts, jacket_counts=jacket_counts,
         missing_count=missing_count,

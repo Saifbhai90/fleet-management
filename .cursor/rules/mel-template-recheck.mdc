@@ -1,0 +1,13 @@
+---
+description: After MEL filter template edits, verify Jinja syntax (block/endblock) before claiming done
+alwaysApply: true
+---
+
+# MEL / Jinja template analysis checks
+
+When editing Jinja templates (especially Phase MEL cascade migrations):
+
+1. After each template change, count `{% block` vs `{% endblock` — they must match.
+2. Reject duplicate consecutive `{% endblock %}` (stray closer) — causes `TemplateSyntaxError: Encountered unknown tag 'endblock'`.
+3. Prefer `jinja2.Environment.parse(source)` or `get_template(path)` smoke on every touched file in the batch before STOP/push.
+4. Also keep existing MEL checks: no raw `{#selectId}` in cascade URLs (use `{{ '{#' }}id}`), `locationCascadeData` when LC attrs present, no leftover `loadDistricts`/`loadVehicles` hand cascade on migrated pages.

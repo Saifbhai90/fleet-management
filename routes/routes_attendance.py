@@ -237,31 +237,19 @@ def driver_attendance_list():
 
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
-    if project_id and project_id != 0:
-        districts_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
-        if not is_master_or_admin and allowed_districts:
-            districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
-        districts = districts_q.order_by(District.name).all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-        if district_id:
-            vehicles_q = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
-        else:
-            vehicles_q = Vehicle.query.filter(Vehicle.project_id == project_id)
-        if not is_master_or_admin and allowed_vehicles:
-            vehicles_q = vehicles_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-        vehicles = vehicles_q.order_by(*vehicle_order_by()).all()
-    else:
-        districts_q = District.query
-        if not is_master_or_admin and allowed_districts:
-            districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_q.order_by(District.name).all()]
-        if district_id:
-            vehicles_q = Vehicle.query.filter(Vehicle.district_id == district_id)
-        else:
-            vehicles_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
-        if not is_master_or_admin and allowed_vehicles:
-            vehicles_q = vehicles_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
-        vehicles = vehicles_q.order_by(*vehicle_order_by()).all()
+    # MEL: full scoped D/V lists on first paint (cascade narrows on change)
+    districts_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        districts_q = districts_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_q.order_by(District.name).all()]
+    vehicles_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if not is_master_or_admin and allowed_vehicles:
+        vehicles_q = vehicles_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if not is_master_or_admin and allowed_projects:
+        vehicles_q = vehicles_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        vehicles_q = vehicles_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    vehicles = vehicles_q.order_by(*vehicle_order_by()).all()
     form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in vehicles]
     if vehicle_id and not any(v.id == vehicle_id for v in vehicles):
         v = db.session.get(Vehicle, vehicle_id)
@@ -378,6 +366,7 @@ def driver_attendance_list():
         can_att_list_manual_checkout=can_att_list_manual_checkout,
         can_att_list_manual_edit=can_att_list_manual_edit,
         can_att_list_manual_delete=can_att_list_manual_delete,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('module_hub', hub_slug='attendance'), show_without_nav_from=True),
     )
 
@@ -1036,52 +1025,21 @@ def driver_attendance_mark():
     if request.method == 'GET':
         form.attendance_date.data = view_date
         form.project_id.data = project_id if project_id else 0
-    if project_id and project_id != 0:
-        districts_query = District.query.join(project_district).filter(project_district.c.project_id == project_id).order_by(District.name)
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        districts = districts_query.all()
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
-    else:
-        districts_query = District.query.order_by(District.name)
-        if scope_districts:
-            districts_query = districts_query.filter(District.id.in_(scope_districts))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.all()]
+    # MEL: full scoped D/V lists on first paint (cascade narrows on change)
+    districts_query = District.query.order_by(District.name)
+    if scope_districts:
+        districts_query = districts_query.filter(District.id.in_(scope_districts))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts_query.all()]
     if request.method == 'GET':
         form.district_id.data = district_id if district_id else 0
-    vehicles = []
-    if project_id and district_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id)
-        if scope_vehicles:
-            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-        if scope_projects:
-            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
-        if scope_districts:
-            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
-        vehicles = vq.order_by(*vehicle_order_by()).all()
-    elif project_id:
-        vq = Vehicle.query.filter(Vehicle.project_id == project_id)
-        if scope_vehicles:
-            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-        if scope_districts:
-            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
-        vehicles = vq.order_by(*vehicle_order_by()).all()
-    elif district_id:
-        vq = Vehicle.query.filter(Vehicle.district_id == district_id)
-        if scope_vehicles:
-            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-        if scope_projects:
-            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
-        vehicles = vq.order_by(*vehicle_order_by()).all()
-    else:
-        vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
-        if scope_vehicles:
-            vq = vq.filter(Vehicle.id.in_(scope_vehicles))
-        if scope_projects:
-            vq = vq.filter(Vehicle.project_id.in_(scope_projects))
-        if scope_districts:
-            vq = vq.filter(Vehicle.district_id.in_(scope_districts))
-        vehicles = vq.order_by(*vehicle_order_by()).all()
+    vq = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if scope_vehicles:
+        vq = vq.filter(Vehicle.id.in_(scope_vehicles))
+    if scope_projects:
+        vq = vq.filter(Vehicle.project_id.in_(scope_projects))
+    if scope_districts:
+        vq = vq.filter(Vehicle.district_id.in_(scope_districts))
+    vehicles = vq.order_by(*vehicle_order_by()).all()
     drivers_query = Driver.query.filter(
         Driver.status == 'Active',
         Driver.vehicle_id.isnot(None),
@@ -1257,6 +1215,7 @@ def driver_attendance_mark():
         disable_district=disable_district,
         driver_history=driver_history,
         mark_clearable=mark_clearable,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(_driver_attendance_mark_redirect_url(), show_without_nav_from=True),
     )
 
@@ -1582,29 +1541,20 @@ def driver_attendance_pending():
             disable_shift = True
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
-    if project_id and project_id != 0:
-        dist_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
-        if not is_master_or_admin and allowed_districts:
-            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
-    else:
-        dist_q = District.query
-        if not is_master_or_admin and allowed_districts:
-            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
+    # MEL: full scoped D/V lists on first paint (cascade narrows on change)
+    dist_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     form.district_id.data = district_id if district_id else 0
-    vehicles = []
-    if project_id and district_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(*vehicle_order_by()).all()
-    elif project_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(*vehicle_order_by()).all()
-    elif district_id:
-        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(*vehicle_order_by()).all()
-    else:
-        veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
-        if not is_master_or_admin and allowed_projects:
-            veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-        vehicles = veh_q.order_by(*vehicle_order_by()).all()
+    veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if not is_master_or_admin and allowed_vehicles:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if not is_master_or_admin and allowed_projects:
+        veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        veh_q = veh_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    vehicles = veh_q.order_by(*vehicle_order_by()).all()
     drivers_query = Driver.query.filter(Driver.status == 'Active').filter(Driver.vehicle_id.isnot(None))
     if project_id:
         drivers_query = drivers_query.filter(Driver.project_id == project_id)
@@ -1680,6 +1630,7 @@ def driver_attendance_pending():
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
         checked_in_vehicle_count=checked_in_vehicle_count,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y')), show_without_nav_from=True),
     )
 
@@ -1778,29 +1729,20 @@ def driver_attendance_missing_checkout():
             disable_shift = True
     form.attendance_date.data = view_date
     form.project_id.data = project_id if project_id else 0
-    if project_id and project_id != 0:
-        dist_q = District.query.join(project_district).filter(project_district.c.project_id == project_id)
-        if not is_master_or_admin and allowed_districts:
-            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
-    else:
-        dist_q = District.query
-        if not is_master_or_admin and allowed_districts:
-            dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
-        form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
+    # MEL: full scoped D/V lists on first paint (cascade narrows on change)
+    dist_q = District.query
+    if not is_master_or_admin and allowed_districts:
+        dist_q = dist_q.filter(District.id.in_(list(allowed_districts)))
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.order_by(District.name).all()]
     form.district_id.data = district_id if district_id else 0
-    vehicles = []
-    if project_id and district_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id, Vehicle.district_id == district_id).order_by(*vehicle_order_by()).all()
-    elif project_id:
-        vehicles = Vehicle.query.filter(Vehicle.project_id == project_id).order_by(*vehicle_order_by()).all()
-    elif district_id:
-        vehicles = Vehicle.query.filter(Vehicle.district_id == district_id).order_by(*vehicle_order_by()).all()
-    else:
-        veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
-        if not is_master_or_admin and allowed_projects:
-            veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
-        vehicles = veh_q.order_by(*vehicle_order_by()).all()
+    veh_q = Vehicle.query.filter(Vehicle.project_id.isnot(None))
+    if not is_master_or_admin and allowed_vehicles:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+    if not is_master_or_admin and allowed_projects:
+        veh_q = veh_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if not is_master_or_admin and allowed_districts:
+        veh_q = veh_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+    vehicles = veh_q.order_by(*vehicle_order_by()).all()
     vehicle_drivers_q = Driver.query.filter(Driver.status == 'Active', Driver.vehicle_id.isnot(None))
     if project_id:
         vehicle_drivers_q = vehicle_drivers_q.filter(Driver.project_id == project_id)
@@ -1876,6 +1818,7 @@ def driver_attendance_missing_checkout():
         disable_district=disable_district,
         disable_vehicle=disable_vehicle,
         disable_shift=disable_shift,
+        location_cascade=_fuel_expense_location_cascade_dict(),
         **_nav_back_ctx(url_for('driver_attendance_list', date=view_date.strftime('%d-%m-%Y')), show_without_nav_from=True),
     )
 

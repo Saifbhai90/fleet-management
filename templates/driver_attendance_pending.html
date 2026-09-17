@@ -2,6 +2,7 @@
 {% block title %}Missing Check IN{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
   .pending-att-page { --pending-primary: #0d6efd; --pending-warning: #dc3545; --pending-muted: #64748b; }
   .pending-att-page .page-header { padding: 0.5rem 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
@@ -63,20 +64,39 @@
           <input type="text" name="date" class="form-control datepicker" placeholder="dd-mm-yyyy" value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
         <div class="col-6 col-md-4 col-lg-3">
-          <label class="form-label">Project</label>
-          <select id="projectSelect" class="form-select search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}>
-            <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
-            {% for p in form.project_id.choices if p[0] != 0 %}
-              <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
+          <label class="form-label">District</label>
+          <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}
+              data-cascade-child="#projectSelect"
+              data-cascade-url="/api/cascade/projects?parent={value}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="name"
+              data-cascade-placeholder="All Projects"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#vehicleSelect,#driverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="proj_d">
+            <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
+            {% for d in form.district_id.choices if d[0] != 0 %}
+              <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="col-6 col-md-4 col-lg-3">
-          <label class="form-label">District</label>
-          <select id="districtSelect" class="form-select search-select" data-placeholder="Search district..." {% if disable_district %}disabled{% endif %}>
-            <option value="0" {% if not district_id %}selected{% endif %}>All Districts</option>
-            {% for d in form.district_id.choices if d[0] != 0 %}
-              <option value="{{ d[0] }}" {% if district_id == d[0] %}selected{% endif %}>{{ d[1] }}</option>
+          <label class="form-label">Project</label>
+          <select id="projectSelect" class="form-select search-select" data-placeholder="Search project..." {% if disable_project %}disabled{% endif %}
+              data-cascade-child="#vehicleSelect"
+              data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
+              data-cascade-value-key="id"
+              data-cascade-text-key="vehicle_no"
+              data-cascade-placeholder="All Vehicles"
+              data-cascade-placeholder-value="0"
+              data-cascade-also-clear="#driverSelect"
+              data-cascade-source="locationCascadeData"
+              data-cascade-cache-prefix="veh_p"
+              data-cascade-cache-district="#districtSelect">
+            <option value="0" {% if not project_id %}selected{% endif %}>All Projects</option>
+            {% for p in form.project_id.choices if p[0] != 0 %}
+              <option value="{{ p[0] }}" {% if project_id == p[0] %}selected{% endif %}>{{ p[1] }}</option>
             {% endfor %}
           </select>
         </div>
@@ -295,65 +315,17 @@
     });
   }
 
-  function runProjectChange(pid) {
-    if (hiddenProjectId) hiddenProjectId.value = pid || '0';
-    if (hiddenDriverId) hiddenDriverId.value = '0';
-    if (hiddenVehicleId) hiddenVehicleId.value = '0';
-    if (hiddenDistrictId) hiddenDistrictId.value = '0';
-    fleetFillSelectRows(districtSelect, [], 'id', 'name', { placeholder: 'All Districts', placeholderValue: '0' });
-    fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: 'All Vehicles', placeholderValue: '0' });
-    if (driverSelect) fleetFillSelect(driverSelect, [], { placeholder: 'All Drivers', placeholderValue: '0' });
-    if (pid && pid !== '0') {
-      fetch('/api/filter/districts-by-project?project_id=' + pid)
-        .then(function(r) { return r.json(); })
-        .then(function(districts) {
-          fleetFillSelectRows(districtSelect, districts, 'id', 'name', { placeholder: 'All Districts', placeholderValue: '0' });
-        });
-      fetch('/api/filter/all-vehicles-by-project-district?project_id=' + pid + '&district_id=0')
-        .then(function(r) { return r.json(); })
-        .then(function(vehicles) {
-          fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
-            return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
-          }), { placeholder: 'All Vehicles', placeholderValue: '0' });
-          if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(false);
-        });
-    } else {
-      fetch('/api/filter/all-vehicles-by-project-district')
-        .then(function(r) { return r.json(); })
-        .then(function(vehicles) {
-          fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
-            return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
-          }), { placeholder: 'All Vehicles', placeholderValue: '0' });
-          if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(false);
-        });
-      reinitDropdown(districtSelect, 'Search district...');
-    }
-  }
-
-  function runDistrictChange(pid, did) {
-    if (hiddenDistrictId) hiddenDistrictId.value = did || '0';
-    if (hiddenDriverId) hiddenDriverId.value = '0';
-    if (hiddenVehicleId) hiddenVehicleId.value = '0';
-    fleetFillSelectRows(vehicleSelect, [], 'id', 'vehicle_no', { placeholder: 'All Vehicles', placeholderValue: '0' });
-    if (driverSelect) fleetFillSelect(driverSelect, [], { placeholder: 'All Drivers', placeholderValue: '0' });
-    fetch('/api/filter/all-vehicles-by-project-district?project_id=' + (pid || '0') + '&district_id=' + (did || '0'))
-      .then(function(r) { return r.json(); })
-      .then(function(vehicles) {
-        fleetFillSelect(vehicleSelect, (vehicles || []).map(function(v) {
-          return { value: v.id, text: v.vehicle_no + (v.vehicle_type ? ' (' + v.vehicle_type + ')' : '') };
-        }), { placeholder: 'All Vehicles', placeholderValue: '0' });
-        if (typeof refreshDriverDropdown === 'function') refreshDriverDropdown(true);
-      });
-  }
-
-  if (projectSelect && districtSelect) {
-    projectSelect.addEventListener('change', function() {
-      runProjectChange(this.value);
+  /* D→P→V: declarative data-cascade-* + locationCascadeData (fleet_core). KEEP driver + hidden sync + locks. */
+  if (districtSelect) {
+    districtSelect.addEventListener('change', function() {
+      syncHiddenFromSelects();
+      refreshDriverDropdown(false);
     });
   }
-  if (districtSelect && vehicleSelect) {
-    districtSelect.addEventListener('change', function() {
-      runDistrictChange(projectSelect && projectSelect.value ? projectSelect.value : '0', this.value);
+  if (projectSelect) {
+    projectSelect.addEventListener('change', function() {
+      syncHiddenFromSelects();
+      refreshDriverDropdown(false);
     });
   }
   if (vehicleSelect && driverSelect) {

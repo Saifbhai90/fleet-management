@@ -2,6 +2,7 @@
 {% block title %}Driver Response Time Report{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <style>
   .tsd-header { background: linear-gradient(135deg, #312e81 0%, #4f46e5 100%); color: #fff; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
   .tsd-header h2 { margin: 0; font-size: 1.3rem; font-weight: 700; }
@@ -82,7 +83,16 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">District</label>
-          <select name="district_id" class="form-select form-select-sm search-select">
+          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#vehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             {% for val, label in district_choices %}
             <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -90,7 +100,16 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Project</label>
-          <select name="project_id" class="form-select form-select-sm search-select">
+          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select"
+            data-cascade-child="#vehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#districtSelect">
             {% for val, label in project_choices %}
             <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -98,7 +117,7 @@
         </div>
         <div class="col-6 col-md-2">
           <label class="form-label mb-1 small fw-semibold">Vehicle</label>
-          <select name="vehicle_id" class="form-select form-select-sm search-select">
+          <select name="vehicle_id" id="vehicleSelect" class="form-select form-select-sm search-select">
             {% for val, label in vehicle_choices %}
             <option value="{{ val }}" {% if vehicle_id == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}

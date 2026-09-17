@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}New Task Entry{% endblock %}
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 {% set tef = task_entry_filter if task_entry_filter is defined else {} %}
 {% set vehicle_id = vehicle_id if vehicle_id is defined else 0 %}
 {% set filter_vehicles = filter_vehicles if filter_vehicles is defined else [] %}
@@ -2485,13 +2486,22 @@
           <label class="form-label" for="taskEntryDateInput">Date <span class="text-danger">*</span></label>
           <input type="text" name="date" id="taskEntryDateInput" class="form-control datepicker task-batch-date-input" placeholder="dd-mm-yyyy" autocomplete="off" required value="{{ view_date.strftime('%d-%m-%Y') }}">
         </div>
-        {% if lock_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
-        {% if lock_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-        {% if lock_vehicle %}<input type="hidden" name="vehicle_id" value="{{ vehicle_id }}">{% endif %}
+        {% if lock_district %}<input type="hidden" name="district_id" id="districtSelect" value="{{ district_id }}">{% endif %}
+        {% if lock_project %}<input type="hidden" name="project_id" id="projectSelect" value="{{ project_id }}">{% endif %}
+        {% if lock_vehicle %}<input type="hidden" name="vehicle_id" id="vehicleSelect" value="{{ vehicle_id }}">{% endif %}
         {% if not lock_district %}
         <div class="col-6 col-md-2">
           <label class="form-label" for="districtSelect">District</label>
-          <select name="district_id" id="districtSelect" class="form-select search-select" autocomplete="off">
+          <select name="district_id" id="districtSelect" class="form-select search-select" autocomplete="off"
+            data-cascade-child="#projectSelect"
+            data-cascade-url="/api/cascade/projects?parent={value}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="name"
+            data-cascade-placeholder="-- All Projects --"
+            data-cascade-placeholder-value="0"
+            data-cascade-also-clear="#vehicleSelect"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="proj_d">
             <option value="0">-- All Districts --</option>
             {% for d in districts %}
               <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
@@ -2502,7 +2512,16 @@
         {% if not lock_project %}
         <div class="col-6 col-md-2">
           <label class="form-label" for="projectSelect">Project</label>
-          <select name="project_id" id="projectSelect" class="form-select search-select" autocomplete="off">
+          <select name="project_id" id="projectSelect" class="form-select search-select" autocomplete="off"
+            data-cascade-child="#vehicleSelect"
+            data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
+            data-cascade-value-key="id"
+            data-cascade-text-key="vehicle_no"
+            data-cascade-placeholder="-- All Vehicles --"
+            data-cascade-placeholder-value="0"
+            data-cascade-source="locationCascadeData"
+            data-cascade-cache-prefix="veh_p"
+            data-cascade-cache-district="#districtSelect">
             <option value="0">-- All Projects --</option>
             {% for p in projects %}
               <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>

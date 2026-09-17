@@ -2,6 +2,7 @@
 {% block title %}Active Driver Summary{% endblock %}
 
 {% block content %}
+<script type="application/json" id="locationCascadeData">{{ location_cascade|tojson }}</script>
 <link rel="stylesheet" href="/static/vendor/datatables/1.13.7/dataTables.bootstrap5.min.css?v=8006">
 <style>
     .report-header { background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%); color: #fff; border-radius: 10px; padding: 1.1rem 1.4rem; margin-bottom: 1rem; }
@@ -98,22 +99,40 @@
                            placeholder="dd-mm-yyyy" value="{{ to_date or '' }}" autocomplete="off">
                 </div>
                 <div class="col-6 col-md-2">
-                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
-                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}>
-                        {% for val, label in project_choices %}
-                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
-                </div>
-                <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">District</label>
-                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}>
+                    <select name="district_id" id="districtSelect" class="form-select filter-input search-select" {% if disable_district %}disabled{% endif %}
+                      data-cascade-child="#projectSelect"
+                      data-cascade-url="/api/cascade/projects?parent={value}"
+                      data-cascade-value-key="id"
+                      data-cascade-text-key="name"
+                      data-cascade-placeholder="-- All Projects --"
+                      data-cascade-placeholder-value="0"
+                      data-cascade-also-clear="#vehicleSelect"
+                      data-cascade-source="locationCascadeData"
+                      data-cascade-cache-prefix="proj_d">
                         {% for val, label in district_choices %}
                         <option value="{{ val }}" {% if district_id == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                     {% if disable_district %}<input type="hidden" name="district_id" value="{{ district_id }}">{% endif %}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Project</label>
+                    <select name="project_id" id="projectSelect" class="form-select filter-input search-select" {% if disable_project %}disabled{% endif %}
+                      data-cascade-child="#vehicleSelect"
+                      data-cascade-url="/api/cascade/vehicles?parent={value}&district_id={{ '{#' }}districtSelect}"
+                      data-cascade-value-key="id"
+                      data-cascade-text-key="vehicle_no"
+                      data-cascade-placeholder="-- All Vehicles --"
+                      data-cascade-placeholder-value="0"
+                      data-cascade-source="locationCascadeData"
+                      data-cascade-cache-prefix="veh_p"
+                      data-cascade-cache-district="#districtSelect">
+                        {% for val, label in project_choices %}
+                        <option value="{{ val }}" {% if project_id == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if disable_project %}<input type="hidden" name="project_id" value="{{ project_id }}">{% endif %}
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label mb-1" style="font-size:0.78rem;font-weight:600;color:#455a64;">Vehicle</label>
@@ -300,49 +319,6 @@ $(document).ready(function () {
     $('#dtSearchInput').on('blur',  function () { $(this).css('border-color', '#ddd'); });
 });
 
-/* ── Cascading filter dropdowns ────────────────────────── */
-(function () {
-    var $proj     = $('#projectSelect');
-    var $dist     = $('#districtSelect');
-    var $veh      = $('#vehicleSelect');
-    var curProjId = {{ project_id|int }};
-    var curDistId = {{ district_id|int }};
-    var curVehId  = {{ vehicle_id|int }};
-
-    /* Reload district dropdown when project changes */
-    $proj.on('change', function () {
-        var pid = parseInt($(this).val()) || 0;
-        if ($dist.prop('disabled') || $veh.prop('disabled')) return; /* auto-locked */
-        /* Reset dependent dropdowns */
-        $dist.html('<option value="0">-- All Districts --</option>');
-        $veh.html('<option value="0">-- All Vehicles --</option>');
-        if (!pid) return;
-        $.getJSON('/api/filter/districts-by-project', { project_id: pid }, function (data) {
-            $.each(data, function (_, d) {
-                $dist.append($('<option>').val(d.id).text(d.name));
-            });
-        });
-        /* also reload vehicles (no district selected yet — all for this project) */
-        $.getJSON('/api/filter/vehicles-by-project-district', { project_id: pid, district_id: 0 }, function (data) {
-            $.each(data, function (_, v) {
-                $veh.append($('<option>').val(v.id).text(v.vehicle_no));
-            });
-        });
-    });
-
-    /* Reload vehicle dropdown when district changes */
-    $dist.on('change', function () {
-        var did = parseInt($(this).val()) || 0;
-        var pid = parseInt($proj.val()) || 0;
-        if ($veh.prop('disabled')) return; /* auto-locked */
-        $veh.html('<option value="0">-- All Vehicles --</option>');
-        $.getJSON('/api/filter/vehicles-by-project-district', { project_id: pid, district_id: did }, function (data) {
-            $.each(data, function (_, v) {
-                $veh.append($('<option>').val(v.id).text(v.vehicle_no)
-                    .prop('selected', v.id === curVehId));
-            });
-        });
-    });
-})();
+/* D→P→V: declarative data-cascade-* + locationCascadeData (fleet_core). KEEP disable locks. */
 </script>
 {% endblock %}

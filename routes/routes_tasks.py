@@ -406,13 +406,10 @@ def task_report_list():
                 if only_p in vp:
                     pid = only_p
                     lk['lock_project'] = True
+        # MEL: full scoped vehicle list on first paint (cascade narrows on change)
         vehicle_q = _vehicle_query_task_report_scope(
             is_master_or_admin, allowed_projects, allowed_districts, allowed_vehicles
         )
-        if did:
-            vehicle_q = vehicle_q.filter(Vehicle.district_id == did)
-        if pid:
-            vehicle_q = vehicle_q.filter(Vehicle.project_id == pid)
         form.vehicle_id.choices = [(0, '-- All Vehicles --')] + [
             (v.id, v.vehicle_no) for v in vehicle_q.order_by(*vehicle_order_by()).all()
         ]
@@ -549,6 +546,7 @@ def task_report_list():
                            total_tasks=total_tasks, total_emg=total_emg, total_task_diff=total_task_diff,
                            pagination=pagination, per_page=per_page, search=search,
                            task_report_filter_lock=task_report_filter_lock,
+                           location_cascade=_fuel_expense_location_cascade_dict(),
                            **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True))
 
 
@@ -1032,7 +1030,7 @@ def task_report_new():
             vehicle_id=vehicle_id or 0,
             districts=districts,
             projects=_all_p_ui,
-            filter_vehicles=_task_report_new_vehicles_ui(district_id, project_id),
+            filter_vehicles=_task_report_new_vehicles_ui(0, 0),  # MEL: full scoped on first paint
             show_batch_totals=_show_task_batch_totals(user_context, rows_list),
             task_entry_filter=_tef,
             can_edit_saved_task_rows=can_edit_saved_task_rows,
@@ -1041,6 +1039,7 @@ def task_report_new():
             task_entry_odometer_required=odom_required_setting,
             task_entry_date_hint=_hint,
             pending_task_count=len(_filter_pending_task_rows(rows_list)) if rows_list else 0,
+            location_cascade=_fuel_expense_location_cascade_dict(),
             **_nav_back_ctx(url_for('module_hub', hub_slug='task-logbook'), show_without_nav_from=True),
         ))
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
