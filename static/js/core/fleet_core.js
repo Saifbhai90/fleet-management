@@ -4886,12 +4886,22 @@
         cfg = cfg || {};
         var items = options || [];
         var selected = cfg.selected;
+        var phVal = cfg.placeholderValue != null ? String(cfg.placeholderValue) : '0';
+        var phText = cfg.placeholder || '-- Select --';
         if (sel.tomselect) {
             var ts = sel.tomselect;
             ts._wsSilentFill = true;
             try { ts.close(); } catch (e0) {}
             ts.clear(true);
             ts.clearOptions();
+            // Mirror native path: keep All/Select as a real clickable top option
+            // after cascade refill (previously TS skipped placeholders entirely).
+            if (phText) {
+                try {
+                    if (ts.settings) ts.settings.placeholder = phText.replace(/^[-\s]+/, '').replace(/[-\s]+$/, '').trim() || phText;
+                } catch (ePh) {}
+                ts.addOption({ value: phVal, text: phText });
+            }
             items.forEach(function(item) {
                 if (!item) return;
                 var v = String(item.value);
@@ -4912,7 +4922,17 @@
             if (selected != null && selected !== '' && String(selected) !== '0') {
                 window.fleetSetSelectValue(sel, selected, cfg.silent !== false);
             } else {
+                // Match initSearchableDropdowns: value 0/empty shows ghost placeholder
+                // text, while All… stays clickable in the options list (addOption above).
+                try { ts.clear(true); } catch (eClr) {}
                 try { ts.wrapper.classList.remove('has-items'); } catch (e2) {}
+                try {
+                    var phEl = ts.control && ts.control.querySelector('.placeholder');
+                    if (phEl) {
+                        phEl.style.display = 'block';
+                        phEl.style.visibility = 'visible';
+                    }
+                } catch (e3) {}
             }
             var reserved = _tsFocusReservation === sel;
             if (reserved) _tsFocusReservation = null;
@@ -4924,8 +4944,6 @@
             }
             return;
         }
-        var phVal = cfg.placeholderValue != null ? String(cfg.placeholderValue) : '0';
-        var phText = cfg.placeholder || '-- Select --';
         sel.innerHTML = '';
         var ph = document.createElement('option');
         ph.value = phVal;
@@ -5149,8 +5167,18 @@
                     var ph = '-- Select --';
                     var phv = '0';
                     if (el.options && el.options.length > 0) {
-                        ph = ((el.options[0].text || '').trim()) || ph;
-                        phv = el.options[0].value;
+                        var ot = ((el.options[0].text || '').trim()) || '';
+                        if (ot) {
+                            ph = ot;
+                            phv = el.options[0].value;
+                        }
+                    }
+                    var idName = ((el.id || '') + ' ' + (el.name || '')).toLowerCase();
+                    var isVehicle = idName.indexOf('vehicle') >= 0 || (el.name || '') === 'vehicle_id';
+                    // Vehicle filter clears should reset to All Vehicles (not a Select prompt).
+                    if (isVehicle && !/\ball\b/i.test(ph)) {
+                        ph = '-- All Vehicles --';
+                        phv = '0';
                     }
                     if (typeof window.fleetFillSelectRows === 'function') {
                         window.fleetFillSelectRows(el, [], 'id', 'name', { placeholder: ph, placeholderValue: phv });

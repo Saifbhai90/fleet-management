@@ -1367,7 +1367,7 @@ def fuel_expense_list():
     district_q = District.query
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    form.district_id.choices = [(0, '-- Select District --')] + [
+    form.district_id.choices = [(0, '-- All Districts --')] + [
         (d.id, d.name) for d in district_q.order_by(District.name).all()
     ]
 
@@ -1376,7 +1376,7 @@ def fuel_expense_list():
     project_q = Project.query
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
-    form.project_id.choices = [(0, '-- Select Project --')] + [
+    form.project_id.choices = [(0, '-- All Projects --')] + [
         (p.id, p.name) for p in project_q.order_by(Project.name).all()
     ]
 
@@ -3551,12 +3551,12 @@ def oil_expense_list():
     district_q = District.query
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     
     project_q = Project.query
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     
     vehicle_q = Vehicle.query
     if not is_master_or_admin and allowed_vehicles:
@@ -5725,8 +5725,8 @@ def maintenance_work_order_list():
     d_list = district_q.order_by(District.name).all()
     p_list = project_q.order_by(Project.name).all()
     v_list = vehicle_q.order_by(*vehicle_order_by()).all()
-    district_choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in d_list]
-    project_choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in p_list]
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in d_list]
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in p_list]
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in v_list]
     return render_template(
         'maintenance_work_order_list.html',
@@ -6355,8 +6355,8 @@ def oil_work_order_list():
     d_list = district_q.order_by(District.name).all()
     p_list = project_q.order_by(Project.name).all()
     v_list = vehicle_q.order_by(*vehicle_order_by()).all()
-    district_choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in d_list]
-    project_choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in p_list]
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in d_list]
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in p_list]
     vehicle_choices = [(0, '-- All Vehicles --')] + [(v.id, v.vehicle_no) for v in v_list]
     return render_template(
         'oil_work_order_list.html',
@@ -7164,12 +7164,12 @@ def maintenance_expense_list():
     district_q = District.query
     if not is_master_or_admin and allowed_districts:
         district_q = district_q.filter(District.id.in_(list(allowed_districts)))
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in district_q.order_by(District.name).all()]
     
     project_q = Project.query
     if not is_master_or_admin and allowed_projects:
         project_q = project_q.filter(Project.id.in_(list(allowed_projects)))
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_q.order_by(Project.name).all()]
     
     vehicle_q = Vehicle.query
     if not is_master_or_admin and allowed_vehicles:

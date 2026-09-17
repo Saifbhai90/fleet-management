@@ -4927,7 +4927,7 @@ def driver_attendance_daily_report():
     project_query = Project.query.filter(Project.company_id.isnot(None))
     if scope_projects:
         project_query = project_query.filter(Project.id.in_(scope_projects))
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in project_query.order_by(Project.name).all()]
 
     if disable_project:
         form.project_id.data = scope_projects[0]
@@ -4939,7 +4939,7 @@ def driver_attendance_daily_report():
     if scope_districts:
         districts_query = districts_query.filter(District.id.in_(scope_districts))
     districts = districts_query.order_by(District.name).all()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in districts]
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in districts]
 
     today = pk_date()
     form.month.data = form.month.data or today.month

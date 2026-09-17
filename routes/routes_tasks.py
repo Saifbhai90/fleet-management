@@ -712,8 +712,8 @@ def task_report_vehicle_period_detail_export_pdf():
 @app.route('/task-report/logbook-cover', methods=['GET', 'POST'])
 def task_report_logbook_cover():
     form = TaskReportFilterForm()
-    form.district_id.choices = [(0, '-- Select District --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
-    form.project_id.choices = [(0, '-- Select Project --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
+    form.district_id.choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in District.query.order_by(District.name).all()]
+    form.project_id.choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
     today = pk_date()
     from_date = today
     to_date = today
