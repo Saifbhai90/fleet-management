@@ -8433,13 +8433,51 @@ def _vehicle_period_detail_rows(from_date, to_date, project_id, district_id, veh
             vq = vq.filter(Vehicle.project_id.in_(list(ap)))
         if ad:
             vq = vq.filter(Vehicle.district_id.in_(list(ad)))
+
+    vehicles = vq.order_by(*vehicle_order_by()).all()
+    if not vehicles:
+        return []
+
+    # Preload daily tasks per vehicle for the period.
+    vid_list = [int(v.id) for v in vehicles]
+    tasks_by_vid = {vid: [] for vid in vid_list}
+    for t in VehicleDailyTask.query.filter(
+        VehicleDailyTask.vehicle_id.in_(vid_list),
+        VehicleDailyTask.task_date >= from_date,
+        VehicleDailyTask.task_date <= to_date,
+    ).order_by(VehicleDailyTask.task_date.asc()).all():
+        tasks_by_vid.setdefault(int(t.vehicle_id), []).append(t)
+
+    # Batch EMG for the full date window — same matcher/categories as emg-detail API
+    # (COW/USG tags + empty category), not exact amb_reg_no == vehicle_no.
+    vehicle_nos = [(v.vehicle_no or '').strip() for v in vehicles if v and (v.vehicle_no or '').strip()]
+    emg_regs = []
+    emg_match_filters = [emg_amb_reg_matches_vehicle(no) for no in vehicle_nos]
+    if emg_match_filters:
+        emg_rows = EmergencyTaskRecord.query.filter(
+            EmergencyTaskRecord.task_date >= from_date,
+            EmergencyTaskRecord.task_date <= to_date,
+            or_(
+                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
+                EmergencyTaskRecord.category.is_(None),
+                EmergencyTaskRecord.category == '',
+            ),
+            or_(*emg_match_filters),
+        ).with_entities(EmergencyTaskRecord.amb_reg_no).all()
+        emg_regs = [(r[0] or '').strip() for r in emg_rows if r and (r[0] or '').strip()]
+
+    def _emg_count_for_vehicle(vehicle_no):
+        n = 0
+        for reg in emg_regs:
+            if emg_amb_reg_matches_vehicle_no(reg, vehicle_no):
+                n += 1
+        return n
+
+    from services.mileage_record_service import tracker_km_for_vehicle
+
     rows = []
-    for v in vq.order_by(*vehicle_order_by()).all():
-        tasks = VehicleDailyTask.query.filter(
-            VehicleDailyTask.vehicle_id == v.id,
-            VehicleDailyTask.task_date >= from_date,
-            VehicleDailyTask.task_date <= to_date,
-        ).order_by(VehicleDailyTask.task_date.asc()).all()
+    for v in vehicles:
+        tasks = tasks_by_vid.get(int(v.id)) or []
         if not tasks:
             continue
         first_d = tasks[0].task_date
@@ -8458,18 +8496,11 @@ def _vehicle_period_detail_rows(from_date, to_date, project_id, district_id, veh
         if kms_driven < 0:
             kms_driven = 0
         tasks_count = sum(int(t.tasks_count or 0) for t in tasks)
-        emg_tasks = 0
+        emg_tasks = _emg_count_for_vehicle(v.vehicle_no)
         tracker_km = 0.0
         odometer_photo_path = ''
         for t in tasks:
-            task_d = t.task_date
-            emg_tasks += EmergencyTaskRecord.query.filter(
-                EmergencyTaskRecord.task_date == task_d,
-                EmergencyTaskRecord.amb_reg_no == v.vehicle_no,
-                EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
-            ).count()
-            from services.mileage_record_service import tracker_km_for_vehicle
-            tracker_km += tracker_km_for_vehicle(task_d, v.vehicle_no)
+            tracker_km += tracker_km_for_vehicle(t.task_date, v.vehicle_no)
             ph = (getattr(t, 'odometer_photo_path', None) or '').strip()
             if ph:
                 odometer_photo_path = ph

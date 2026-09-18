@@ -1751,8 +1751,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         var vno = emgLink.getAttribute('data-vno') || '';
         var period = _mobilePeriodFromLink(emgLink);
-        var badge = emgLink.querySelector('.badge');
-        var emgCount = parseInt((badge ? badge.textContent : '0') || '0', 10) || 0;
         var periodLabel = (period.fromDt && period.toDt) ? (period.fromDt + ' to ' + period.toDt) : period.date;
         var displayVno = vno || 'All Vehicles';
         var vehicleNos = (emgLink.getAttribute('data-vehicle-nos') || '').trim();
@@ -1768,11 +1766,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        if (emgCount === 0) {
-            window.openMobileTaskModal('No Emergency Tasks', '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>', 'EMG Tasks');
-            return;
-        }
-        
+        // Always fetch — badge can lag behind API matcher (COW/USG + empty category).
         window.openMobileTaskModal(displayVno + ' · ' + periodLabel, '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2">Loading emergency tasks...</p></div>', 'EMG Tasks');
         
         fetch(_mobileBuildEmgUrl(vno, period, vehicleNos), { credentials: 'same-origin', cache: 'no-store' })
@@ -1782,6 +1776,10 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(function(rows) {
                 if (!Array.isArray(rows)) throw new Error('invalid');
+                if (!rows.length) {
+                    document.getElementById('mobileTaskBody').innerHTML = '<div class="mobile-task-empty"><i class="bi bi-inbox"></i><p>No emergency tasks' + (periodLabel ? (' · ' + _mobileHe(periodLabel)) : '') + '</p></div>';
+                    return;
+                }
                 document.getElementById('mobileTaskBody').innerHTML = _renderMobileEmgCards(rows);
             })
             .catch(function() {
