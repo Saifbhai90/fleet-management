@@ -33,7 +33,7 @@
                 <tr>
                     <th>Reg No</th><th>Status</th><th>Speed</th><th>Ignition</th>
                     <th>Mileage</th><th>Group</th><th>Type</th><th>Driver</th>
-                    <th>Address</th><th>Last Update</th><th></th>
+                    <th>Address</th><th>Last Update</th><th class="text-nowrap">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -50,7 +50,19 @@
                     <td>{{ v.driver_name or '—' }}</td>
                     <td class="ps-td-addr" title="{{ v.address or '' }}">{{ v.address or '—' }}</td>
                     <td class="text-nowrap">{{ v.device_time.strftime('%d-%b %I:%M %p') if v.device_time else '—' }}</td>
-                    <td><a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}"><i class="bi bi-route"></i></a></td>
+                    <td class="text-nowrap">
+                        <div class="ps-row-actions">
+                            <a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_vehicle_detail', vid=v.id) }}" title="Details">
+                                <i class="bi bi-info-circle" aria-hidden="true"></i><span>Details</span>
+                            </a>
+                            <a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}" title="History">
+                                <i class="bi bi-route" aria-hidden="true"></i><span>History</span>
+                            </a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('personal_live') }}" title="Live Map">
+                                <i class="bi bi-geo-alt" aria-hidden="true"></i><span>Live</span>
+                            </a>
+                        </div>
+                    </td>
                 </tr>
                 {% else %}
                 <tr><td colspan="11" class="text-center text-muted py-4">Cache khali hai — Refresh dabayein.</td></tr>

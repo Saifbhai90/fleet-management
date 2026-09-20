@@ -147,6 +147,24 @@
 .ps-td-addr { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ps-toolbar { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
 
+.ps-row-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    align-items: center;
+}
+.ps-row-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    white-space: nowrap;
+    min-height: 34px;
+    padding: .3rem .55rem;
+    font-size: .78rem;
+    font-weight: 700;
+}
+.ps-row-actions .btn i { font-size: .9rem; line-height: 1; }
+
 /* ── Forms ──────────────────────────────────────────────────────── */
 .ps-form { background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .7rem .85rem; margin-top: .4rem; }
 
@@ -551,6 +569,17 @@
     .ps-table-card .table td {
         white-space: nowrap;
         vertical-align: middle;
+    }
+
+    .ps-row-actions {
+        flex-direction: column;
+        align-items: stretch;
+        min-width: 96px;
+    }
+    .ps-row-actions .btn {
+        justify-content: center;
+        width: 100%;
+        min-height: 40px;
     }
 
     /* Settings — sticky Save bar like native apps */
