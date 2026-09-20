@@ -6,25 +6,38 @@
 .ps-wrap.ps-wide { max-width: 1700px; }
 .ps-wrap.ps-full { max-width: none; padding-bottom: 0; }
 
-/* ── Sub navigation ─────────────────────────────────────────────── */
-.ps-nav {
-    display: flex; flex-wrap: wrap; gap: .35rem;
-    background: linear-gradient(135deg, rgba(16,185,129,.10), rgba(5,150,105,.06));
-    border: 1px solid rgba(16,185,129,.25);
-    border-radius: .8rem; padding: .45rem;
-    margin-bottom: .9rem;
-    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+.ps-back-row { margin-bottom: .65rem; }
+
+/* Touch / native: never zoom inputs on iOS */
+.ps-wrap .form-control,
+.ps-wrap .form-select,
+.ps-wrap .form-control-sm,
+.ps-wrap .form-select-sm {
+    font-size: 16px;
+    min-height: 44px;
+    border-radius: .65rem;
 }
-.ps-tab {
-    display: inline-flex; align-items: center; gap: .4rem;
-    padding: .42rem .85rem; border-radius: .55rem;
-    font-size: .86rem; font-weight: 600; text-decoration: none; color: inherit;
-    white-space: nowrap; transition: all .18s ease;
+.ps-wrap .form-control-sm,
+.ps-wrap .form-select-sm {
+    padding: .55rem .75rem;
 }
-.ps-tab:hover { background: rgba(16,185,129,.14); transform: translateY(-1px); }
-.ps-tab.active {
-    background: linear-gradient(135deg, #059669, #10b981);
-    color: #fff; box-shadow: 0 3px 10px rgba(16,185,129,.35);
+.ps-wrap .btn {
+    min-height: 44px;
+    border-radius: .65rem;
+    font-weight: 700;
+}
+.ps-wrap .btn-sm {
+    min-height: 40px;
+    padding: .45rem .85rem;
+}
+.ps-wrap .form-label {
+    font-weight: 700;
+    color: #334155;
+}
+.ps-wrap input[type="date"],
+.ps-wrap input[type="time"],
+.ps-wrap input[type="number"] {
+    min-height: 44px;
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
@@ -198,6 +211,17 @@
 .ps-trip-kpi b { display: block; font-size: .95rem; font-variant-numeric: tabular-nums; }
 .ps-trip-kpi span { font-size: .64rem; text-transform: uppercase; color: #64748b; letter-spacing: .03em; }
 
+/* Alarm / notification cards (mobile) */
+.ps-alarm-card {
+    background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem;
+    border-left: 4px solid #ef4444; padding: .7rem .8rem; margin-bottom: .5rem;
+}
+.ps-alarm-head { display: flex; justify-content: space-between; gap: .5rem; align-items: flex-start; }
+.ps-alarm-title { font-weight: 800; font-size: .9rem; }
+.ps-alarm-when { font-size: .72rem; color: #64748b; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ps-alarm-loc { font-size: .8rem; color: #475569; margin-top: .35rem; }
+.ps-alarm-meta { font-size: .74rem; color: #64748b; margin-top: .25rem; }
+
 /* ── Steps / misc ───────────────────────────────────────────────── */
 .ps-steps { padding-left: 1.1rem; }
 .ps-log-table { max-height: 480px; overflow-y: auto; }
@@ -230,4 +254,368 @@
     #psMap { height: 55vh; }
     .ps-live-list { width: 100%; max-height: 40vh; }
     .ps-hist-side { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Mobile app shell — TrackSolid / Wialon-style stability
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 767.98px) {
+    body.page-personal .main-content,
+    body.page-personal #mainContent {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .ps-wrap {
+        padding: .55rem .7rem calc(78px + env(safe-area-inset-bottom, 0px));
+        max-width: none;
+    }
+    .ps-wrap.ps-full {
+        padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .ps-back-row {
+        margin-bottom: .4rem;
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        background: rgba(248, 250, 252, .92);
+        backdrop-filter: blur(8px);
+        padding: .25rem 0;
+    }
+    .ps-back-row .btn-nav-back-rounded {
+        margin-right: 0;
+        padding: 6px 12px;
+        min-height: 40px;
+    }
+    .ps-back-row .btn-nav-back-rounded span {
+        max-width: 11rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ps-header {
+        gap: .55rem;
+        margin-bottom: .15rem;
+    }
+    .ps-header h4 {
+        font-size: 1.05rem;
+        line-height: 1.25;
+    }
+    .ps-header .btn,
+    .ps-header .btn-sm {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+    .ps-header .d-flex.gap-2 {
+        width: 100%;
+    }
+
+    /* KPI strip: swipe horizontally like fleet apps */
+    .ps-stats {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: .5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        margin-top: .55rem;
+        padding-bottom: .15rem;
+    }
+    .ps-stats::-webkit-scrollbar { display: none; }
+    .ps-stat {
+        flex: 0 0 108px;
+        min-width: 108px;
+        padding: .55rem .65rem;
+    }
+    .ps-stat .num { font-size: 1.25rem; }
+    .ps-stat:hover { transform: none; box-shadow: none; }
+
+    .ps-cards {
+        grid-template-columns: 1fr;
+        gap: .65rem;
+    }
+    .ps-card:hover { transform: none; }
+    .ps-card-actions a {
+        padding: .65rem .35rem;
+        font-size: .8rem;
+        min-height: 44px;
+    }
+
+    /* Filter / report forms — stacked app cards */
+    .ps-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .55rem .5rem;
+        padding: .75rem;
+        margin-top: .35rem;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, .05);
+    }
+    .ps-form > [class*="col-"] {
+        width: 100% !important;
+        max-width: none !important;
+        flex: none !important;
+        padding: 0 !important;
+    }
+    .ps-form > .col-md-3,
+    .ps-form > .col-md-3.col-lg-2,
+    .ps-form > .col-md-2.d-flex {
+        grid-column: 1 / -1;
+    }
+    .ps-form .d-flex.gap-2 {
+        display: flex !important;
+        gap: .45rem !important;
+    }
+    .ps-form .d-flex.gap-2 .btn {
+        flex: 1;
+    }
+    .ps-form .form-label {
+        margin-bottom: .2rem;
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    .ps-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .ps-toolbar .form-control,
+    .ps-toolbar .form-select {
+        width: 100% !important;
+        max-width: none !important;
+    }
+
+    /* Live map — map-first + bottom vehicle sheet */
+    .ps-wrap.ps-full .ps-back-row {
+        margin: 0 .7rem .35rem;
+    }
+    .ps-live-bar {
+        margin: 0 .7rem .45rem;
+        padding: .55rem .65rem;
+        gap: .45rem .55rem;
+        border-radius: .85rem;
+    }
+    .ps-live-title { width: 100%; font-size: .95rem; }
+    .ps-live-stats {
+        display: flex;
+        gap: .3rem;
+        overflow-x: auto;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding-bottom: 1px;
+    }
+    .ps-live-stats::-webkit-scrollbar { display: none; }
+    .ps-live-stats .badge {
+        flex: 0 0 auto;
+        font-size: .68rem;
+        padding: .35rem .5rem;
+    }
+    .ps-live-bar #psSearch {
+        max-width: none !important;
+        flex: 1 1 100%;
+        width: 100%;
+    }
+    .ps-live-bar .ps-check,
+    .ps-live-bar .btn {
+        flex: 1 1 auto;
+    }
+    .ps-live-body {
+        margin: 0;
+        gap: 0;
+        min-height: 0;
+        height: calc(100dvh - 210px - env(safe-area-inset-bottom, 0px));
+        max-height: none;
+        position: relative;
+    }
+    .ps-live-body #psMap {
+        height: 100%;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        min-height: 280px;
+    }
+    .ps-live-list {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: 42%;
+        border-radius: 1rem 1rem 0 0;
+        border: 1px solid #e2e8f0;
+        border-bottom: 0;
+        box-shadow: 0 -8px 28px rgba(15, 23, 42, .14);
+        z-index: 20;
+        padding: .35rem .55rem calc(.55rem + env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        -webkit-overflow-scrolling: touch;
+    }
+    .ps-live-list::before {
+        content: '';
+        display: block;
+        width: 42px;
+        height: 4px;
+        border-radius: 999px;
+        background: #cbd5e1;
+        margin: .15rem auto .45rem;
+    }
+    .ps-live-item {
+        padding: .65rem .55rem;
+        min-height: 48px;
+        border-radius: .7rem;
+    }
+
+    /* History playback */
+    .ps-live-body.mt-2,
+    .ps-hist-layout {
+        height: auto !important;
+        min-height: 0;
+    }
+    .ps-hist-layout #psMap,
+    .ps-live-body.mt-2 #psMap {
+        height: 48vh;
+        min-height: 260px;
+        border-radius: .85rem;
+    }
+    .ps-play-bar {
+        gap: .45rem;
+        padding: .55rem .6rem;
+        position: sticky;
+        bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+        z-index: 30;
+        box-shadow: 0 -4px 18px rgba(15, 23, 42, .08);
+    }
+    .ps-play-btn {
+        width: 48px;
+        height: 48px;
+        flex: none;
+    }
+    .ps-speed-group { flex-wrap: wrap; }
+    .ps-speed-btn {
+        min-height: 36px;
+        padding: .3rem .55rem;
+    }
+    .ps-timeline { flex: 1 1 100%; min-width: 0; }
+    .ps-tl-time {
+        min-width: 0;
+        width: 100%;
+        font-size: .74rem;
+    }
+    .ps-hist-side {
+        margin-top: .55rem;
+        max-height: none;
+    }
+    .ps-point-table {
+        max-height: 220px;
+    }
+    .ps-point-table table {
+        font-size: .74rem;
+    }
+
+    /* Trip cards */
+    .ps-trip-card {
+        flex-direction: column;
+        align-items: stretch;
+        gap: .55rem;
+        padding: .75rem .8rem;
+    }
+    .ps-trip-time { min-width: 0; }
+    .ps-trip-route { min-width: 0; }
+    .ps-trip-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .35rem;
+        width: 100%;
+    }
+    .ps-trip-kpi {
+        min-width: 0;
+        padding: .35rem .25rem;
+    }
+    .ps-trip-kpi b { font-size: .85rem; }
+
+    /* Tables → horizontal swipe cards */
+    .ps-table-card {
+        padding: .35rem;
+        margin-left: -.15rem;
+        margin-right: -.15rem;
+        border-radius: .75rem;
+    }
+    .ps-table-card .table {
+        font-size: .78rem;
+        margin-bottom: 0;
+    }
+    .ps-table-card .table th,
+    .ps-table-card .table td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    /* Settings — sticky Save bar like native apps */
+    .ps-settings-actions {
+        position: sticky;
+        bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+        z-index: 35;
+        display: flex;
+        gap: .5rem;
+        padding: .65rem .15rem .25rem;
+        background: linear-gradient(180deg, rgba(248,250,252,0), #f8fafc 28%);
+    }
+    .ps-settings-actions .btn {
+        flex: 1;
+        min-height: 48px;
+    }
+    .ps-wrap .card {
+        border-radius: .9rem;
+        border-color: #e2e8f0;
+        box-shadow: 0 2px 12px rgba(15, 23, 42, .04);
+    }
+    .ps-log-table {
+        max-height: 320px;
+        font-size: .72rem;
+    }
+    .ps-kv {
+        font-size: .8rem;
+    }
+    .ps-mini-map {
+        height: 200px;
+    }
+
+    /* Vehicle detail command buttons */
+    .ps-wrap .btn-danger,
+    .ps-wrap .btn-warning {
+        min-height: 48px;
+        width: 100%;
+    }
+}
+
+/* Capacitor / WebView extras */
+html.capacitor-native body.page-personal .ps-wrap {
+    padding-top: max(.55rem, env(safe-area-inset-top, 0px));
+}
+html.capacitor-native body.page-personal .ps-wrap.ps-full {
+    padding-left: 0;
+    padding-right: 0;
+}
+html.capacitor-native body.page-personal .ps-live-list {
+    padding-bottom: calc(.7rem + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 767.98px) {
+    /* Live map pages: hide bottom nav so map feels like a real tracker app */
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_live"] .mobile-bottom-nav,
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_history"] .mobile-bottom-nav {
+        display: none !important;
+    }
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_live"] .ps-wrap,
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_history"] .ps-wrap {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_live"] .ps-live-body {
+        height: calc(100dvh - 168px - env(safe-area-inset-bottom, 0px));
+    }
+    html.capacitor-native body.page-personal[data-fleet-endpoint="personal_history"] .ps-play-bar {
+        bottom: env(safe-area-inset-bottom, 0px);
+    }
 }

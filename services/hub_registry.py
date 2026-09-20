@@ -525,6 +525,47 @@ HUBS = {
             },
         ],
     },
+    'personal': {
+        'title': 'Personal Tracking',
+        'header_icon': 'bi-person-badge',
+        'section_perm': None,
+        'access': 'personal',
+        'extra_endpoints': (
+            'personal_dashboard', 'personal_live', 'personal_vehicles',
+            'personal_vehicle_detail', 'personal_history', 'personal_trips',
+            'personal_alarms', 'personal_notifications', 'personal_settings',
+            'api_personal_positions', 'api_personal_vehicles', 'api_personal_refresh',
+            'api_personal_notifications', 'api_personal_history',
+            'api_personal_trips', 'api_personal_alarms',
+            'api_personal_test_connection', 'api_personal_settings_save',
+            'api_personal_log_clear', 'api_personal_vehicle_command',
+        ),
+        'sections': [
+            {
+                'title': 'Live View',
+                'items': [
+                    _item('personal_dashboard', 'Dashboard & KPIs', 'fa-solid fa-gauge-high', 'rc-tile--tracker', 'personal_view'),
+                    _item('personal_live', 'Live Map', 'fa-solid fa-map-location-dot', 'rc-tile--tracker', 'personal_view'),
+                    _item('personal_vehicles', 'Vehicles', 'fa-solid fa-car', 'rc-tile--tracker', 'personal_view'),
+                    _item('personal_notifications', 'Notifications', 'fa-solid fa-bell', 'rc-tile--tracker', 'personal_view'),
+                ],
+            },
+            {
+                'title': 'History & Reports',
+                'items': [
+                    _item('personal_history', 'History Playback', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'personal_history'),
+                    _item('personal_trips', 'Trip Report', 'fa-solid fa-route', 'rc-tile--tracker', 'personal_reports'),
+                    _item('personal_alarms', 'Alarm Report', 'fa-solid fa-triangle-exclamation', 'rc-tile--tracker', 'personal_reports'),
+                ],
+            },
+            {
+                'title': 'Configuration',
+                'items': [
+                    _item('personal_settings', 'Crescent Settings', 'fa-solid fa-gear', 'rc-tile--hub-admin', 'personal_settings'),
+                ],
+            },
+        ],
+    },
     'administration': {
         'title': 'Administration',
         'header_icon': 'bi-shield-lock',
@@ -569,6 +610,8 @@ def _hub_access(hub, can_see_section_fn, can_see_page_fn, can_see_admin_fn, is_m
         return can_see_section_fn('tracking')
     if access == 'ufone':
         return can_see_section_fn('ufone')
+    if access == 'personal':
+        return can_see_section_fn('personal')
     perm = hub.get('section_perm')
     if perm:
         return can_see_section_fn(perm)

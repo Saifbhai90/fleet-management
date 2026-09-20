@@ -249,4 +249,15 @@
     setInterval(updateCountdown, 1000);
     setInterval(pollNow, pollSeconds * 1000);
     pollNow();
+
+    // Mobile / WebView: keep map tiles aligned after rotate / bottom-sheet layout
+    function relayoutMap() {
+        try { map.invalidateSize({ animate: false }); } catch (e) { /* ignore */ }
+    }
+    window.addEventListener('resize', relayoutMap);
+    window.addEventListener('orientationchange', function () {
+        setTimeout(relayoutMap, 280);
+    });
+    setTimeout(relayoutMap, 120);
+    setTimeout(relayoutMap, 600);
 })();

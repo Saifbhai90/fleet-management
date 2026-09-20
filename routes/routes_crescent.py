@@ -5,7 +5,7 @@ Integration of the Crescent "TrackGF" mobile-app API into Fleet Manager:
 dashboard, live map, vehicles, history playback, trip/alarm reports,
 notifications and connection settings.
 
-Sidebar item: "Personal" (below Report Centre).
+Sidebar item: "Personal" → /hub/personal (module hub, same as Software view).
 """
 import json
 from datetime import datetime, timedelta
@@ -16,6 +16,13 @@ from app import app, db
 from models import CrescentApiLog, CrescentSettings, CrescentVehicleCache
 from routes import _nav_back_ctx
 from services import crescent_service as cs
+
+
+def _personal_hub_back():
+    return _nav_back_ctx(
+        url_for('module_hub', hub_slug='personal'),
+        default_label='Personal Tracking Hub',
+    )
 
 
 @app.before_request
@@ -53,7 +60,7 @@ def personal_dashboard():
         vehicles=vehicles, stats=stats, settings=s,
         configured=_configured(),
         poll_seconds=(s.poll_seconds if s else 30),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -66,7 +73,7 @@ def personal_live():
         vehicles=vehicles, stats=cs.status_counts(vehicles), settings=s,
         configured=_configured(),
         poll_seconds=(s.poll_seconds if s else 30),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -77,7 +84,7 @@ def personal_vehicles():
     return render_template(
         'personal/vehicles.html',
         vehicles=vehicles, groups=groups, configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -92,7 +99,7 @@ def personal_vehicle_detail(vid):
     return render_template(
         'personal/vehicle_detail.html',
         v=v, raw=raw, configured=_configured(), settings=_settings_or_none(),
-        **_nav_back_ctx(url_for('personal_vehicles')),
+        **_personal_hub_back(),
     )
 
 
@@ -102,7 +109,7 @@ def personal_history():
     return render_template(
         'personal/history.html',
         vehicles=vehicles, configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -112,7 +119,7 @@ def personal_trips():
     return render_template(
         'personal/trips.html',
         vehicles=vehicles, configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -122,7 +129,7 @@ def personal_alarms():
     return render_template(
         'personal/alarms.html',
         vehicles=vehicles, configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -131,7 +138,7 @@ def personal_notifications():
     return render_template(
         'personal/notifications.html',
         configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 
@@ -145,7 +152,7 @@ def personal_settings():
     return render_template(
         'personal/settings.html',
         settings=s, logs=logs, configured=_configured(),
-        **_nav_back_ctx(url_for('personal_dashboard')),
+        **_personal_hub_back(),
     )
 
 

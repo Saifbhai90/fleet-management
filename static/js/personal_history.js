@@ -359,4 +359,14 @@
     } else {
         showAlert('Koi vehicle cache mein nahi — pehle Live Map/Dashboard par Refresh karein.');
     }
+
+    function relayoutMap() {
+        try { map.invalidateSize({ animate: false }); } catch (e) { /* ignore */ }
+    }
+    window.addEventListener('resize', relayoutMap);
+    window.addEventListener('orientationchange', function () {
+        setTimeout(relayoutMap, 280);
+    });
+    setTimeout(relayoutMap, 120);
+    setTimeout(relayoutMap, 600);
 })();

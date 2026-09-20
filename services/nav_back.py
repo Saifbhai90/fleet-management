@@ -30,6 +30,8 @@ _HUB_SLUG_LABELS: dict[str, str] = {
     'notifications':    'Notifications Hub',
     'administration':   'Administration Hub',
     'fleet-tracking':   'Fleet Tracking Hub',
+    'personal':         'Personal Tracking Hub',
+    'ufone':            'Ufone BPOCOPS Hub',
 }
 
 

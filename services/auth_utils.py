@@ -805,10 +805,14 @@ ENDPOINT_PERMISSION_MAP = [
     ('api_personal_history',      'personal_history'),
     ('personal_trips',            'personal_reports'),
     ('personal_alarms',           'personal_reports'),
+    ('api_personal_trips',        'personal_reports'),
+    ('api_personal_alarms',       'personal_reports'),
     ('personal_settings',         'personal_settings'),  # covers settings sub-routes
     ('api_personal_test_connection', 'personal_settings'),
     ('api_personal_settings_save',   'personal_settings'),
     ('api_personal_log_clear',       'personal_settings'),
+    # Immobilizer / engine kill — settings-level only (dangerous)
+    ('api_personal_vehicle_command', 'personal_settings'),
 ]
 
 
@@ -966,7 +970,7 @@ def ensure_config_permissions_exist():
 
 def seed_auth_tables(app):
     """Create permissions from tree, Master/Admin roles, and default users if not present."""
-    from models import db, Permission, Role, User
+    from models import db, Permission, Role, User, SystemSetting
 
     with app.app_context():
         ensure_config_permissions_exist()
@@ -1141,6 +1145,33 @@ def seed_auth_tables(app):
                     changed = True
                 if changed:
                     db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        # Personal (Crescent): one-time — strip from every non-Master role so default is
+        # Master-only. Master can later grant via Role Management (Admin role first).
+        try:
+            flag_key = 'auth_personal_master_only_v1'
+            if SystemSetting.get(flag_key) != '1':
+                personal_codes = {
+                    PERMISSION_PERSONAL,
+                    'personal_view',
+                    'personal_history',
+                    'personal_reports',
+                    'personal_settings',
+                }
+                changed = False
+                for role in Role.query.all():
+                    if role.name == 'Master':
+                        continue
+                    before = list(role.permissions or [])
+                    kept = [p for p in before if p.code not in personal_codes]
+                    if len(kept) != len(before):
+                        role.permissions = kept
+                        changed = True
+                if changed:
+                    db.session.commit()
+                SystemSetting.set(flag_key, '1')
         except Exception:
             db.session.rollback()
 

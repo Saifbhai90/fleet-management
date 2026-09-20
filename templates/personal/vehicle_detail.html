@@ -19,7 +19,6 @@
         <div class="d-flex gap-2">
             <a href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}" class="btn btn-outline-success btn-sm"><i class="bi bi-route"></i> History</a>
             <a href="{{ url_for('personal_live') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-geo-alt"></i> Live Map</a>
-            <a href="{{ url_for('personal_vehicles') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
         </div>
     </div>
 
@@ -96,11 +95,11 @@
                         <i class="bi bi-exclamation-triangle"></i> <strong>Khatarnak command:</strong> Engine Kill chalte waqt engine band kar sakta hai.
                         Sirf tab use karein jab vehicle parked ho aur aap sure hon.
                     </p>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-danger btn-sm" id="psKillBtn" {% if (v.speed or 0) >= 5 %}disabled title="Vehicle moving hai"{% endif %}>
+                    <div class="d-flex gap-2 flex-column flex-sm-row ps-cmd-actions">
+                        <button class="btn btn-danger" id="psKillBtn" {% if (v.speed or 0) >= 5 %}disabled title="Vehicle moving hai"{% endif %}>
                             <i class="bi bi-stop-circle"></i> Engine Kill
                         </button>
-                        <button class="btn btn-success btn-sm" id="psReleaseBtn">
+                        <button class="btn btn-success" id="psReleaseBtn">
                             <i class="bi bi-play-circle"></i> Engine Release
                         </button>
                     </div>

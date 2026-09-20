@@ -45,6 +45,15 @@
     setInterval(refresh, 30000);
     refresh();
 
+    function relayoutMap() {
+        try { map.invalidateSize({ animate: false }); } catch (e) { /* ignore */ }
+    }
+    window.addEventListener('resize', relayoutMap);
+    window.addEventListener('orientationchange', function () {
+        setTimeout(relayoutMap, 280);
+    });
+    setTimeout(relayoutMap, 120);
+
     // ── Engine Kill / Release (typed confirmation + CSRF) ──────────
     const CSRF = (window.FleetConfig && window.FleetConfig.csrfToken) ||
         (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
