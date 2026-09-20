@@ -32,6 +32,7 @@
 
     let routeLayer = null;        // L.featureGroup with colored segments
     let stopLayer = null;         // stop markers
+    let startEndLayer = null;     // START / END badges
     let replayMarker = null;
     let trailLayer = null;        // traveled part during replay
     let chart = null;
@@ -40,6 +41,42 @@
     let replaySpeed = 4;
     let currentPoints = [];
     let currentStops = [];
+
+    // Same Crescent vehicle icons as Live Map (status × type, DirAngle rotate).
+    function historyVehicleIcon(p) {
+        const STATUS_COLORS = { Moving: '#10b981', Idle: '#f59e0b', Parked: '#64748b', Offline: '#ef4444' };
+        const stMap = { Moving: 'moving', Idle: 'idle', Parked: 'parked', Offline: 'offline' };
+        const sl = String(p.status || '').toLowerCase();
+        let stKey = 'Idle';
+        if (sl.includes('mov')) stKey = 'Moving';
+        else if (sl.includes('idle')) stKey = 'Idle';
+        else if (sl.includes('park') || sl.includes('stop')) stKey = 'Parked';
+        else if (sl.includes('off')) stKey = 'Offline';
+        else if ((p.speed || 0) > 3) stKey = 'Moving';
+        const st = stMap[stKey] || 'idle';
+        const vehSel = document.getElementById('psVehicle');
+        const opt = vehSel && vehSel.options[vehSel.selectedIndex];
+        const tMap = { car: 'car', truck: 'truck', bus: 'bus', bike: 'bike', motorcycle: 'bike', atm: 'atm', van: 'car', pickup: 'truck' };
+        const vt = tMap[String((opt && opt.dataset.vtype) || 'car').toLowerCase()] || 'car';
+        const url = `/static/img/personal/vehicles/${st}_${vt}.png`;
+        const w = 22;
+        const h = Math.round(w * 223 / 114);
+        const dir = parseFloat(p.dir);
+        const rot = (stKey === 'Moving' && isFinite(dir)) ? dir : 0;
+        const speedTag = stKey === 'Moving'
+            ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);background:${STATUS_COLORS[stKey]};color:#fff;font-size:8px;font-weight:700;padding:0 4px;border-radius:999px;white-space:nowrap;line-height:14px;">${p.speed ?? 0} km/h</div>`
+            : '';
+        const ring = `<div style="position:absolute;inset:-4px;border:2px solid ${STATUS_COLORS[stKey] || '#10b981'};border-radius:50%;"></div>`;
+        return L.divIcon({
+            className: '',
+            html: `<div style="position:relative;width:${w}px;height:${h}px;">
+                     <img src="${url}" alt="" style="width:100%;height:100%;object-fit:contain;transform:rotate(${rot}deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">
+                     ${ring}${speedTag}
+                   </div>`,
+            iconSize: [w, h],
+            iconAnchor: [w / 2, h / 2],
+        });
+    }
 
     const form = document.getElementById('psHistoryForm');
     const alertBox = document.getElementById('psHistoryAlert');
@@ -116,24 +153,49 @@
                 color: speedColor(a.speed || 0), weight: 4, opacity: .92,
             }).addTo(routeLayer);
         }
-        // start/end pins
+        // Start / End — compact circular badges (fixed size so text never clips)
         const first = points[0], last = points[points.length - 1];
+        startEndLayer = L.featureGroup().addTo(map);
+        function endpointIcon(letter, bg) {
+            const size = 22;
+            return L.divIcon({
+                className: 'ps-endpoint-icon',
+                html: `<div style="width:${size}px;height:${size}px;line-height:${size - 4}px;text-align:center;background:${bg};color:#fff;font-weight:800;font-size:11px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);">${letter}</div>`,
+                iconSize: [size, size],
+                iconAnchor: [size / 2, size / 2],
+            });
+        }
         L.marker([first.lat, first.lon], {
-            icon: L.divIcon({ className: '', html: '<div style="background:#059669;color:#fff;font-weight:800;font-size:10px;padding:3px 8px;border-radius:999px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);">START</div>', iconAnchor: [26, 12] }),
-        }).addTo(map).bindTooltip('Start');
+            icon: endpointIcon('S', '#059669'),
+            zIndexOffset: 200,
+        }).addTo(startEndLayer).bindTooltip('Start', { direction: 'top', offset: [0, -12] });
         L.marker([last.lat, last.lon], {
-            icon: L.divIcon({ className: '', html: '<div style="background:#dc2626;color:#fff;font-weight:800;font-size:10px;padding:3px 8px;border-radius:999px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);">END</div>', iconAnchor: [26, 12] }),
-        }).addTo(map).bindTooltip('End');
+            icon: endpointIcon('E', '#dc2626'),
+            zIndexOffset: 200,
+        }).addTo(startEndLayer).bindTooltip('End', { direction: 'top', offset: [0, -12] });
         map.fitBounds(L.polyline(points.map(p => [p.lat, p.lon])).getBounds().pad(0.2));
 
-        // stops
+        // Stops — numbered dots; duration only in tooltip/popup (no long overlapping labels)
         stopLayer = L.featureGroup().addTo(map);
         stops.forEach((st, i) => {
-            if (st.lat == null) return;
+            if (st.lat == null || st.lon == null) return;
+            const size = 20;
+            const n = i + 1;
             L.marker([st.lat, st.lon], {
-                icon: L.divIcon({ className: '', html: `<div style="background:#475569;color:#fff;font-weight:700;font-size:10px;padding:3px 8px;border-radius:999px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35);white-space:nowrap;">⏸ ${st.duration_min} min</div>`, iconAnchor: [30, 12] }),
-            }).addTo(stopLayer).bindPopup(
-                `<b>Stop ${i + 1}</b> (${st.status || 'Stopped'})<br>${new Date(st.start).toLocaleTimeString()} → ${new Date(st.end).toLocaleTimeString()}<br>${st.address || ''}`);
+                icon: L.divIcon({
+                    className: 'ps-stop-icon',
+                    html: `<div style="width:${size}px;height:${size}px;line-height:${size - 4}px;text-align:center;background:#475569;color:#fff;font-weight:700;font-size:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);">${n}</div>`,
+                    iconSize: [size, size],
+                    iconAnchor: [size / 2, size / 2],
+                }),
+                zIndexOffset: 150,
+            }).addTo(stopLayer)
+                .bindTooltip(`Stop ${n}: ${st.duration_min} min`, { direction: 'top', offset: [0, -12] })
+                .bindPopup(
+                    `<b>Stop ${n}</b> (${st.status || 'Stopped'})<br>` +
+                    `${st.duration_min} min<br>` +
+                    `${new Date(st.start).toLocaleTimeString()} → ${new Date(st.end).toLocaleTimeString()}<br>` +
+                    `${st.address || ''}`);
         });
 
         // stops side list
@@ -155,11 +217,13 @@
         renderTable(points);
         renderChart(points);
         setupTimeline(points);
+        // Crescent car icon at playback position (Live Map style)
+        showPointAt(0);
     }
 
     function clearLayers() {
-        [routeLayer, stopLayer, replayMarker, trailLayer].forEach(l => { if (l) map.removeLayer(l); });
-        routeLayer = stopLayer = trailLayer = replayMarker = null;
+        [routeLayer, stopLayer, startEndLayer, replayMarker, trailLayer].forEach(l => { if (l) map.removeLayer(l); });
+        routeLayer = stopLayer = startEndLayer = trailLayer = replayMarker = null;
         if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
     }
 
@@ -228,18 +292,25 @@
     function showPointAt(i) {
         if (!currentPoints.length) return;
         const p = currentPoints[i];
+        if (p.lat == null || p.lon == null) return;
+        const icon = historyVehicleIcon(p);
+        const vehSel = document.getElementById('psVehicle');
+        const opt = vehSel && vehSel.options[vehSel.selectedIndex];
+        const regno = (opt && opt.dataset.regno) || 'Vehicle';
         if (!replayMarker) {
-            replayMarker = L.marker([p.lat, p.lon]).addTo(map);
+            replayMarker = L.marker([p.lat, p.lon], { icon, zIndexOffset: 1000 }).addTo(map);
         } else {
             replayMarker.setLatLng([p.lat, p.lon]);
+            replayMarker.setIcon(icon);
         }
         replayMarker.bindPopup(
-            `<b>${p.speed ?? 0} km/h</b> · ${p.status || ''}<br>${String(p.time).replace('T', ' ').slice(0, 19)}<br>${p.address || ''}`);
+            `<b>${regno}</b><br>${p.speed ?? 0} km/h · ${p.status || ''}<br>${String(p.time || '').replace('T', ' ').slice(0, 19)}<br>${p.address || ''}`);
         if (trailLayer) map.removeLayer(trailLayer);
-        const trail = currentPoints.slice(0, i + 1).map(q => [q.lat, q.lon]);
+        const trail = currentPoints.slice(0, i + 1).filter(q => q.lat != null && q.lon != null).map(q => [q.lat, q.lon]);
         if (trail.length > 1) {
             trailLayer = L.polyline(trail, { color: '#0f172a', weight: 3, opacity: .55, dashArray: '1' }).addTo(map);
         }
+        replayIdx = i;
         updateTlLabel();
     }
 

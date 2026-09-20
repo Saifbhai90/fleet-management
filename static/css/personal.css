@@ -218,6 +218,13 @@
 }
 .ps-legend .sw { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 
+/* History map endpoint / stop badges — kill Leaflet default white box */
+.leaflet-div-icon.ps-endpoint-icon,
+.leaflet-div-icon.ps-stop-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
 @media (max-width: 992px) {
     .ps-live-body { flex-direction: column; height: auto; }
     #psMap { height: 55vh; }

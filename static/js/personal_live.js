@@ -37,20 +37,20 @@
         const tMap = { car: 'car', truck: 'truck', bus: 'bus', bike: 'bike', motorcycle: 'bike', atm: 'atm', van: 'car', pickup: 'truck' };
         const vt = tMap[(v.vehicle_type || 'car').toLowerCase()] || 'car';
         const url = `/static/img/personal/vehicles/${st}_${vt}.png`;
-        const w = selected ? 40 : 30;
+        const w = selected ? 26 : 20;
         const h = Math.round(w * 223 / 114); // keep the vendor aspect ratio
         const dir = parseFloat(v.dir);
         const rot = (v.status === 'Moving' && isFinite(dir)) ? dir : 0;
         const ring = selected
-            ? `<div style="position:absolute;inset:-7px;border:2.5px solid ${STATUS_COLORS[v.status] || '#10b981'};border-radius:50%;animation:psPulse 1.6s infinite;"></div>`
+            ? `<div style="position:absolute;inset:-5px;border:2px solid ${STATUS_COLORS[v.status] || '#10b981'};border-radius:50%;animation:psPulse 1.6s infinite;"></div>`
             : '';
         const speedTag = v.status === 'Moving'
-            ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);background:${STATUS_COLORS[v.status]};color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:999px;white-space:nowrap;">${v.speed ?? 0} km/h</div>`
+            ? `<div style="position:absolute;top:100%;left:50%;transform:translateX(-50%);background:${STATUS_COLORS[v.status]};color:#fff;font-size:8px;font-weight:700;padding:0 4px;border-radius:999px;white-space:nowrap;line-height:14px;">${v.speed ?? 0} km/h</div>`
             : '';
         return L.divIcon({
             className: '',
             html: `<div style="position:relative;width:${w}px;height:${h}px;">
-                     <img src="${url}" style="width:100%;height:100%;object-fit:contain;transform:rotate(${rot}deg);transform-origin:50% 50%;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45));">
+                     <img src="${url}" style="width:100%;height:100%;object-fit:contain;transform:rotate(${rot}deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">
                      ${ring}${speedTag}
                    </div>`,
             iconSize: [w, h], iconAnchor: [w / 2, h / 2],

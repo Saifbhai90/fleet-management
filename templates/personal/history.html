@@ -21,7 +21,7 @@
             <select id="psVehicle" class="form-select form-select-sm" required>
                 <option value="">— select —</option>
                 {% for v in vehicles %}
-                <option value="{{ v.device_id }}" data-regno="{{ v.regno }}" {% if request.args.get('vehicle') == v.device_id %}selected{% endif %}>{{ v.regno }}</option>
+                <option value="{{ v.device_id }}" data-regno="{{ v.regno }}" data-vtype="{{ v.vehicle_type or 'car' }}" {% if request.args.get('vehicle') == v.device_id %}selected{% endif %}>{{ v.regno }}</option>
                 {% endfor %}
             </select>
         </div>
