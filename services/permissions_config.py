@@ -7,7 +7,7 @@ from auth_utils import (
     PERMISSION_DRIVER_STATUS, PERMISSION_ATTENDANCE, PERMISSION_TASK_REPORT,
     PERMISSION_EXPENSES, PERMISSION_ACCOUNTS, PERMISSION_WORKSPACE, PERMISSION_PAYROLL, PERMISSION_BOOKS,
     PERMISSION_REPORTS, PERMISSION_BACKUP, PERMISSION_USERS_MANAGE, PERMISSION_DASHBOARD,
-    PERMISSION_TRACKING, PERMISSION_UFONE,
+    PERMISSION_TRACKING, PERMISSION_UFONE, PERMISSION_PERSONAL,
 )
 
 # Setting (Form Control) — one permission per tab; backup is a separate section (not freeze).
@@ -401,6 +401,13 @@ PERMISSION_TREE = {
         ('ufone_admin', 'Admin (Patient Registration, Ambulance Management)'),
         ('ufone_settings', 'Settings (Accounts, Polling)'),
     ],
+    PERMISSION_PERSONAL: [
+        ('personal', 'Personal Tracking – Crescent (full)'),
+        ('personal_view', 'Dashboard, Live Map & Vehicles – View'),
+        ('personal_history', 'History Playback'),
+        ('personal_reports', 'Trip & Alarm Reports'),
+        ('personal_settings', 'Settings (Connection & Credentials)'),
+    ],
 }
 
 SECTION_LABELS = {
@@ -421,6 +428,7 @@ SECTION_LABELS = {
     PERMISSION_USERS_MANAGE: 'Administration',
     PERMISSION_TRACKING: 'Fleet Tracking',
     PERMISSION_UFONE: 'Ufone BPOCOPS',
+    PERMISSION_PERSONAL: 'Personal Tracking (Crescent)',
 }
 
 # Section "full" permission code -> SECTION_PAGE_GROUPS key (for login expansion)
@@ -442,6 +450,7 @@ SECTION_FULL_TO_GROUP = {
     'users_manage': PERMISSION_USERS_MANAGE,
     'tracking': PERMISSION_TRACKING,
     'ufone': PERMISSION_UFONE,
+    'personal': PERMISSION_PERSONAL,
 }
 
 
@@ -682,6 +691,10 @@ PERMISSION_DEPENDENCIES = {
     'ufone_actions': ['ufone_view'],
     'ufone_admin': ['ufone_view'],
     'ufone_settings': ['ufone_view'],
+    # Personal (Crescent): history/reports/settings assume view-level access
+    'personal_history': ['personal_view'],
+    'personal_reports': ['personal_view'],
+    'personal_settings': ['personal_view'],
 }
 
 # Section -> list of (page_label, list of (code, display_name)) for hierarchical UI (Section → Page → Buttons)
@@ -1141,6 +1154,21 @@ SECTION_PAGE_GROUPS = {
             ('ufone_settings', 'Settings (Accounts, Polling)'),
         ]),
     ],
+    PERMISSION_PERSONAL: [
+        ('Personal Tracking – Crescent (full)', [('personal', 'Personal Tracking (full)')]),
+        ('Live View', [
+            ('personal_view', 'Dashboard, Live Map & Vehicles – View'),
+        ]),
+        ('History', [
+            ('personal_history', 'History Playback'),
+        ]),
+        ('Reports', [
+            ('personal_reports', 'Trip & Alarm Reports'),
+        ]),
+        ('Configuration', [
+            ('personal_settings', 'Settings (Connection & Credentials)'),
+        ]),
+    ],
 }
 
 # All permission codes under Reports & Analytics (for Report Centre nav: show hub if user has any).
@@ -1435,6 +1463,15 @@ PAGE_VISIBLE = {
     'ufone_actions': ['ufone', 'ufone_actions'],
     'ufone_admin': ['ufone', 'ufone_admin'],
     'ufone_settings': ['ufone', 'ufone_settings'],
+    # Personal (Crescent Tracker)
+    'personal': [
+        'personal', 'personal_view', 'personal_history',
+        'personal_reports', 'personal_settings',
+    ],
+    'personal_view': ['personal', 'personal_view'],
+    'personal_history': ['personal', 'personal_history'],
+    'personal_reports': ['personal', 'personal_reports'],
+    'personal_settings': ['personal', 'personal_settings'],
 }
 
 

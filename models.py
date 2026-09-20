@@ -3594,3 +3594,86 @@ class UfoneMaintenanceHistory(db.Model):
 
     def __repr__(self):
         return f'<UfoneMaintenanceHistory {self.reg_no} open={self.is_open}>'
+
+
+# ── Personal (Crescent Tracker) integration ──────────────────────────────────
+
+class CrescentSettings(db.Model):
+    """Single active connection profile for the Crescent Tracker (TrackGF) API."""
+    __tablename__ = 'crescent_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(100), nullable=False, default='Crescent Tracker')
+    api_base = db.Column(db.String(300), nullable=False, default='http://trackgf.crescenttrack.com:8888/api/')
+    alt_api_base = db.Column(db.String(300), nullable=True)  # legacy Progatix backend (optional)
+    username = db.Column(db.String(200), nullable=False, default='')
+    password_enc = db.Column(db.Text, nullable=True)  # Fernet-encrypted
+    token_enc = db.Column(db.Text, nullable=True)  # cached bearer token (encrypted)
+    refresh_token_enc = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=True)
+    fcm_token = db.Column(db.String(300), nullable=True)  # synthetic push identity for notifications
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    last_sync_at = db.Column(db.DateTime, nullable=True)
+    last_error = db.Column(db.Text, nullable=True)
+    poll_seconds = db.Column(db.Integer, nullable=False, default=30)
+    commands_enabled = db.Column(db.Boolean, nullable=False, default=False)  # engine kill/release safety gate
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=pk_now)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    def __repr__(self):
+        return f'<CrescentSettings {self.label} ({self.username})>'
+
+
+class CrescentVehicleCache(db.Model):
+    """Latest known state of each Crescent device (refreshed from DashBoard/List)."""
+    __tablename__ = 'crescent_vehicle_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.String(100), nullable=False, index=True)
+    regno = db.Column(db.String(100), nullable=True, index=True)
+    group_name = db.Column(db.String(150), nullable=True)
+    vehicle_type = db.Column(db.String(80), nullable=True)
+    driver_name = db.Column(db.String(150), nullable=True)
+    lat = db.Column(db.Numeric(10, 6), nullable=True)
+    lon = db.Column(db.Numeric(10, 6), nullable=True)
+    speed = db.Column(db.Numeric(10, 2), nullable=True)
+    status = db.Column(db.String(30), nullable=True)  # Moving/Idle/Parked/Offline
+    ignition = db.Column(db.String(50), nullable=True)
+    mileage = db.Column(db.Numeric(12, 2), nullable=True)
+    address = db.Column(db.Text, nullable=True)
+    device_time = db.Column(db.DateTime, nullable=True)  # vendor last-update time
+    cmp_id = db.Column(db.String(20), nullable=True)  # vendor company id (trips API cmpId)
+    cluster_id = db.Column(db.String(20), nullable=True)  # live/status ClusterId
+    proc_id = db.Column(db.String(20), nullable=True)  # live/status ProcId
+    vendor_vehicle_id = db.Column(db.String(50), nullable=True)  # vendor vehicleId (history id)
+    raw_json = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    settings = db.relationship('CrescentSettings', backref='vehicle_cache')
+
+    __table_args__ = (
+        db.UniqueConstraint('settings_id', 'device_id', name='uq_crescent_settings_device'),
+    )
+
+    def __repr__(self):
+        return f'<CrescentVehicleCache {self.regno}>'
+
+
+class CrescentApiLog(db.Model):
+    """Diagnostics log of every outbound Crescent API call (Settings page)."""
+    __tablename__ = 'crescent_api_log'
+    id = db.Column(db.Integer, primary_key=True)
+    settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=True, index=True)
+    endpoint = db.Column(db.String(200), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    status_code = db.Column(db.Integer, nullable=True)
+    ok = db.Column(db.Boolean, default=False)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    request_snip = db.Column(db.Text, nullable=True)
+    response_snip = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=pk_now, index=True)
+
+    def __repr__(self):
+        return f'<CrescentApiLog {self.method} {self.endpoint} {self.status_code}>'

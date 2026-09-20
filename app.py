@@ -983,6 +983,7 @@ import routes_tracker_reports  # noqa: E402,F401 — Tracker & Operations Report
 import routes_workforce  # noqa: E402,F401 — Workforce: Job Left, Rejoin, Leave, Driver Posts
 import routes_tracking  # noqa: E402,F401 — PortalXS Fleet Tracking Portal
 import routes_ufone  # noqa: E402,F401 — Ufone BPOCOPS Ambulance Portal
+import routes_crescent  # noqa: E402,F401 — Personal (Crescent Tracker) portal
 
 # Book management: explicit registration so endpoints always exist (avoids BuildError if routes.py tail not loaded)
 from routes_books import register_book_routes  # noqa: E402

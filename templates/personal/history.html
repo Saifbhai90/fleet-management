@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% block title %}Personal — History Playback{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+<link rel="stylesheet" href="/static/vendor/chartjs/4.4.2/chartjs.css?v=8006" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap ps-wide">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <h4 class="mb-0"><i class="bi bi-route text-success"></i> History Playback</h4>
+    </div>
+
+    <form id="psHistoryForm" class="ps-form row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Vehicle</label>
+            <select id="psVehicle" class="form-select form-select-sm" required>
+                <option value="">— select —</option>
+                {% for v in vehicles %}
+                <option value="{{ v.device_id }}" data-regno="{{ v.regno }}" {% if request.args.get('vehicle') == v.device_id %}selected{% endif %}>{{ v.regno }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">From Date</label>
+            <input type="date" id="psFrom" class="form-control form-control-sm" required />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small mb-1">To Date</label>
+            <input type="date" id="psTo" class="form-control form-control-sm" required />
+        </div>
+        <div class="col-md-2 col-lg-1">
+            <label class="form-label small mb-1">From</label>
+            <input type="time" id="psTimeFrom" class="form-control form-control-sm" value="00:00" />
+        </div>
+        <div class="col-md-2 col-lg-1">
+            <label class="form-label small mb-1">To</label>
+            <input type="time" id="psTimeTo" class="form-control form-control-sm" value="23:59" />
+        </div>
+        <div class="col-md-3 col-lg-2 d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-sm flex-fill" id="psRunBtn"><i class="bi bi-play-fill"></i> Show</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="psPrevDay" title="Previous day"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="psNextDay" title="Next day"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </form>
+
+    <div id="psHistoryAlert" class="alert alert-danger py-2 mt-2" style="display:none;"></div>
+
+    <div class="ps-stats mt-2" id="psHistoryStats" style="display:none;">
+        <div class="ps-stat total"><i class="bi bi-collection ico"></i><div class="num" id="psHPoints">0</div><div class="lbl">Points</div></div>
+        <div class="ps-stat moving"><i class="bi bi-road ico"></i><div class="num" id="psHDist">0</div><div class="lbl">Distance (km)</div></div>
+        <div class="ps-stat idle"><i class="bi bi-speedometer ico"></i><div class="num" id="psHMax">0</div><div class="lbl">Max km/h</div></div>
+        <div class="ps-stat parked"><i class="bi bi-activity ico"></i><div class="num" id="psHAvg">0</div><div class="lbl">Avg km/h</div></div>
+        <div class="ps-stat offline"><i class="bi bi-stopwatch ico"></i><div class="num" id="psHMove">0</div><div class="lbl">Moving time</div></div>
+    </div>
+
+    <div class="ps-play-bar" id="psPlayBar" style="display:none;">
+        <button type="button" class="ps-play-btn" id="psPlayBtn" title="Replay" disabled><i class="bi bi-play-fill"></i></button>
+        <div class="ps-speed-group">
+            <button type="button" class="ps-speed-btn" data-speed="1">1×</button>
+            <button type="button" class="ps-speed-btn active" data-speed="4">4×</button>
+            <button type="button" class="ps-speed-btn" data-speed="8">8×</button>
+            <button type="button" class="ps-speed-btn" data-speed="16">16×</button>
+        </div>
+        <div class="ps-timeline">
+            <input type="range" id="psTimeline" min="0" max="100" value="0" disabled />
+        </div>
+        <div class="ps-tl-time" id="psTlTime">--:--:--</div>
+    </div>
+
+    <div class="ps-live-body mt-2" style="height:450px;">
+        <div id="psMap"></div>
+        <div class="ps-hist-side">
+            <div class="small text-muted mb-1"><i class="bi bi-pause-circle"></i> Stops</div>
+            <div class="ps-stops-list" id="psStopsList"><div class="text-muted small">Show chalane par stops yahan aayenge.</div></div>
+            <div class="small text-muted mb-1 mt-2">Speed profile</div>
+            <canvas id="psSpeedChart" height="120"></canvas>
+            <div class="small text-muted mt-2 mb-1">Points (latest 500 — click = map par)</div>
+            <div class="ps-point-table">
+                <table class="table table-sm table-striped">
+                    <thead><tr><th>Time</th><th>km/h</th><th>Status</th><th>Address</th></tr></thead>
+                    <tbody id="psPointsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
+<script src="{{ url_for('static', filename='js/personal_history.js') }}?v={{ fleet_static_hash('js/personal_history.js') }}"></script>
+{% endblock %}

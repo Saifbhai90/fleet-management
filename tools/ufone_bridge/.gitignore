@@ -1,0 +1,8 @@
+_phone_remote/
+_phone_apks/
+_phone_stage/
+_phone_bridge.tar
+.vps_password
+deploy_key
+.env
+

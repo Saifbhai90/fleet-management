@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Live Map{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap ps-full">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-live-bar" id="psPollInfo" data-poll="{{ poll_seconds }}">
+        <div class="ps-live-title"><span class="ps-live-dot"></span> Live Tracking
+            <span class="ps-fresh" id="tbFreshText">—</span>
+        </div>
+        <div class="ps-live-stats">
+            <span class="badge bg-dark">{{ stats.total }} total</span>
+            <span class="badge bg-success">{{ stats.Moving }} moving</span>
+            <span class="badge bg-warning text-dark">{{ stats.Idle }} idle</span>
+            <span class="badge bg-secondary">{{ stats.Parked }} parked</span>
+            <span class="badge bg-danger">{{ stats.Offline }} offline</span>
+        </div>
+        <input type="text" id="psSearch" class="form-control form-control-sm" style="max-width:180px;" placeholder="Search…" />
+        <label class="ps-check"><input type="checkbox" id="psFollow" checked> Follow</label>
+        <button class="btn btn-outline-secondary btn-sm" id="psFsBtn" title="Fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
+        <button id="psRefreshBtn" class="btn btn-success btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+    </div>
+
+    <div class="ps-live-body">
+        <div id="psMap"></div>
+        <div class="ps-live-list" id="psList"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
+<script src="{{ url_for('static', filename='js/personal_live.js') }}?v={{ fleet_static_hash('js/personal_live.js') }}"></script>
+{% endblock %}

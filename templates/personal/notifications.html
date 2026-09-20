@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Notifications{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <h4 class="mb-0"><i class="bi bi-chat-dots text-success"></i> Notifications <span class="text-muted fs-6">(Crescent app alerts)</span></h4>
+        <button id="psRefreshBtn" class="btn btn-success btn-sm"><i class="bi bi-arrow-clockwise"></i> Load</button>
+    </div>
+
+    <div id="psAlert" class="alert alert-warning py-2 mt-2" style="display:none;"></div>
+
+    <div class="table-responsive ps-table-card mt-2">
+        <table class="table table-sm table-hover" id="psTable">
+            <thead class="table-light"><tr id="psHeadRow"><th class="text-muted">Load dabayein — Crescent server se notifications aayengi</th></tr></thead>
+            <tbody id="psBody"></tbody>
+        </table>
+    </div>
+    <div class="text-muted small" id="psCount"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/personal_reports.js') }}?v={{ fleet_static_hash('js/personal_reports.js') }}" data-mode="notifications"></script>
+{% endblock %}

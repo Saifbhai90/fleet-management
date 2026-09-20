@@ -30,6 +30,7 @@ PERMISSION_BACKUP = 'backup'
 PERMISSION_USERS_MANAGE = 'users_manage'
 PERMISSION_TRACKING = 'tracking'
 PERMISSION_UFONE = 'ufone'
+PERMISSION_PERSONAL = 'personal'
 
 ALL_PERMISSION_CODES = [
     (PERMISSION_DASHBOARD, 'Dashboard', 'General'),
@@ -61,6 +62,11 @@ ALL_PERMISSION_CODES = [
     ('ufone_actions', 'Ufone – Task Actions (Comment/Feedback/Complete)', 'Ufone'),
     ('ufone_admin', 'Ufone – Admin (Patient Reg, Ambulance Mgmt)', 'Ufone'),
     ('ufone_settings', 'Ufone – Settings (Accounts, Polling)', 'Ufone'),
+    (PERMISSION_PERSONAL, 'Personal Tracking – Crescent (full)', 'Personal'),
+    ('personal_view', 'Personal – Dashboard, Live Map & Vehicles', 'Personal'),
+    ('personal_history', 'Personal – History Playback', 'Personal'),
+    ('personal_reports', 'Personal – Trip & Alarm Reports', 'Personal'),
+    ('personal_settings', 'Personal – Settings (Credentials)', 'Personal'),
 ]
 
 # Endpoint -> required permission code (granular where defined)
@@ -784,6 +790,25 @@ ENDPOINT_PERMISSION_MAP = [
     ('ufone_admin_ambulances',    'ufone_admin'),
     ('ufone_admin_assignments',   'ufone_admin'),
     ('ufone_settings',            'ufone_settings'),    # covers all settings sub-routes
+
+    # ── Personal (Crescent Tracker) — granular permissions ────────────────
+    ('personal_dashboard',        'personal_view'),
+    ('personal_live',             'personal_view'),
+    ('personal_vehicles',         'personal_view'),
+    ('personal_vehicle_detail',   'personal_view'),
+    ('api_personal_positions',    'personal_view'),
+    ('api_personal_vehicles',     'personal_view'),
+    ('api_personal_refresh',      'personal_view'),
+    ('api_personal_notifications','personal_view'),
+    ('personal_notifications',    'personal_view'),
+    ('personal_history',          'personal_history'),
+    ('api_personal_history',      'personal_history'),
+    ('personal_trips',            'personal_reports'),
+    ('personal_alarms',           'personal_reports'),
+    ('personal_settings',         'personal_settings'),  # covers settings sub-routes
+    ('api_personal_test_connection', 'personal_settings'),
+    ('api_personal_settings_save',   'personal_settings'),
+    ('api_personal_log_clear',       'personal_settings'),
 ]
 
 

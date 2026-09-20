@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Crescent Tracker Dashboard{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <div>
+            <h4 class="mb-0"><i class="bi bi-person-badge text-success"></i> Personal Tracking <span class="text-muted fs-6">(Crescent Tracker)</span></h4>
+            <div class="text-muted small" id="psSyncInfo">
+                {% if settings and settings.last_sync_at %}
+                Last sync: {{ settings.last_sync_at.strftime('%d-%b-%Y %I:%M %p') }}
+                {% else %}Not synced yet — press Refresh{% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button id="psRefreshBtn" class="btn btn-success btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+            <a href="{{ url_for('personal_live') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-geo-alt"></i> Live Map</a>
+        </div>
+    </div>
+
+    {% if settings and settings.last_error %}
+    <div class="alert alert-danger py-2 mt-2"><i class="bi bi-x-octagon"></i> {{ settings.last_error }}</div>
+    {% endif %}
+
+    <!-- Status KPI cards -->
+    <div class="ps-stats">
+        <div class="ps-stat total" data-filter="all"><i class="bi bi-collection ico"></i><div class="num" id="psTotal">{{ stats.total }}</div><div class="lbl">Total</div></div>
+        <div class="ps-stat moving" data-filter="Moving"><i class="bi bi-truck ico"></i><div class="num" id="psMoving">{{ stats.Moving }}</div><div class="lbl">Moving</div></div>
+        <div class="ps-stat idle" data-filter="Idle"><i class="bi bi-hourglass-split ico"></i><div class="num" id="psIdle">{{ stats.Idle }}</div><div class="lbl">Idle</div></div>
+        <div class="ps-stat parked" data-filter="Parked"><i class="bi bi-p-square ico"></i><div class="num" id="psParked">{{ stats.Parked }}</div><div class="lbl">Parked</div></div>
+        <div class="ps-stat offline" data-filter="Offline"><i class="bi bi-wifi-off ico"></i><div class="num" id="psOffline">{{ stats.Offline }}</div><div class="lbl">Offline</div></div>
+    </div>
+
+    <input type="text" id="psSearch" class="form-control form-control-sm mt-3" placeholder="Search reg no, group, address&hellip;" />
+
+    <!-- Vehicle cards -->
+    <div class="ps-cards" id="psCards">
+        {% for v in vehicles %}
+        <div class="ps-card status-{{ (v.status or 'offline')|lower }}" data-status="{{ v.status or 'Offline' }}"
+             data-search="{{ (v.regno or '')~' '~(v.group_name or '')~' '~(v.address or '') }}" data-id="{{ v.id }}">
+            <div class="ps-card-head">
+                <span class="ps-dot {{ (v.status or 'offline')|lower }}"></span>
+                <a href="{{ url_for('personal_vehicle_detail', vid=v.id) }}" class="ps-regno">{{ v.regno }}</a>
+                <span class="ps-badge {{ (v.status or 'offline')|lower }}">{{ v.status or 'Offline' }}</span>
+            </div>
+            <div class="ps-card-body">
+                <div class="ps-row"><i class="bi bi-geo-alt"></i><span class="ps-addr">{{ v.address or '—' }}</span></div>
+                <div class="ps-grid2">
+                    <div class="ps-row"><i class="bi bi-speedometer"></i><span>{{ v.speed or 0 }} km/h</span></div>
+                    <div class="ps-row"><i class="bi bi-key"></i><span>{{ v.ignition or '—' }}</span></div>
+                    <div class="ps-row"><i class="bi bi-road"></i><span>{{ v.mileage or 0 }} km</span></div>
+                    <div class="ps-row"><i class="bi bi-truck"></i><span>{{ v.vehicle_type or '—' }}</span></div>
+                </div>
+                <div class="ps-chips">
+                    <span class="ps-chip"><i class="bi bi-people"></i> {{ v.group_name or 'No group' }}</span>
+                    {% if v.driver_name %}<span class="ps-chip"><i class="bi bi-person"></i> {{ v.driver_name }}</span>{% endif %}
+                    <span class="ps-chip"><i class="bi bi-clock"></i> {{ v.device_time.strftime('%d-%b %I:%M %p') if v.device_time else '—' }}</span>
+                </div>
+            </div>
+            <div class="ps-card-actions">
+                <a href="{{ url_for('personal_live') }}"><i class="bi bi-geo-alt"></i> Track</a>
+                <a href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}"><i class="bi bi-route"></i> History</a>
+                <a href="{{ url_for('personal_vehicle_detail', vid=v.id) }}"><i class="bi bi-info-circle"></i> Details</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-muted py-4 w-100 text-center">
+            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+            Koi vehicle cache mein nahi hai. <strong>Refresh</strong> dabayein (credentials save hone ke baad).
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/personal_dashboard.js') }}?v={{ fleet_static_hash('js/personal_dashboard.js') }}"></script>
+{% endblock %}

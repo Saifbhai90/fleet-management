@@ -1,0 +1,226 @@
+/* ════════════════════════════════════════════════════════════════════
+   Personal (Crescent Tracker) — premium tracking UI
+   ════════════════════════════════════════════════════════════════════ */
+
+.ps-wrap { padding: 1rem 1.25rem; max-width: 1500px; margin: 0 auto; }
+.ps-wrap.ps-wide { max-width: 1700px; }
+.ps-wrap.ps-full { max-width: none; padding-bottom: 0; }
+
+/* ── Sub navigation ─────────────────────────────────────────────── */
+.ps-nav {
+    display: flex; flex-wrap: wrap; gap: .35rem;
+    background: linear-gradient(135deg, rgba(16,185,129,.10), rgba(5,150,105,.06));
+    border: 1px solid rgba(16,185,129,.25);
+    border-radius: .8rem; padding: .45rem;
+    margin-bottom: .9rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.ps-tab {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .42rem .85rem; border-radius: .55rem;
+    font-size: .86rem; font-weight: 600; text-decoration: none; color: inherit;
+    white-space: nowrap; transition: all .18s ease;
+}
+.ps-tab:hover { background: rgba(16,185,129,.14); transform: translateY(-1px); }
+.ps-tab.active {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: #fff; box-shadow: 0 3px 10px rgba(16,185,129,.35);
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.ps-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.ps-header h4 { font-weight: 800; letter-spacing: -.02em; }
+
+/* ── KPI stat cards ─────────────────────────────────────────────── */
+.ps-stats { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: .85rem; }
+.ps-stat {
+    flex: 1 1 120px; min-width: 118px; border-radius: .85rem; padding: .7rem .9rem;
+    background: #fff; border: 1px solid #e8ecf1; cursor: pointer; position: relative;
+    overflow: hidden; transition: transform .18s ease, box-shadow .18s ease;
+}
+.ps-stat::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent, #9ca3af);
+}
+.ps-stat:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+.ps-stat.selected { outline: 2px solid #10b981; }
+.ps-stat .num { font-size: 1.55rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ps-stat .lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; font-weight: 700; }
+.ps-stat .ico { position: absolute; right: .6rem; top: .6rem; font-size: 1rem; opacity: .35; }
+.ps-stat.total { --accent: #334155; } .ps-stat.total .num { color: #0f172a; }
+.ps-stat.moving { --accent: #10b981; } .ps-stat.moving .num { color: #059669; }
+.ps-stat.idle { --accent: #f59e0b; } .ps-stat.idle .num { color: #d97706; }
+.ps-stat.parked { --accent: #64748b; } .ps-stat.parked .num { color: #475569; }
+.ps-stat.offline { --accent: #ef4444; } .ps-stat.offline .num { color: #dc2626; }
+
+/* ── Vehicle cards ──────────────────────────────────────────────── */
+.ps-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .8rem; margin-top: .9rem; }
+.ps-card {
+    background: #fff; border: 1px solid #e8ecf1; border-radius: .9rem; overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease;
+    border-left: 4px solid var(--ribbon, #9ca3af);
+}
+.ps-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.10); }
+.ps-card.status-moving { --ribbon: #10b981; }
+.ps-card.status-idle { --ribbon: #f59e0b; }
+.ps-card.status-parked { --ribbon: #64748b; }
+.ps-card.status-offline { --ribbon: #ef4444; }
+.ps-card-head { display: flex; align-items: center; gap: .5rem; padding: .7rem .85rem .35rem; }
+.ps-regno { font-weight: 800; font-size: 1.02rem; text-decoration: none; color: inherit; letter-spacing: .01em; }
+.ps-regno:hover { color: #059669; }
+.ps-dot { width: 9px; height: 9px; border-radius: 50%; background: #9ca3af; display: inline-block; flex: none; }
+.ps-dot.moving { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.18); animation: psPulse 1.8s infinite; }
+.ps-dot.idle { background: #f59e0b; }
+.ps-dot.parked { background: #64748b; }
+.ps-dot.offline { background: #ef4444; }
+.ps-badge { margin-left: auto; font-size: .68rem; padding: .2rem .55rem; border-radius: 999px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.ps-badge.moving { background: rgba(16,185,129,.14); color: #059669; }
+.ps-badge.idle { background: rgba(245,158,11,.16); color: #b45309; }
+.ps-badge.parked { background: rgba(100,116,139,.14); color: #334155; }
+.ps-badge.offline { background: rgba(239,68,68,.14); color: #b91c1c; }
+.ps-card-body { padding: .3rem .85rem .7rem; }
+.ps-row { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: #374151; margin-bottom: .2rem; min-width: 0; }
+.ps-row .bi { color: #94a3b8; flex: none; }
+.ps-grid2 { display: grid; grid-template-columns: 1fr 1fr; }
+.ps-addr { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-time { color: #64748b; font-size: .74rem; margin-top: .3rem; }
+.ps-chips { display: flex; gap: .35rem; flex-wrap: wrap; margin-top: .45rem; }
+.ps-chip {
+    font-size: .68rem; padding: .14rem .5rem; border-radius: 999px;
+    background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; gap: .25rem;
+}
+.ps-card-actions { display: flex; border-top: 1px solid #f1f5f9; }
+.ps-card-actions a {
+    flex: 1; text-align: center; padding: .5rem; font-size: .78rem; font-weight: 600;
+    text-decoration: none; color: #475569; transition: background .15s;
+    display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+}
+.ps-card-actions a:hover { background: rgba(16,185,129,.08); color: #059669; }
+.ps-card-actions a + a { border-left: 1px solid #f1f5f9; }
+
+/* ── Live map ───────────────────────────────────────────────────── */
+.ps-live-bar {
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+    padding: .55rem .8rem; background: #fff; border: 1px solid #e8ecf1;
+    border-radius: .8rem; margin-bottom: .6rem; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.ps-live-title { font-weight: 800; display: flex; align-items: center; gap: .55rem; }
+.ps-live-dot { width: 10px; height: 10px; border-radius: 50%; background: #10b981; animation: psPulse 1.6s infinite; }
+@keyframes psPulse { 0% { box-shadow: 0 0 0 0 rgba(16,185,129,.5);} 70% { box-shadow: 0 0 0 8px rgba(16,185,129,0);} 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0);} }
+.ps-fresh { font-size: .76rem; color: #64748b; font-variant-numeric: tabular-nums; }
+.ps-check { display: flex; align-items: center; gap: .35rem; font-size: .82rem; margin: 0; }
+.ps-live-body { display: flex; gap: .6rem; height: calc(100vh - 235px); min-height: 430px; }
+#psMap { flex: 1; border-radius: .8rem; border: 1px solid #e8ecf1; z-index: 1; }
+.ps-live-list {
+    width: 315px; overflow-y: auto; background: #fff; border: 1px solid #e8ecf1;
+    border-radius: .8rem; padding: .5rem; scrollbar-width: thin;
+}
+.ps-live-item {
+    padding: .5rem .6rem; border-radius: .55rem; cursor: pointer; font-size: .84rem;
+    display: flex; align-items: center; gap: .5rem; margin-bottom: .2rem;
+    transition: background .15s;
+}
+.ps-live-item:hover { background: rgba(16,185,129,.08); }
+.ps-live-item.selected { background: rgba(16,185,129,.16); }
+.ps-live-item .spd { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ps-mini-map { height: 230px; border-radius: .6rem; }
+
+/* map popup polish */
+.leaflet-popup-content-wrapper { border-radius: .7rem; box-shadow: 0 8px 30px rgba(0,0,0,.16); }
+.leaflet-popup-content { margin: .65rem .8rem; }
+
+/* ── Tables ─────────────────────────────────────────────────────── */
+.ps-table-card { background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .5rem; }
+.ps-td-addr { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-toolbar { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+
+/* ── Forms ──────────────────────────────────────────────────────── */
+.ps-form { background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .7rem .85rem; margin-top: .4rem; }
+
+/* ── KV tiles ───────────────────────────────────────────────────── */
+.ps-kv { background: #f8fafc; border: 1px solid #eef1f5; border-radius: .6rem; padding: .5rem .65rem; font-size: .84rem; }
+.ps-kv > div { color: #64748b; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.ps-kv strong { font-variant-numeric: tabular-nums; }
+.ps-raw { background: #0f172a; color: #e2e8f0; font-size: .68rem; padding: .6rem; border-radius: .6rem; max-height: 260px; overflow: auto; }
+.ps-bat-bar { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.ps-bat-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #10b981, #34d399); }
+
+/* ── History playback ───────────────────────────────────────────── */
+.ps-play-bar {
+    display: flex; align-items: center; gap: .9rem; flex-wrap: wrap;
+    background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem;
+    padding: .55rem .8rem; margin-top: .6rem; box-shadow: 0 1px 6px rgba(0,0,0,.05);
+}
+.ps-play-btn {
+    width: 42px; height: 42px; border-radius: 50%; border: none; color: #fff;
+    background: linear-gradient(135deg, #059669, #10b981); font-size: 1.05rem;
+    box-shadow: 0 4px 12px rgba(16,185,129,.4); transition: transform .15s;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.ps-play-btn:hover { transform: scale(1.07); }
+.ps-speed-group { display: flex; gap: .2rem; }
+.ps-speed-btn {
+    border: 1px solid #e2e8f0; background: #fff; border-radius: .45rem;
+    padding: .22rem .55rem; font-size: .74rem; font-weight: 700; color: #475569; cursor: pointer;
+}
+.ps-speed-btn.active { background: #059669; border-color: #059669; color: #fff; }
+.ps-timeline { flex: 1 1 300px; min-width: 220px; }
+.ps-timeline input[type=range] { width: 100%; accent-color: #059669; }
+.ps-tl-time { font-size: .78rem; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; min-width: 150px; }
+.ps-hist-side { width: 390px; display: flex; flex-direction: column; background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .6rem; }
+.ps-point-table { overflow-y: auto; flex: 1; scrollbar-width: thin; }
+.ps-point-table tbody tr { cursor: pointer; }
+.ps-point-table tbody tr:hover { background: rgba(16,185,129,.08); }
+.ps-stops-list { max-height: 180px; overflow-y: auto; margin-bottom: .5rem; scrollbar-width: thin; }
+.ps-stop-item {
+    display: flex; gap: .5rem; align-items: center; font-size: .76rem;
+    padding: .35rem .5rem; border-radius: .5rem; background: #f8fafc; margin-bottom: .25rem; cursor: pointer;
+}
+.ps-stop-item:hover { background: #eef2f7; }
+.ps-stop-badge {
+    background: #64748b; color: #fff; border-radius: 999px; font-size: .66rem;
+    padding: .1rem .45rem; font-weight: 700; flex: none;
+}
+
+/* ── Trip cards ─────────────────────────────────────────────────── */
+.ps-trip-card {
+    background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .8rem .9rem;
+    border-left: 4px solid #10b981; margin-bottom: .5rem;
+    display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;
+    transition: box-shadow .18s;
+}
+.ps-trip-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+.ps-trip-time { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 150px; }
+.ps-trip-route { flex: 1; min-width: 220px; font-size: .8rem; color: #475569; }
+.ps-trip-route .loc { display: flex; gap: .4rem; align-items: center; margin-bottom: .15rem; }
+.ps-trip-kpis { display: flex; gap: .5rem; flex-wrap: wrap; }
+.ps-trip-kpi { text-align: center; background: #f8fafc; border-radius: .55rem; padding: .3rem .7rem; min-width: 76px; }
+.ps-trip-kpi b { display: block; font-size: .95rem; font-variant-numeric: tabular-nums; }
+.ps-trip-kpi span { font-size: .64rem; text-transform: uppercase; color: #64748b; letter-spacing: .03em; }
+
+/* ── Steps / misc ───────────────────────────────────────────────── */
+.ps-steps { padding-left: 1.1rem; }
+.ps-log-table { max-height: 480px; overflow-y: auto; }
+.ps-log-endpoint { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-log-snip { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; }
+
+/* marker movement: transitions are applied inline by personal_live.js ONLY on
+   real position changes and never during zoom/pan (global transition rules make
+   markers drift while zooming — Leaflet repositions via the same transform). */
+
+/* fullscreen map */
+.ps-map-fs { position: fixed !important; inset: 0 !important; z-index: 5000; border-radius: 0 !important; height: 100vh !important; }
+
+/* speed legend */
+.ps-legend {
+    background: #fff; border-radius: .55rem; padding: .45rem .6rem; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+    font-size: .72rem; line-height: 1.5;
+}
+.ps-legend .sw { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+@media (max-width: 992px) {
+    .ps-live-body { flex-direction: column; height: auto; }
+    #psMap { height: 55vh; }
+    .ps-live-list { width: 100%; max-height: 40vh; }
+    .ps-hist-side { width: 100%; }
+}

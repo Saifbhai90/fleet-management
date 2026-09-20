@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Alarm Report{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap ps-wide">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <h4 class="mb-0"><i class="bi bi-bell text-success"></i> Alarm Report</h4>
+    </div>
+
+    <form id="psReportForm" class="ps-form row g-2 align-items-end"
+          data-endpoint="{{ url_for('api_personal_alarms') }}">
+        <div class="col-md-3">
+            <label class="form-label small mb-1">Vehicle</label>
+            <select id="psVehicle" class="form-select form-select-sm">
+                <option value="">— all / select —</option>
+                {% for v in vehicles %}
+                <option value="{{ v.device_id }}" data-regno="{{ v.regno }}">{{ v.regno }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2"><label class="form-label small mb-1">From</label><input type="date" id="psFrom" class="form-control form-control-sm" required /></div>
+        <div class="col-md-2"><label class="form-label small mb-1">To</label><input type="date" id="psTo" class="form-control form-control-sm" required /></div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-sm flex-fill" id="psRunBtn"><i class="bi bi-search"></i> Run</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="psCsvBtn" disabled><i class="bi bi-filetype-csv"></i></button>
+        </div>
+    </form>
+
+    <div id="psAlert" class="alert alert-warning py-2 mt-2" style="display:none;"></div>
+
+    <div class="table-responsive ps-table-card mt-2">
+        <table class="table table-sm table-hover" id="psTable">
+            <thead class="table-light"><tr id="psHeadRow"><th class="text-muted">Report yahan render hoga — Run dabayein</th></tr></thead>
+            <tbody id="psBody"></tbody>
+        </table>
+    </div>
+    <div class="text-muted small" id="psCount"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/personal_reports.js') }}?v={{ fleet_static_hash('js/personal_reports.js') }}"></script>
+{% endblock %}

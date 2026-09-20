@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Settings{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap ps-wide">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <h4 class="mb-0"><i class="bi bi-gear text-success"></i> Crescent Connection Settings</h4>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form id="psSettingsForm">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">API Base URL</label>
+                            <input type="text" id="psApiBase" class="form-control form-control-sm"
+                                   value="{{ settings.api_base if settings else 'https://teletixapp.crescenttrack.com:8888/api/' }}" />
+                            <div class="form-text">Crescent app ka TrackGF/Teletix server (default pre-filled hai).</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Alt API Base (optional — Progatix backend)</label>
+                            <input type="text" id="psAltBase" class="form-control form-control-sm"
+                                   value="{{ settings.alt_api_base if settings and settings.alt_api_base else '' }}"
+                                   placeholder="https://crescent-api.progatix.com/" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Username (Crescent app login)</label>
+                            <input type="text" id="psUsername" class="form-control form-control-sm"
+                                   value="{{ settings.username if settings else '' }}" autocomplete="off" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Password</label>
+                            <div class="input-group input-group-sm">
+                                <input type="password" id="psPassword" class="form-control" autocomplete="new-password"
+                                       placeholder="{% if settings and settings.password_enc %}•••••• (saved — change karne ke liye likhein){% else %}Crescent app wala password{% endif %}" />
+                                <button type="button" class="btn btn-outline-secondary" id="psPwToggle" tabindex="-1"><i class="bi bi-eye"></i></button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small mb-1">Auto-refresh interval (seconds)</label>
+                            <input type="number" id="psPoll" class="form-control form-control-sm" min="10" max="600"
+                                   value="{{ settings.poll_seconds if settings else 30 }}" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small mb-1">FCM Token — optional, notifications ke liye</label>
+                            <input type="text" id="psFcm" class="form-control form-control-sm" autocomplete="off"
+                                   value="{{ settings.fcm_token if settings and settings.fcm_token else '' }}"
+                                   placeholder="Crescent app ke device ka FCM token (notifications ke liye)" />
+                            <div class="form-text">Yeh token Crescent app ke device se aata hai. Khali chhor dein to notifications ka data Alarms page se milta hai.</div>
+                        </div>
+                        <div class="mb-3" id="engine">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="psCmdToggle"
+                                       {% if settings and settings.commands_enabled %}checked{% endif %} />
+                                <label class="form-check-label small" for="psCmdToggle">
+                                    <strong>Engine Commands</strong> (Engine Kill / Release)
+                                </label>
+                                <div class="form-text text-danger">
+                                    <i class="bi bi-exclamation-triangle"></i> Khatarnak: immobilizer commands seedha vendor ke devices par jate hain.
+                                    Default OFF hai — OFF hone par har command <em>dry-run</em> hoti hai (API Log mein dikhti hai, bheji nahi jati).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-save"></i> Save</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="psTestBtn"><i class="bi bi-plug"></i> Test Connection</button>
+                        </div>
+                    </form>
+                    <div id="psSaveMsg" class="small mt-2"></div>
+                    <div id="psTestResult" class="mt-2"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Yeh kaise kaam karta hai?</h6>
+                    <p class="small mb-1">Yeh section Crescent Tracker Android app ka asli backend API (Teletix/GPS Monitor, HTTPS:8888) call karta hai — live app se capture kiya gaya protocol:</p>
+                    <ul class="small ps-steps mb-0">
+                        <li><code>GET /api/user/verify?uname=&amp;pwd=</code> — login &rarr; hex-encoded session token</li>
+                        <li><code>GET /api/live/status?a=1&amp;t=&lt;token&gt;</code> — sab devices ki live position/status</li>
+                        <li><code>GET /api/tripreplay/getall?cmpId=1&amp;type=v&amp;id=&lt;vid&gt;&amp;dateTime1=&amp;dateTime2=</code> — history points</li>
+                        <li><code>GET /api/user/isanychange</code>, Progatix push API (FCM identity) — notifications</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <h6 class="card-title text-muted mb-0">API Log (last 50 calls)</h6>
+                        <button class="btn btn-outline-danger btn-sm ms-auto" id="psClearLogBtn"><i class="bi bi-trash"></i> Clear</button>
+                    </div>
+                    {% if logs %}
+                    <div class="table-responsive ps-log-table">
+                        <table class="table table-sm table-striped table-hover">
+                            <thead><tr><th>Time</th><th>Endpoint</th><th>Method</th><th>Status</th><th>ms</th><th>Response / Error</th></tr></thead>
+                            <tbody>
+                                {% for lg in logs %}
+                                <tr class="{{ 'table-success' if lg.ok else 'table-danger' }}">
+                                    <td class="text-nowrap">{{ lg.created_at.strftime('%H:%M:%S') if lg.created_at else '' }}</td>
+                                    <td class="ps-log-endpoint" title="{{ lg.endpoint }}">{{ lg.endpoint }}</td>
+                                    <td>{{ lg.method }}</td>
+                                    <td>{{ lg.status_code or '—' }}</td>
+                                    <td>{{ lg.duration_ms or '' }}</td>
+                                    <td class="ps-log-snip" title="{{ lg.response_snip or lg.error or '' }}">
+                                        {{ (lg.response_snip or lg.error or '')[:160] }}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-muted small">Abhi koi call log nahi hui. Test Connection chalayein — har request/response yahan record hoga (payload tuning ke liye).</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/personal_settings.js') }}?v={{ fleet_static_hash('js/personal_settings.js') }}"></script>
+{% endblock %}
