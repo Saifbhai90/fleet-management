@@ -78,8 +78,21 @@
         fetch('/api/personal/daily-summary').then(r => r.json()).then(res => {
             if (!res.ok) { todayWrap.innerHTML = '<div class="text-muted small p-2">' + esc(res.error || 'Summary load failed') + '</div>'; return; }
             if (!res.rows.length) { todayWrap.innerHTML = '<div class="text-muted small p-2">Aaj ka data abhi compute nahi hua — Refresh dabayein.</div>'; return; }
-            todayWrap.innerHTML = res.rows.map(r => `
-                <div class="ps-card status-${(r.regno || '').toLowerCase().includes('x') ? 'offline' : 'moving'}" style="--ribbon:#10b981;">
+            todayWrap.innerHTML = res.rows.map(r => {
+                const noMovement = (r.distance_km || 0) === 0 && (r.moving_min || 0) === 0;
+                if (noMovement) {
+                    return `<div class="ps-card status-parked" style="--ribbon:#64748b;">
+                        <div class="ps-card-head">
+                            <i class="bi bi-p-square text-muted"></i>
+                            <a class="ps-regno" href="/personal/history?vehicle=${esc(r.device_id)}">${esc(r.regno || '—')}</a>
+                            <span class="ps-badge parked">Parked</span>
+                        </div>
+                        <div class="ps-card-body">
+                            <div class="ps-row"><i class="bi bi-moon"></i> Aaj koi movement nahi — vehicle parked rahi.</div>
+                        </div>
+                    </div>`;
+                }
+                return `<div class="ps-card status-moving" style="--ribbon:#10b981;">
                     <div class="ps-card-head">
                         <i class="bi bi-sun text-warning"></i>
                         <a class="ps-regno" href="/personal/history?vehicle=${esc(r.device_id)}">${esc(r.regno || '—')}</a>
@@ -98,7 +111,8 @@
                             <span class="ps-chip"><i class="bi bi-coin"></i> ${r.overspeed || 0} overspeed</span>
                         </div>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
         }).catch(() => { todayWrap.innerHTML = '<div class="text-muted small p-2">Summary load nahi hui.</div>'; });
     }
 
@@ -107,9 +121,15 @@
 
     function loadKPIs() {
         const row = document.getElementById('psKpiRow');
-        if (!row || typeof Chart === 'undefined') return;
+        if (!row) return;
+        const meta = document.getElementById('psKpiMeta');
+        if (typeof Chart === 'undefined') {
+            if (meta) meta.textContent = 'Chart library load nahi hui (refresh karein).';
+            return;
+        }
+        if (meta) meta.textContent = 'KPIs compute ho rahe hain (pehli baar 15-40 sec lagta hai, uske baad cached)…';
         fetch('/api/personal/fleet-kpis?days=14').then(r => r.json()).then(res => {
-            if (!res.ok) { document.getElementById('psKpiMeta').textContent = res.error || 'KPI load failed'; return; }
+            if (!res.ok) { if (meta) meta.textContent = 'KPI error: ' + (res.error || 'load failed'); return; }
             const s = res.series || [];
             const labels = s.map(x => x.date.slice(5));
             const mk = (id, data, color, type, suffix) => {
@@ -132,9 +152,8 @@
             utilChart = mk('psKpiUtil', s.map(x => x.utilization), '#3b82f6', 'bar', '%');
             scoreChart = mk('psKpiScore', s.map(x => x.score), '#f59e0b', 'line');
             const tot = s.reduce((a, x) => a + (x.distance_km || 0), 0);
-            document.getElementById('psKpiMeta').textContent =
-                `14 din mein total: ${tot.toFixed(0)} km · overspeed events: ${s.reduce((a, x) => a + (x.overspeed || 0), 0)}`;
-        }).catch(() => {});
+            if (meta) meta.textContent = `14 din mein total: ${tot.toFixed(0)} km · overspeed events: ${s.reduce((a, x) => a + (x.overspeed || 0), 0)}`;
+        }).catch(e => { if (meta) meta.textContent = 'KPI network error: ' + e; });
     }
 
     function schedule() {

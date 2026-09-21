@@ -753,7 +753,9 @@ def compute_daily_summary(settings, vehicle, date, force=False, overspeed_limit=
     if row and not force:
         if date < today:
             return row  # past days are final
-        if row.updated_at and (datetime.utcnow() - row.updated_at).total_seconds() < 600:
+        # TTL compare in the SAME clock as updated_at (pk_now = PKT naive);
+        # comparing with utcnow made the age negative -> today's row never refreshed.
+        if row.updated_at and (datetime.now() - row.updated_at).total_seconds() < 600:
             return row  # today's cache is fresh for 10 minutes
 
     res = history_points(settings, vehicle, date.strftime('%Y-%m-%d'), date.strftime('%Y-%m-%d'))
