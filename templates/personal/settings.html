@@ -95,6 +95,23 @@
         <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-body">
+                    <h6 class="card-title text-muted"><i class="bi bi-collection"></i> Crescent Accounts (multi-account)</h6>
+                    <div id="psAccountsList" class="mb-2"><div class="text-muted small">Loading&hellip;</div></div>
+                    <details>
+                        <summary class="small text-success" style="cursor:pointer;">+ Naya account add karein</summary>
+                        <form id="psAccForm" class="row g-2 mt-2">
+                            <div class="col-md-4"><input type="text" id="psAccLabel" class="form-control form-control-sm" placeholder="Label (e.g. Fleet-2)" required /></div>
+                            <div class="col-md-4"><input type="text" id="psAccUser" class="form-control form-control-sm" placeholder="ct_username" required /></div>
+                            <div class="col-md-4"><input type="password" id="psAccPass" class="form-control form-control-sm" placeholder="Password" required /></div>
+                            <div class="col-12"><button type="submit" class="btn btn-outline-success btn-sm">Add Account</button></div>
+                        </form>
+                        <div id="psAccMsg" class="small mt-1"></div>
+                    </details>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
                     <div class="d-flex align-items-center mb-2">
                         <h6 class="card-title text-muted mb-0">API Log (last 50 calls)</h6>
                         <button class="btn btn-outline-danger btn-sm ms-auto" id="psClearLogBtn"><i class="bi bi-trash"></i> Clear</button>

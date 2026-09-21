@@ -648,3 +648,27 @@ html.capacitor-native body.page-personal .ps-live-list {
         bottom: env(safe-area-inset-bottom, 0px);
     }
 }
+
+/* section titles + chart cards (KPIs) */
+.ps-section-title {
+    font-weight: 800; font-size: .95rem; color: #0f172a;
+    display: flex; align-items: center; gap: .45rem;
+    border-bottom: 2px solid rgba(16,185,129,.25); padding-bottom: .3rem;
+}
+.ps-chart-card {
+    background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .7rem .8rem;
+}
+.ps-chart-card h6 { font-size: .76rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+
+/* accounts table */
+.ps-account-row.active { background: rgba(16,185,129,.08); }
+
+/* mobile polish */
+@media (max-width: 768px) {
+    .ps-wrap { padding: .7rem .6rem; }
+    .ps-tab { padding: .38rem .6rem; font-size: .8rem; }
+    .ps-stat .num { font-size: 1.25rem; }
+    .ps-live-bar { gap: .5rem; }
+    .ps-btn-touch { min-height: 40px; }
+    .ps-card-actions a { padding: .65rem; }
+}

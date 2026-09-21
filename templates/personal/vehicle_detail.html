@@ -4,6 +4,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+<link rel="stylesheet" href="/static/vendor/chartjs/4.4.2/chartjs.css?v=8006" />
 {% endblock %}
 
 {% block content %}
@@ -117,6 +118,28 @@
 
             <div class="card shadow-sm mt-3">
                 <div class="card-body">
+                    <h6 class="card-title text-muted"><i class="bi bi-fuel-pump"></i> Fuel / RPM — last 24h <span class="ps-fresh" id="psFuelInfo"></span></h6>
+                    <canvas id="psFuelChart" height="110"></canvas>
+                    <div class="small text-muted mt-1">FuelConsumed device ke snapshots se (Live Map refresh ke saath collect hota hai).</div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+                    <h6 class="card-title text-muted"><i class="bi bi-wrench"></i> Maintenance</h6>
+                    <div id="psMaintList" class="mb-2"><div class="text-muted small">Loading&hellip;</div></div>
+                    <form id="psMaintForm" class="row g-2 align-items-end">
+                        <div class="col-5"><input type="text" id="psMaintLabel" class="form-control form-control-sm" placeholder="Oil Change" required /></div>
+                        <div class="col-3"><input type="number" id="psMaintInterval" class="form-control form-control-sm" placeholder="5000 km" required /></div>
+                        <div class="col-3"><input type="number" id="psMaintLast" class="form-control form-control-sm" placeholder="last km" /></div>
+                        <div class="col-1"><button type="submit" class="btn btn-success btn-sm w-100">+</button></div>
+                    </form>
+                    <div id="psMaintMsg" class="small mt-1"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
                     <div class="d-flex align-items-center">
                         <h6 class="card-title text-muted mb-0">Raw API Record (debug)</h6>
                         <button class="btn btn-sm btn-outline-secondary ms-auto" data-bs-toggle="collapse" data-bs-target="#psRawBox"><i class="bi bi-chevron-down"></i></button>
@@ -171,5 +194,6 @@
 
 {% block extra_js %}
 <script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
 <script src="{{ url_for('static', filename='js/personal_vehicle_detail.js') }}?v={{ fleet_static_hash('js/personal_vehicle_detail.js') }}"></script>
 {% endblock %}

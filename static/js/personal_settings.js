@@ -67,4 +67,53 @@
             }).then(() => window.location.reload());
         });
     }
+
+    // ── Multi-account management ──────────────────────────────────
+    const accList = document.getElementById('psAccountsList');
+
+    function loadAccounts() {
+        if (!accList) return;
+        fetch('/api/personal/accounts').then(r => r.json()).then(res => {
+            if (!res.ok) return;
+            if (!res.accounts.length) { accList.innerHTML = '<div class="text-muted small">Koi account nahi.</div>'; return; }
+            accList.innerHTML = res.accounts.map(a => `
+                <div class="ps-account-row d-flex align-items-center gap-2 border rounded p-2 mb-1 ${a.is_active ? 'active' : ''}">
+                    <div class="flex-fill small">
+                        <b>${a.label}</b> ${a.is_active ? '<span class="badge bg-success">active ★</span>' : ''}
+                        <div class="text-muted">${a.username} · ${a.vehicles} vehicles</div>
+                    </div>
+                    ${a.is_active ? '' : `<button class="btn btn-sm btn-outline-success" data-act="${a.id}">Activate</button>`}
+                    ${a.is_active ? '' : `<button class="btn btn-sm btn-outline-danger" data-del="${a.id}">×</button>`}
+                </div>`).join('');
+            accList.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+                fetch(`/api/personal/accounts/${b.dataset.act}/activate`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+                    .then(r => r.json()).then(res => { if (res.ok) window.location.reload(); });
+            }));
+            accList.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+                if (!confirm('Account delete karein? Uska vehicle cache bhi jayega.')) return;
+                fetch(`/api/personal/accounts/${b.dataset.del}/delete`, { method: 'POST', headers: { 'X-CSRFToken': CSRF } })
+                    .then(r => r.json()).then(res => { if (res.ok) loadAccounts(); });
+            }));
+        }).catch(() => {});
+    }
+
+    const accForm = document.getElementById('psAccForm');
+    if (accForm) accForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        fetch('/api/personal/accounts/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                label: document.getElementById('psAccLabel').value.trim(),
+                username: document.getElementById('psAccUser').value.trim(),
+                password: document.getElementById('psAccPass').value.trim(),
+            }),
+        }).then(r => r.json()).then(res => {
+            const msg = document.getElementById('psAccMsg');
+            msg.innerHTML = res.ok ? `<span class="text-success">${res.message}</span>` : `<span class="text-danger">${res.error}</span>`;
+            if (res.ok) { accForm.reset(); loadAccounts(); }
+        }).catch(e => { alert('Network error: ' + e); });
+    });
+
+    loadAccounts();
 })();

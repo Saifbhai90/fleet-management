@@ -3,6 +3,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+<link rel="stylesheet" href="/static/vendor/chartjs/4.4.2/chartjs.css?v=8006" />
 {% endblock %}
 
 {% block content %}
@@ -18,7 +19,14 @@
                 {% else %}Not synced yet — press Refresh{% endif %}
             </div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 align-items-center">
+            {% if accounts and accounts|length > 1 %}
+            <select id="psAccount" class="form-select form-select-sm w-auto" title="Switch account">
+                {% for a in accounts %}
+                <option value="{{ a.id }}" {% if a.id == current_account_id %}selected{% endif %}>{{ a.label }}{% if a.is_active %} ★{% endif %}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
             <button id="psRefreshBtn" class="btn btn-success btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
             <a href="{{ url_for('personal_live') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-geo-alt"></i> Live Map</a>
         </div>
@@ -35,6 +43,12 @@
         <div class="ps-stat idle" data-filter="Idle"><i class="bi bi-hourglass-split ico"></i><div class="num" id="psIdle">{{ stats.Idle }}</div><div class="lbl">Idle</div></div>
         <div class="ps-stat parked" data-filter="Parked"><i class="bi bi-p-square ico"></i><div class="num" id="psParked">{{ stats.Parked }}</div><div class="lbl">Parked</div></div>
         <div class="ps-stat offline" data-filter="Offline"><i class="bi bi-wifi-off ico"></i><div class="num" id="psOffline">{{ stats.Offline }}</div><div class="lbl">Offline</div></div>
+    </div>
+
+    <!-- Aaj (today) per-vehicle summary -->
+    <div class="ps-section-title mt-3"><i class="bi bi-sun"></i> Aaj ka Summary</div>
+    <div id="psToday" class="ps-cards">
+        <div class="text-muted small p-2">Loading today's summary&hellip;</div>
     </div>
 
     <input type="text" id="psSearch" class="form-control form-control-sm mt-3" placeholder="Search reg no, group, address&hellip;" />
@@ -76,9 +90,19 @@
         </div>
         {% endfor %}
     </div>
+
+    <!-- Fleet KPIs (14 days) -->
+    <div class="ps-section-title mt-4"><i class="bi bi-graph-up-arrow"></i> Fleet KPIs — last 14 days</div>
+    <div class="row g-3">
+        <div class="col-md-4"><div class="ps-chart-card"><h6>Distance per day (km)</h6><canvas id="psKpiDist" height="170"></canvas></div></div>
+        <div class="col-md-4"><div class="ps-chart-card"><h6>Utilization % (moving time)</h6><canvas id="psKpiUtil" height="170"></canvas></div></div>
+        <div class="col-md-4"><div class="ps-chart-card"><h6>Driver / Fleet Score</h6><canvas id="psKpiScore" height="170"></canvas></div></div>
+    </div>
+    <div class="text-muted small mt-1" id="psKpiMeta"></div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
 <script src="{{ url_for('static', filename='js/personal_dashboard.js') }}?v={{ fleet_static_hash('js/personal_dashboard.js') }}"></script>
 {% endblock %}

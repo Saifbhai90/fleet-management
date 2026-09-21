@@ -112,4 +112,87 @@
             if (m) m.hide();
           });
     });
+
+    // ── Fuel chart (last 24h from live snapshots) ─────────────────
+    function loadFuel() {
+        const el = document.getElementById('psFuelChart');
+        if (!el || typeof Chart === 'undefined') return;
+        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/fuel?hours=24`)
+            .then(r => r.json()).then(res => {
+                if (!res.ok) return;
+                const s = res.series || [];
+                const labels = s.map(x => x.ts.slice(11, 16));
+                const info = document.getElementById('psFuelInfo');
+                if (info) info.textContent = s.length ? `(${s.length} samples)` : '(snapshots collect ho rahe hain — thori dair mein data aayega)';
+                new Chart(el, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [
+                            { label: 'Fuel delta', data: s.map(x => x.fuel_delta), borderColor: '#f59e0b', yAxisID: 'y1', pointRadius: 0, borderWidth: 2, tension: .3 },
+                            { label: 'Speed', data: s.map(x => x.speed), borderColor: '#10b981', pointRadius: 0, borderWidth: 1.5, tension: .3 },
+                        ],
+                    },
+                    options: {
+                        plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 } } } },
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'km/h' } },
+                            y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'fuel' } },
+                        },
+                        animation: false,
+                    },
+                });
+            }).catch(() => {});
+    }
+    loadFuel();
+
+    // ── Maintenance rules ─────────────────────────────────────────
+    const maintList = document.getElementById('psMaintList');
+
+    function loadMaint() {
+        if (!maintList) return;
+        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`)
+            .then(r => r.json()).then(res => {
+                if (!res.ok) return;
+                if (!res.rules.length) { maintList.innerHTML = '<div class="text-muted small">Koi rule nahi — neeche se add karein.</div>'; return; }
+                maintList.innerHTML = res.rules.map(r => {
+                    const cls = r.due ? 'text-danger fw-bold' : (r.due_soon ? 'text-warning fw-bold' : 'text-success');
+                    return `<div class="ps-row justify-content-between">
+                        <span><b>${esc(r.label)}</b> — every ${r.interval_km} km (last @ ${r.last_service_km} km)</span>
+                        <span class="${cls}">${r.due ? 'OVERDUE' : r.remaining_km + ' km left'}
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" data-del="${r.id}">×</button></span>
+                    </div>`;
+                }).join('');
+                maintList.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+                    fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                        body: JSON.stringify({ action: 'delete', id: Number(b.dataset.del) }),
+                    }).then(() => loadMaint());
+                }));
+            }).catch(() => {});
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+    const maintForm = document.getElementById('psMaintForm');
+    if (maintForm) maintForm.addEventListener('submit', ev => {
+        ev.preventDefault();
+        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                label: document.getElementById('psMaintLabel').value.trim(),
+                interval_km: document.getElementById('psMaintInterval').value,
+                last_service_km: document.getElementById('psMaintLast').value || 0,
+            }),
+        }).then(r => r.json()).then(res => {
+            const msg = document.getElementById('psMaintMsg');
+            msg.innerHTML = res.ok ? '<span class="text-success">Rule saved.</span>'
+                                   : '<span class="text-danger">' + (res.error || 'Save failed') + '</span>';
+            if (res.ok) { maintForm.reset(); loadMaint(); }
+        }).catch(e => { alert('Network error: ' + e); });
+    });
+
+    loadMaint();
 })();

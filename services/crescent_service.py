@@ -33,9 +33,14 @@ import requests
 import urllib3
 
 from app import db
-from models import CrescentApiLog, CrescentSettings, CrescentVehicleCache
+from models import (
+    CrescentApiLog, CrescentDailySummary, CrescentLiveSnapshot,
+    CrescentMaintenanceRule, CrescentSettings, CrescentVehicleCache,
+)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)  # vendor TLS cert is loose
+
+OVERSPEED_LIMIT_KMH = 80  # default fleet limit (points above this = overspeeding)
 
 try:  # flat vs package import both supported
     from services.portalxs_service import decrypt_password, encrypt_password
@@ -77,6 +82,8 @@ def ensure_tables():
     try:
         db.metadata.create_all(db.engine, tables=[
             CrescentSettings.__table__, CrescentVehicleCache.__table__, CrescentApiLog.__table__,
+            CrescentDailySummary.__table__, CrescentLiveSnapshot.__table__,
+            CrescentMaintenanceRule.__table__,
         ])
         is_pg = 'postgres' in str(db.engine.url)
         for table, cols in _EXTRA_COLUMNS.items():
@@ -96,12 +103,18 @@ def ensure_tables():
         pass  # leave flag False so the next request retries
 
 
-# ── Settings ─────────────────────────────────────────────────────────────────
+# ── Settings / accounts (multi-account: one active row at a time) ────────────
 
-def get_settings():
-    """Active CrescentSettings row (first active) or None."""
+def get_settings(account_id=None):
+    """Active CrescentSettings row — by explicit id, else the single active one."""
     ensure_tables()
+    if account_id:
+        return CrescentSettings.query.filter_by(id=account_id).first()
     return CrescentSettings.query.filter_by(is_active=True).order_by(CrescentSettings.id).first()
+
+
+def all_accounts():
+    return CrescentSettings.query.order_by(CrescentSettings.is_active.desc(), CrescentSettings.id).all()
 
 
 def save_settings(api_base, username, password=None, alt_api_base=None, poll_seconds=30, fcm_token=None,
@@ -392,6 +405,12 @@ def send_command(settings, vehicle, action, dry_run_forced=False):
         last = {'ok': ok, 'dry_run': False, 'vendor_status': resp.status_code,
                 'vendor_body': body, 'message': body or f'HTTP {resp.status_code}',
                 'request_url': attempt_url}
+        if ok:
+            notify_personal_users(
+                f'Engine {"OFF" if action == "engine_off" else "ON"} — {vehicle.regno}',
+                f'{label} command vendor ko bheji gayi. Response: {body[:200] or "OK"}',
+                ntype='warning' if action == 'engine_off' else 'info',
+                link='/personal/vehicle/' + str(vehicle.id))
         break
     return last
 
@@ -563,6 +582,7 @@ def sync_vehicles(settings=None):
     s.last_sync_at = now
     s.last_error = None
     db.session.commit()
+    capture_live_snapshots(s, norm)
     return {'ok': True, 'count': len(norm)}
 
 
@@ -681,3 +701,276 @@ def test_connection(settings=None):
         ok_count += 1 if r['ok'] else 0
     out['ok'] = ok_count >= 2
     return out
+
+
+# ── Driver behavior (speed deltas) + overspeed ───────────────────────────────
+
+def derive_driver_events(points, overspeed_limit=OVERSPEED_LIMIT_KMH):
+    """Harsh brake / harsh accel events from consecutive speed samples, plus
+    overspeed events (consecutive over-limit points count as one event)."""
+    harsh_brake = harsh_accel = overspeed_events = 0
+    prev = None
+    in_over = False
+    for p in points:
+        s = p.get('speed') or 0
+        if s > overspeed_limit:
+            if not in_over:
+                overspeed_events += 1
+                in_over = True
+        else:
+            in_over = False
+        if prev is not None and prev.get('_ts') and p.get('_ts'):
+            dt = (p['_ts'] - prev['_ts']).total_seconds()
+            if 1 <= dt <= 15:
+                prev_s = prev.get('speed') or 0
+                delta = s - prev_s
+                rate = delta / dt  # km/h per second
+                if prev_s >= 20 and delta <= -15 and rate <= -3.0:
+                    harsh_brake += 1
+                elif delta >= 15 and rate >= 3.0:
+                    harsh_accel += 1
+        prev = p
+    return {'harsh_brake': harsh_brake, 'harsh_accel': harsh_accel, 'overspeed': overspeed_events}
+
+
+def _haversine_km(a_lat, a_lon, b_lat, b_lon):
+    import math
+    r = 6371.0
+    p1, p2 = math.radians(a_lat), math.radians(b_lat)
+    dp = math.radians(b_lat - a_lat)
+    dl = math.radians(b_lon - a_lon)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+# ── Daily summaries (cached tripreplay aggregates) ───────────────────────────
+
+def compute_daily_summary(settings, vehicle, date, force=False, overspeed_limit=OVERSPEED_LIMIT_KMH):
+    """Compute (or fetch cached) daily aggregates for one vehicle. `date` is a date object."""
+    from models import CrescentDailySummary as CDS
+    row = CDS.query.filter_by(settings_id=settings.id, device_id=vehicle.device_id, date=date).first()
+    today = datetime.now().date()
+    if row and not force:
+        if date < today:
+            return row  # past days are final
+        if row.updated_at and (datetime.utcnow() - row.updated_at).total_seconds() < 600:
+            return row  # today's cache is fresh for 10 minutes
+
+    res = history_points(settings, vehicle, date.strftime('%Y-%m-%d'), date.strftime('%Y-%m-%d'))
+    if not res['ok']:
+        return row  # keep stale row (if any) on vendor failure
+
+    points = _extract_points(res['data'])
+    points.sort(key=lambda x: (x['_ts'] is not None, x['_ts'] or datetime.min))
+    pts = [p for p in points if p['lat'] is not None and p['lon'] is not None]
+
+    dist = 0.0
+    moving_s = idle_s = parked_s = 0
+    max_speed = 0.0
+    speeds = []
+    prev = None
+    for p in pts:
+        sp = p.get('speed') or 0
+        speeds.append(sp)
+        max_speed = max(max_speed, sp)
+        if prev is not None and prev['_ts'] and p['_ts'] and prev['lat'] is not None:
+            dt = (p['_ts'] - prev['_ts']).total_seconds()
+            if 0 < dt <= 600:
+                dist += _haversine_km(prev['lat'], prev['lon'], p['lat'], p['lon'])
+                st = (p.get('status') or '').lower()
+                if sp > 2 or 'mov' in st:
+                    moving_s += dt
+                elif 'idle' in st:
+                    idle_s += dt
+                else:
+                    parked_s += dt
+        prev = p
+
+    events = derive_driver_events(points, overspeed_limit)
+    span_min = 0
+    if pts and pts[0]['_ts'] and pts[-1]['_ts']:
+        span_min = int((pts[-1]['_ts'] - pts[0]['_ts']).total_seconds() / 60)
+
+    trips = len(derive_trips(pts))
+
+    if row is None:
+        row = CDS(settings_id=settings.id, device_id=vehicle.device_id, date=date)
+        db.session.add(row)
+    row.regno = vehicle.regno
+    row.distance_km = round(dist, 2)
+    row.max_speed = max_speed
+    row.avg_speed = round(sum(speeds) / len(speeds), 1) if speeds else 0
+    row.moving_min = int(moving_s / 60)
+    row.idle_min = int(idle_s / 60)
+    row.parked_min = int(parked_s / 60)
+    row.span_min = span_min
+    row.points = len(points)
+    row.trips = trips
+    row.harsh_brake = events['harsh_brake']
+    row.harsh_accel = events['harsh_accel']
+    row.overspeed = events['overspeed']
+    db.session.commit()
+    return row
+
+
+def get_daily_summaries(settings, date, force=False):
+    """Ensure + return day summaries for every cached vehicle of the account."""
+    out = []
+    for v in cached_vehicles(settings):
+        try:
+            row = compute_daily_summary(settings, v, date, force=force)
+            if row is not None:
+                out.append(row)
+        except Exception:
+            continue
+    return out
+
+
+def fleet_kpis(settings, days=14, overspeed_limit=OVERSPEED_LIMIT_KMH):
+    """Per-day fleet aggregates for the last N days (utilization %, score, km)."""
+    today = datetime.now().date()
+    out = []
+    for i in range(days - 1, -1, -1):
+        d = today - timedelta(days=i)
+        rows = []
+        for v in cached_vehicles(settings):
+            try:
+                r = compute_daily_summary(settings, v, d, overspeed_limit=overspeed_limit)
+                if r is not None:
+                    rows.append(r)
+            except Exception:
+                continue
+        total_km = sum(float(r.distance_km or 0) for r in rows)
+        moving_min = sum(r.moving_min or 0 for r in rows)
+        span_min = sum(r.span_min or 0 for r in rows)
+        utilization = round(moving_min * 100.0 / span_min, 1) if span_min else 0.0
+        scores = []
+        for r in rows:
+            penalty = (r.harsh_brake or 0) * 2 + (r.harsh_accel or 0) * 1.5 + (r.overspeed or 0) * 3
+            scores.append(max(0, 100 - penalty))
+        score = round(sum(scores) / len(scores), 1) if scores else None
+        out.append({
+            'date': d.strftime('%Y-%m-%d'),
+            'distance_km': round(total_km, 1),
+            'moving_min': moving_min,
+            'utilization': utilization,
+            'score': score,
+            'harsh_brake': sum(r.harsh_brake or 0 for r in rows),
+            'harsh_accel': sum(r.harsh_accel or 0 for r in rows),
+            'overspeed': sum(r.overspeed or 0 for r in rows),
+        })
+    return out
+
+
+# ── Live snapshots (fuel / rpm / volts over time) ────────────────────────────
+
+def capture_live_snapshots(settings, norm_rows):
+    """Persist throttled live samples (per device, >=120s apart). Prunes >7 days."""
+    from models import CrescentLiveSnapshot as CLS
+    try:
+        device_ids = [n['device_id'] for n in norm_rows if n.get('device_id')]
+        if not device_ids:
+            return
+        latest = dict(db.session.query(CLS.device_id, db.func.max(CLS.ts))
+                      .filter(CLS.settings_id == settings.id, CLS.device_id.in_(device_ids))
+                      .group_by(CLS.device_id).all())
+        now = datetime.utcnow()
+        pending = []
+        for n in norm_rows:
+            did = n.get('device_id')
+            if not did:
+                continue
+            last = latest.get(did)
+            if last and (now - last).total_seconds() < 120:
+                continue
+            raw = n.get('_raw') or {}
+            low = {str(k).lower(): v for k, v in raw.items()}
+            pending.append(CLS(
+                settings_id=settings.id, device_id=did, ts=now,
+                speed=n.get('speed'),
+                rpm=_to_float(low.get('rpm')),
+                fuel_consumed=_to_float(low.get('fuelconsumed')),
+                engine_hrs=_to_float(low.get('enginehrs')),
+                ext_bat=_to_float(low.get('extbatv')),
+                int_bat=_to_float(low.get('intbatpercent')),
+                lat=n.get('lat'), lon=n.get('lon'),
+            ))
+        for p in pending:
+            db.session.add(p)
+        if pending:
+            db.session.query(CLS).filter(
+                CLS.settings_id == settings.id,
+                CLS.ts < now - timedelta(days=7)).delete(synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def fuel_series(settings, vehicle, hours=24):
+    """Fuel/RPM series for graphs. FuelConsumed is cumulative — deltas give usage."""
+    from models import CrescentLiveSnapshot as CLS
+    since = datetime.utcnow() - timedelta(hours=hours)
+    rows = (CLS.query.filter_by(settings_id=settings.id, device_id=vehicle.device_id)
+            .filter(CLS.ts >= since).order_by(CLS.ts).all())
+    out = []
+    prev_fuel = None
+    for r in rows:
+        f = float(r.fuel_consumed) if r.fuel_consumed is not None else None
+        delta = None
+        if f is not None and prev_fuel is not None and 0 <= f - prev_fuel < 50:
+            delta = round(f - prev_fuel, 3)
+        prev_fuel = f if f is not None else prev_fuel
+        out.append({'ts': r.ts.isoformat(), 'speed': float(r.speed or 0),
+                    'fuel': f, 'fuel_delta': delta,
+                    'rpm': float(r.rpm) if r.rpm is not None else None,
+                    'engine_hrs': float(r.engine_hrs) if r.engine_hrs is not None else None})
+    return out
+
+
+# ── Maintenance rules ────────────────────────────────────────────────────────
+
+def maintenance_rules(settings, vehicle=None):
+    q = CrescentMaintenanceRule.query.filter_by(settings_id=settings.id)
+    if vehicle is not None:
+        q = q.filter_by(device_id=vehicle.device_id)
+    return q.order_by(CrescentMaintenanceRule.label).all()
+
+
+def maintenance_status(settings, vehicle):
+    """Rules for one vehicle annotated with current mileage due-state."""
+    mileage = float(vehicle.mileage or 0)
+    out = []
+    for r in maintenance_rules(settings, vehicle):
+        if not r.enabled:
+            continue
+        used = mileage - float(r.last_service_km or 0)
+        remaining = float(r.interval_km) - used
+        out.append({
+            'id': r.id, 'label': r.label, 'interval_km': r.interval_km,
+            'last_service_km': r.last_service_km, 'current_km': round(mileage, 1),
+            'used_km': round(used, 1), 'remaining_km': round(remaining, 1),
+            'due': remaining <= 0, 'due_soon': 0 <= remaining <= 250,
+        })
+    return out
+
+
+# ── Notifications (only users with Personal hub permission) ──────────────────
+
+PERSONAL_PERM_CODES = 'personal,personal_view,personal_history,personal_reports,personal_settings'
+
+
+def notify_personal_users(title, message, ntype='warning', link=None):
+    """In-app notification visible ONLY to users holding a Personal permission."""
+    from models import Notification
+    try:
+        n = Notification(
+            title=(title or 'Crescent Tracker')[:200], message=message,
+            link=link, link_text='Open Personal Tracking',
+            notification_type=ntype, required_permission=PERSONAL_PERM_CODES,
+        )
+        db.session.add(n)
+        db.session.commit()
+        return n.id
+    except Exception:
+        db.session.rollback()
+        return None

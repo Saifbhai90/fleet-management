@@ -6,6 +6,26 @@ Sidebar section **"Personal"** (Report Centre ke neeche) — **Crescent Tracker*
 (`com.cresent.app` v3.0.6) ke asli backend API ko directly integrate karta hai: professional
 live map, animated history playback, trips, alarms, notifications aur full telemetry.
 
+## v4 — Platform features (analytics, multi-account, SSE, fuel, maintenance)
+
+- **Aaj ka Summary (dashboard):** har vehicle ka daily distance / moving / idle / trips /
+  harsh events — `crescent_daily_summary` table mein cached (past days final, today 10-min TTL).
+- **Fleet KPIs (14 days):** distance/day, **utilization %** (moving time / reported span),
+  **driver score** (100 - brake*2 - accel*1.5 - overspeed*3), harsh events — Chart.js graphs.
+- **Driver behavior:** harsh braking (>=15 km/h drop @ >=3 km/h/s from >=20 km/h), harsh accel
+  (>=15 rise @ >=3 km/h/s), overspeed events (80 km/h default).
+- **Multi-account:** Settings -> Crescent Accounts — add / activate / delete accounts
+  (har account ka apna vehicle cache, summaries, API log). Switch: dashboard dropdown ya `?account=<id>`.
+- **SSE live stream:** `/api/personal/stream` — server khud sync karke positions push karta hai
+  (Live Map EventSource use karta hai; error par polling fallback). 9 min baad auto-reconnect.
+- **Fuel/RPM graph:** har sync par per-device snapshot (>=120s throttle, 7-day retention)
+  `crescent_live_snapshot` mein -> Vehicle Detail par 24h fuel-delta + speed chart.
+- **Maintenance:** per-vehicle rules (label, interval km, last service km) — Vehicle Detail par
+  CRUD + due/OVERDUE state current mileage se.
+- **Notifications:** `notify_personal_users()` — `required_permission` targeting; sirf users
+  jin ke paas Personal permissions hain wo dekhte hain. Engine command results isi se jate hain.
+  (Email steps intentionally nahi kiye gaye.)
+
 ## Pro UI (v3 upgrade)
 
 - **Live Map:** **Google map styles (default: Google Street)** + Satellite/Hybrid/Terrain/OSM/Esri,

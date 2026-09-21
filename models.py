@@ -3677,3 +3677,73 @@ class CrescentApiLog(db.Model):
 
     def __repr__(self):
         return f'<CrescentApiLog {self.method} {self.endpoint} {self.status_code}>'
+
+
+# ── Personal (Crescent) analytics: daily summary, live snapshots, maintenance ─
+
+class CrescentDailySummary(db.Model):
+    """Per-device per-day aggregates computed from tripreplay (cached)."""
+    __tablename__ = 'crescent_daily_summary'
+    id = db.Column(db.Integer, primary_key=True)
+    settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.String(100), nullable=False, index=True)
+    regno = db.Column(db.String(100), nullable=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    distance_km = db.Column(db.Numeric(12, 2), nullable=True)
+    max_speed = db.Column(db.Numeric(10, 2), nullable=True)
+    avg_speed = db.Column(db.Numeric(10, 2), nullable=True)
+    moving_min = db.Column(db.Integer, nullable=True)
+    idle_min = db.Column(db.Integer, nullable=True)
+    parked_min = db.Column(db.Integer, nullable=True)
+    span_min = db.Column(db.Integer, nullable=True)  # device-reported coverage for the day
+    points = db.Column(db.Integer, nullable=True)
+    trips = db.Column(db.Integer, nullable=True)
+    harsh_brake = db.Column(db.Integer, nullable=True)
+    harsh_accel = db.Column(db.Integer, nullable=True)
+    overspeed = db.Column(db.Integer, nullable=True)
+    updated_at = db.Column(db.DateTime, default=pk_now, onupdate=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('settings_id', 'device_id', 'date', name='uq_crescent_daily_device_date'),
+    )
+
+    def __repr__(self):
+        return f'<CrescentDailySummary {self.regno} {self.date}>'
+
+
+class CrescentLiveSnapshot(db.Model):
+    """Throttled live/status samples — fuel, RPM, engine hours, voltages over time."""
+    __tablename__ = 'crescent_live_snapshot'
+    id = db.Column(db.Integer, primary_key=True)
+    settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.String(100), nullable=False, index=True)
+    ts = db.Column(db.DateTime, nullable=False, index=True)
+    speed = db.Column(db.Numeric(10, 2), nullable=True)
+    rpm = db.Column(db.Numeric(10, 2), nullable=True)
+    fuel_consumed = db.Column(db.Numeric(12, 3), nullable=True)
+    engine_hrs = db.Column(db.Numeric(12, 2), nullable=True)
+    ext_bat = db.Column(db.Numeric(10, 2), nullable=True)
+    int_bat = db.Column(db.Numeric(10, 2), nullable=True)
+    lat = db.Column(db.Numeric(10, 6), nullable=True)
+    lon = db.Column(db.Numeric(10, 6), nullable=True)
+
+    __table_args__ = (
+        db.Index('ix_crescent_snap_device_ts', 'settings_id', 'device_id', 'ts'),
+    )
+
+
+class CrescentMaintenanceRule(db.Model):
+    """Per-device service thresholds (e.g. oil change every 5000 km)."""
+    __tablename__ = 'crescent_maintenance_rule'
+    id = db.Column(db.Integer, primary_key=True)
+    settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=False, index=True)
+    device_id = db.Column(db.String(100), nullable=False, index=True)
+    label = db.Column(db.String(100), nullable=False, default='Service')
+    interval_km = db.Column(db.Integer, nullable=False, default=5000)
+    last_service_km = db.Column(db.Integer, nullable=False, default=0)
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=pk_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('settings_id', 'device_id', 'label', name='uq_crescent_maint_rule'),
+    )

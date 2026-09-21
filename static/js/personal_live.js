@@ -223,6 +223,27 @@
         }).catch(() => {});
     }
 
+    // ── SSE live stream (server pushes; falls back to polling) ────
+    let sse = null;
+    function startStream() {
+        if (typeof EventSource === 'undefined') return; // keep polling
+        try {
+            sse = new EventSource('/api/personal/stream');
+            sse.onmessage = ev => {
+                try {
+                    const res = JSON.parse(ev.data);
+                    if (!res.ok) return;
+                    secondsLeft = pollSeconds;
+                    render(res.vehicles);
+                } catch (e) { /* ignore bad frame */ }
+            };
+            sse.onerror = () => {
+                // stream dropped — EventSource retries itself; polling stays as backup
+            };
+        } catch (e) { /* no SSE support — polling continues */ }
+    }
+    startStream();
+
     function fullRefresh() {
         const btn = document.getElementById('psRefreshBtn');
         if (btn) { btn.disabled = true; }
