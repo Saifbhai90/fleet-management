@@ -22,7 +22,6 @@
             password: document.getElementById('psPassword').value.trim(),
             poll_seconds: document.getElementById('psPoll').value,
             fcm_token: (document.getElementById('psFcm') || {}).value || '',
-            commands_enabled: (document.getElementById('psCmdToggle') || {}).checked || false,
         };
         fetch('/api/personal/settings/save', {
             method: 'POST',

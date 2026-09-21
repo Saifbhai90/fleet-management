@@ -55,6 +55,9 @@
                             <a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_vehicle_detail', vid=v.id) }}" title="Details">
                                 <i class="bi bi-info-circle" aria-hidden="true"></i><span>Details</span>
                             </a>
+                            <a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_maintenance', vid=v.id) }}" title="Fuel & Maintenance">
+                                <i class="bi bi-wrench" aria-hidden="true"></i><span>Maint</span>
+                            </a>
                             <a class="btn btn-sm btn-outline-success" href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}" title="History">
                                 <i class="bi bi-route" aria-hidden="true"></i><span>History</span>
                             </a>

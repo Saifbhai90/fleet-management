@@ -658,7 +658,32 @@ html.capacitor-native body.page-personal .ps-live-list {
 .ps-chart-card {
     background: #fff; border: 1px solid #e8ecf1; border-radius: .8rem; padding: .7rem .8rem;
 }
-.ps-chart-card h6 { font-size: .76rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
+.ps-chart-card h6 { font-size: .76rem; color: #64748b; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .45rem; }
+.ps-chart-wrap { position: relative; height: 180px; width: 100%; }
+
+.ps-telemetry-cmds .ps-cmd-actions .btn {
+    min-height: 44px;
+    font-weight: 700;
+}
+.ps-telemetry-cmds .ps-cmd-actions .btn:disabled {
+    opacity: .55;
+}
+.ps-cmd-confirm {
+    border: 1px solid #e2e8f0;
+    border-radius: .5rem;
+    background: #f8fafc;
+    padding: .75rem .85rem;
+}
+.ps-kpi-mini {
+    background: #fff;
+    border: 1px solid #e8ecf1;
+    border-radius: .6rem;
+    padding: .65rem .75rem;
+    text-align: center;
+}
+.ps-kpi-mini strong { font-size: 1.25rem; }
+.ps-maint-form .form-label { margin-bottom: .2rem; color: #64748b; }
+.ps-maint-row:last-child { border-bottom: 0 !important; }
 
 /* accounts table */
 .ps-account-row.active { background: rgba(16,185,129,.08); }

@@ -133,43 +133,9 @@
         }).then(r => r.json()).then(res => {
             if (!res.ok) { showAlert(res.error + (res.hint ? ' — ' + res.hint : '')); return; }
             renderAll(res.points || [], res.stops || [], res.stats || {});
-            drawCompare(res.points || []);
         }).catch(e => showAlert('Network error: ' + e))
           .finally(() => { btn.disabled = false; });
     });
-
-
-    // ── multi-day compare overlay (blue = compare date) ───────────
-    let compareLayer = null;
-    function drawCompare(primaryPoints) {
-        if (compareLayer) { map.removeLayer(compareLayer); compareLayer = null; }
-        const cmp = document.getElementById('psCompare');
-        const cmpDate = cmp && cmp.value;
-        const vehicleSel = document.getElementById('psVehicle');
-        const device_id = vehicleSel.value;
-        if (!cmpDate || !device_id) return;
-        fetch('/api/personal/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({ device_id, date_from: cmpDate, date_to: cmpDate,
-                                   time_from: '00:00', time_to: '23:59' }),
-        }).then(r => r.json()).then(res => {
-            if (!res.ok || !res.points.length) return;
-            compareLayer = L.featureGroup().addTo(map);
-            for (let i = 1; i < res.points.length; i++) {
-                L.polyline([[res.points[i-1].lat, res.points[i-1].lon], [res.points[i].lat, res.points[i].lon]],
-                    { color: '#3b82f6', weight: 3.5, opacity: .8 }).addTo(compareLayer);
-            }
-            const km = res.stats.distance ?? 0;
-            L.control({ position: 'bottomleft' }).onAdd = function () {
-                const d = L.DomUtil.create('div', 'ps-legend');
-                d.innerHTML = `<span class="sw" style="background:#059669"></span>${document.getElementById('psFrom').value} (${primaryPoints.length} pts)
-                    <br><span class="sw" style="background:#3b82f6"></span>${cmpDate} — ${km} km (${res.points.length} pts)`;
-                return d;
-            };
-            // remove previous compare legend: simpler — append legend to compareLayer container
-        }).catch(() => {});
-    }
 
     function renderAll(points, stops, stats) {
         currentPoints = points;

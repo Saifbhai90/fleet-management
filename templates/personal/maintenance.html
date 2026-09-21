@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block title %}Personal — Fuel & Maintenance{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
+{% endblock %}
+
+{% block content %}
+<div class="ps-wrap">
+    {% include 'personal/_nav.html' %}
+
+    <div class="ps-header">
+        <div>
+            <h4 class="mb-0"><i class="bi bi-wrench text-success"></i> Fuel &amp; Maintenance</h4>
+            <div class="text-muted small">Interval km aap set karte hain — koi fixed 5000 default nahi.</div>
+        </div>
+        <a href="{{ url_for('personal_vehicles') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-car-front"></i> Vehicles</a>
+    </div>
+
+    <div class="row g-2 mb-3" id="psMaintKpis">
+        <div class="col-4">
+            <div class="ps-kpi-mini">
+                <div class="text-muted small">Due</div>
+                <strong id="psKpiDue">—</strong>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="ps-kpi-mini">
+                <div class="text-muted small">Due soon</div>
+                <strong id="psKpiSoon">—</strong>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="ps-kpi-mini">
+                <div class="text-muted small">Rules</div>
+                <strong id="psKpiTotal">—</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body py-2">
+            <label class="form-label small mb-1" for="psMaintVehicle">Vehicle</label>
+            <select id="psMaintVehicle" class="form-select">
+                <option value="">Select vehicle&hellip;</option>
+                {% for v in vehicles %}
+                <option value="{{ v.id }}"
+                        data-regno="{{ v.regno }}"
+                        data-mileage="{{ v.mileage or 0 }}"
+                        {% if selected_vid == v.id %}selected{% endif %}>
+                    {{ v.regno }} — {{ '%.0f'|format(v.mileage|float) if v.mileage is not none else 0 }} km
+                </option>
+                {% endfor %}
+            </select>
+            <div class="small text-muted mt-1" id="psMaintVehicleMeta"></div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3" id="psFleetDueCard">
+        <div class="card-body">
+            <h6 class="card-title text-muted mb-2"><i class="bi bi-exclamation-triangle"></i> Fleet due / due soon</h6>
+            <div id="psFleetDueList" class="small text-muted">Loading&hellip;</div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3" id="psFuelCard">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                <h6 class="card-title text-muted mb-0"><i class="bi bi-fuel-pump"></i> Fuel / Speed <span class="ps-fresh" id="psFuelInfo"></span></h6>
+                <select id="psFuelHours" class="form-select form-select-sm w-auto">
+                    <option value="6">Last 6h</option>
+                    <option value="12">Last 12h</option>
+                    <option value="24" selected>Last 24h</option>
+                    <option value="48">Last 48h</option>
+                </select>
+            </div>
+            <canvas id="psFuelChart" height="120"></canvas>
+            <div class="small text-muted mt-1">Fuel delta live snapshots se (Live Map refresh ke saath collect hota hai).</div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-3" id="psMaintCard">
+        <div class="card-body">
+            <h6 class="card-title text-muted"><i class="bi bi-wrench"></i> Service rules</h6>
+            <div id="psMaintList" class="mb-3"><div class="text-muted small">Vehicle select karein.</div></div>
+
+            <form id="psMaintForm" class="ps-maint-form">
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small" for="psMaintLabel">Service name</label>
+                        <input type="text" id="psMaintLabel" class="form-control form-control-sm"
+                               placeholder="e.g. Oil Change" required autocomplete="off" />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small" for="psMaintInterval">Interval (km)</label>
+                        <input type="number" id="psMaintInterval" class="form-control form-control-sm"
+                               placeholder="aap set karein" min="1" step="1" required />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small" for="psMaintLast">Last service @ km</label>
+                        <input type="number" id="psMaintLast" class="form-control form-control-sm"
+                               placeholder="0" min="0" step="1" />
+                    </div>
+                    <div class="col-12 col-md-2 d-flex align-items-end gap-1">
+                        <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" id="psMaintUseMileage"
+                                title="Current mileage last service pe set">Use current</button>
+                        <button type="submit" class="btn btn-success btn-sm flex-fill">Save</button>
+                    </div>
+                </div>
+            </form>
+            <div id="psMaintMsg" class="small mt-2"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
+<script src="{{ url_for('static', filename='js/personal_maintenance.js') }}?v={{ fleet_static_hash('js/personal_maintenance.js') }}"></script>
+{% endblock %}

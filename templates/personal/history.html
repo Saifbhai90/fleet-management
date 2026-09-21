@@ -4,7 +4,6 @@
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
-<link rel="stylesheet" href="/static/vendor/chartjs/4.4.2/chartjs.css?v=8006" />
 {% endblock %}
 
 {% block content %}
@@ -40,10 +39,6 @@
         <div class="col-md-2 col-lg-1">
             <label class="form-label small mb-1">To</label>
             <input type="time" id="psTimeTo" class="form-control form-control-sm" value="23:59" />
-        </div>
-        <div class="col-md-2 col-lg-1">
-            <label class="form-label small mb-1">Compare</label>
-            <input type="date" id="psCompare" class="form-control form-control-sm" title="Doosri date ka route overlay (blue)" />
         </div>
         <div class="col-md-3 col-lg-2 d-flex gap-2">
             <button type="submit" class="btn btn-success btn-sm flex-fill" id="psRunBtn"><i class="bi bi-play-fill"></i> Show</button>

@@ -55,19 +55,6 @@
                                    placeholder="Crescent app ke device ka FCM token (notifications ke liye)" />
                             <div class="form-text">Yeh token Crescent app ke device se aata hai. Khali chhor dein to notifications ka data Alarms page se milta hai.</div>
                         </div>
-                        <div class="mb-3" id="engine">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="psCmdToggle"
-                                       {% if settings and settings.commands_enabled %}checked{% endif %} />
-                                <label class="form-check-label small" for="psCmdToggle">
-                                    <strong>Engine Commands</strong> (Engine Kill / Release)
-                                </label>
-                                <div class="form-text text-danger">
-                                    <i class="bi bi-exclamation-triangle"></i> Khatarnak: immobilizer commands seedha vendor ke devices par jate hain.
-                                    Default OFF hai — OFF hone par har command <em>dry-run</em> hoti hai (API Log mein dikhti hai, bheji nahi jati).
-                                </div>
-                            </div>
-                        </div>
                         <div class="ps-settings-actions">
                             <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save</button>
                             <button type="button" class="btn btn-outline-primary" id="psTestBtn"><i class="bi bi-plug"></i> Test</button>

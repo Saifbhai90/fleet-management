@@ -3733,13 +3733,13 @@ class CrescentLiveSnapshot(db.Model):
 
 
 class CrescentMaintenanceRule(db.Model):
-    """Per-device service thresholds (e.g. oil change every 5000 km)."""
+    """Per-device service thresholds (interval_km is always user-set via API)."""
     __tablename__ = 'crescent_maintenance_rule'
     id = db.Column(db.Integer, primary_key=True)
     settings_id = db.Column(db.Integer, db.ForeignKey('crescent_settings.id', ondelete='CASCADE'), nullable=False, index=True)
     device_id = db.Column(db.String(100), nullable=False, index=True)
     label = db.Column(db.String(100), nullable=False, default='Service')
-    interval_km = db.Column(db.Integer, nullable=False, default=5000)
+    interval_km = db.Column(db.Integer, nullable=False, default=1)  # DB NOT NULL fallback only; API requires user value
     last_service_km = db.Column(db.Integer, nullable=False, default=0)
     enabled = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=pk_now)

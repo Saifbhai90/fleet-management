@@ -331,8 +331,9 @@ def notifications(settings):
 # Vendor wire format is undocumented; the app binary exposes Command/send
 # (trackgf cluster) and CmdCtrl/ImoblizerOn|Off action names. The request below
 # follows the same GET + query-param style as every other endpoint in this API
-# family. commands_enabled gates real sends; while disabled the exact request
-# is written to the API Log as DRY-RUN so the format can be verified safely.
+# family. Live sends: typed confirm + Immobilizer On/Off from DeviceStatus.
+# No speed gate (vendor app also does not gate on speed).
+# dry_run_forced=True still logs without sending (tests / dry-run tools).
 
 IMMOBILIZER_ACTIONS = {
     'engine_off': ('ImoblizerOn', 'ENGINE OFF (Kill)'),
@@ -340,6 +341,35 @@ IMMOBILIZER_ACTIONS = {
 }
 
 LEGACY_COMMAND_BASE = 'http://trackgf.crescenttrack.com:8888/api/'  # Command/send confirmed here
+
+
+def immobilizer_state_from_status(device_status):
+    """Parse DeviceStatus text → True=ON (killed), False=OFF, None=unknown."""
+    s = (device_status or '').lower().replace(' ', '')
+    if not s:
+        return None
+    if 'immobilizeron' in s or 'imoblizeron' in s:
+        return True
+    if 'immobilizeroff' in s or 'imoblizeroff' in s:
+        return False
+    return None
+
+
+def immobilizer_state_from_raw(raw_or_vehicle):
+    """Read Immobilizer On/Off from cached raw_json or a status string."""
+    if raw_or_vehicle is None:
+        return None
+    if isinstance(raw_or_vehicle, str):
+        try:
+            raw = json.loads(raw_or_vehicle or 'null')
+        except (TypeError, ValueError):
+            return immobilizer_state_from_status(raw_or_vehicle)
+        return immobilizer_state_from_status(
+            (raw or {}).get('DeviceStatus') if isinstance(raw, dict) else None)
+    raw_json = getattr(raw_or_vehicle, 'raw_json', None)
+    if raw_json:
+        return immobilizer_state_from_raw(raw_json)
+    return None
 
 
 def send_command(settings, vehicle, action, dry_run_forced=False):
@@ -362,15 +392,13 @@ def send_command(settings, vehicle, action, dry_run_forced=False):
     }
     url = _url(settings.api_base or DEFAULT_API_BASE, 'Command/send')
 
-    dry = dry_run_forced or not settings.commands_enabled
-    if dry:
+    if dry_run_forced:
         _log_call(settings.id, f'Command/send [DRY-RUN {label}]', 'GET', 0, False, 0,
-                  'commands disabled — nothing sent', str(params), '')
+                  'dry_run_forced — nothing sent', str(params), '')
         return {
             'ok': True, 'dry_run': True,
             'request_url': url + '?' + '&'.join(f'{k}={v}' for k, v in params.items()),
-            'message': f'DRY-RUN — commands disabled hain. Yeh request bheji nahi gayi. '
-                       f'Settings se commands enable karne ke baad test karein. ({label})',
+            'message': f'DRY-RUN — request bheji nahi gayi. ({label})',
         }
 
     t0 = time.time()
@@ -952,7 +980,18 @@ def maintenance_status(settings, vehicle):
             'last_service_km': r.last_service_km, 'current_km': round(mileage, 1),
             'used_km': round(used, 1), 'remaining_km': round(remaining, 1),
             'due': remaining <= 0, 'due_soon': 0 <= remaining <= 250,
+            'device_id': vehicle.device_id, 'regno': vehicle.regno,
+            'vid': vehicle.id,
         })
+    return out
+
+
+def fleet_maintenance_status(settings):
+    """All rules across the fleet, due items first."""
+    out = []
+    for v in cached_vehicles(settings):
+        out.extend(maintenance_status(settings, v))
+    out.sort(key=lambda r: (0 if r['due'] else 1 if r['due_soon'] else 2, r['remaining_km']))
     return out
 
 

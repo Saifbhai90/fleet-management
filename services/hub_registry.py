@@ -534,11 +534,14 @@ HUBS = {
             'personal_dashboard', 'personal_live', 'personal_vehicles',
             'personal_vehicle_detail', 'personal_history', 'personal_trips',
             'personal_alarms', 'personal_notifications', 'personal_settings',
+            'personal_maintenance',
             'api_personal_positions', 'api_personal_vehicles', 'api_personal_refresh',
             'api_personal_notifications', 'api_personal_history',
             'api_personal_trips', 'api_personal_alarms',
             'api_personal_test_connection', 'api_personal_settings_save',
             'api_personal_log_clear', 'api_personal_vehicle_command',
+            'api_personal_maintenance_fleet', 'api_personal_vehicle_maintenance',
+            'api_personal_vehicle_fuel', 'api_personal_daily_summary', 'api_personal_fleet_kpis',
         ),
         'sections': [
             {
@@ -556,6 +559,7 @@ HUBS = {
                     _item('personal_history', 'History Playback', 'fa-solid fa-clock-rotate-left', 'rc-tile--tracker', 'personal_history'),
                     _item('personal_trips', 'Trip Report', 'fa-solid fa-route', 'rc-tile--tracker', 'personal_reports'),
                     _item('personal_alarms', 'Alarm Report', 'fa-solid fa-triangle-exclamation', 'rc-tile--tracker', 'personal_reports'),
+                    _item('personal_maintenance', 'Fuel & Maintenance', 'fa-solid fa-wrench', 'rc-tile--tracker', 'personal_view'),
                 ],
             },
             {

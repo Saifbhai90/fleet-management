@@ -38,15 +38,23 @@ live map, animated history playback, trips, alarms, notifications aur full telem
 - **Trips:** derived trip cards + CSV.
 - **Dashboard:** gradient KPI cards (click-to-filter), vehicle cards with quick actions.
 - **Vehicle Detail:** full telemetry (battery bars, GSM, GPS, fence, device status) 30s auto-refresh,
-  **Engine Kill/Release control**, collapsible raw JSON.
+  **Engine Kill/Release** buttons inside the Telemetry card, collapsible raw JSON.
+  Fuel chart + maintenance rules moved to dedicated **Fuel & Maintenance** page.
+
+## Fuel & Maintenance
+
+- Page: `/personal/maintenance` (hub tile + Vehicles → Maint + vehicle detail link).
+- Interval km **user-set only** — API rejects empty interval (no server 5000 default).
+- Fleet due / due-soon summary; per-vehicle fuel chart (6/12/24/48h); mark-done @ current mileage.
 
 ## Engine Kill / Release (Immobilizer)
 
+- UI: Vehicle Detail → Telemetry card (Engine Kill / Engine Release). Settings toggle removed.
 - Endpoint: `POST /api/personal/vehicle/<id>/command` `{action: engine_off|engine_on, confirm: "<REGNO>"}`
-- **Safety gates:** (1) Settings mein `commands_enabled` toggle (default OFF), (2) speed < 5 km/h
-  enforce, (3) typed confirmation (reg no), (4) har command CrescentApiLog mein audited.
-- Toggle OFF hone par har request **DRY-RUN** hoti hai — exact URL API Log mein record hota hai,
-  kuch bheja nahi jata (wire-format verification ka safe tareeqa).
+- **Safety gates:** (1) typed confirmation (reg no), (2) Kill only when DeviceStatus Immobilizer Off,
+  Release only when Immobilizer On, (3) har command CrescentApiLog mein audited.
+  No speed gate (vendor app bhi speed check nahi karti).
+- Optional `dry_run_forced` for tests only.
 - Wire format (app binary se): `GET Command/send?uname=&vid=<vehicleId>&id=<Device#>&cmd=ImoblizerOn|ImoblizerOff`
   + Bearer token. Primary base teletixapp, 404 par legacy trackgf cluster automatic fallback.
   **Note:** vendor wire format undocumented hai — pehli asli command ke baad API Log se verify/tune karein.

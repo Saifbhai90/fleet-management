@@ -4,7 +4,6 @@
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/1.9.4/leaflet.css?v=8006" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/personal.css') }}?v={{ fleet_static_hash('css/personal.css') }}" />
-<link rel="stylesheet" href="/static/vendor/chartjs/4.4.2/chartjs.css?v=8006" />
 {% endblock %}
 
 {% block content %}
@@ -18,6 +17,7 @@
             <span class="ps-badge {{ (v.status or 'offline')|lower }}">{{ v.status or 'Offline' }}</span>
         </h4>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('personal_maintenance', vid=v.id) }}" class="btn btn-outline-success btn-sm"><i class="bi bi-wrench"></i> Maint</a>
             <a href="{{ url_for('personal_history') }}?vehicle={{ v.device_id }}" class="btn btn-outline-success btn-sm"><i class="bi bi-route"></i> History</a>
             <a href="{{ url_for('personal_live') }}" class="btn btn-outline-success btn-sm"><i class="bi bi-geo-alt"></i> Live Map</a>
         </div>
@@ -78,63 +78,49 @@
                     {% endif %}
 
                     <div class="mt-3"><i class="bi bi-geo-alt"></i> <strong>Address:</strong> {{ v.address or '—' }}</div>
-                </div>
-            </div>
 
-            <div class="card shadow-sm mt-3 {% if not settings or not settings.commands_enabled %}opacity-75{% endif %}">
-                <div class="card-body">
-                    <div class="d-flex align-items-center gap-2">
-                        <h6 class="card-title text-muted mb-0"><i class="bi bi-lightning-charge"></i> Engine Control (Immobilizer)</h6>
-                        {% if settings and settings.commands_enabled %}
-                        <span class="badge bg-success">Enabled</span>
-                        {% else %}
-                        <span class="badge bg-secondary">Disabled</span>
-                        {% endif %}
+                    <div class="ps-telemetry-cmds mt-3 pt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                            <div class="small fw-bold text-muted"><i class="bi bi-lightning-charge"></i> Engine Control</div>
+                            <div class="small text-muted">Kill jab Off · Release jab On · type reg no</div>
+                        </div>
+                        {% set _imm = ((raw.get('DeviceStatus') if raw else '') or '')|lower %}
+                        {% set imm_on = 'immobilizer on' in _imm or 'imoblizer on' in _imm %}
+                        {% set imm_off = 'immobilizer off' in _imm or 'imoblizer off' in _imm %}
+                        <div class="d-flex gap-2 flex-column flex-sm-row ps-cmd-actions">
+                            <button type="button" class="btn btn-danger" id="psKillBtn"
+                                    {% if imm_on %}disabled title="Immobilizer pehle se ON hai"{% endif %}>
+                                <i class="bi bi-stop-circle"></i> Engine Kill
+                            </button>
+                            <button type="button" class="btn btn-success" id="psReleaseBtn"
+                                    {% if not imm_on %}disabled title="Immobilizer Off — Release ki zaroorat nahi"{% endif %}>
+                                <i class="bi bi-play-circle"></i> Engine Release
+                            </button>
+                        </div>
+                        <div id="psCmdConfirmBox" class="ps-cmd-confirm mt-2" hidden>
+                            <div class="small mb-1" id="psCmdConfirmText"></div>
+                            <label class="form-label small mb-1">Confirm: type <strong id="psCmdRegno">{{ v.regno }}</strong></label>
+                            <input type="text" class="form-control form-control-sm" id="psCmdConfirm"
+                                   autocomplete="off" placeholder="{{ v.regno }}" />
+                            <div class="d-flex gap-2 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="psCmdCancelBtn">Cancel</button>
+                                <button type="button" class="btn btn-sm btn-danger" id="psCmdSendBtn" disabled>Send Command</button>
+                            </div>
+                        </div>
+                        <div id="psCmdMsg" class="small mt-2"></div>
                     </div>
-                    {% if settings and settings.commands_enabled %}
-                    <p class="small text-danger mt-2 mb-2">
-                        <i class="bi bi-exclamation-triangle"></i> <strong>Khatarnak command:</strong> Engine Kill chalte waqt engine band kar sakta hai.
-                        Sirf tab use karein jab vehicle parked ho aur aap sure hon.
-                    </p>
-                    <div class="d-flex gap-2 flex-column flex-sm-row ps-cmd-actions">
-                        <button class="btn btn-danger" id="psKillBtn" {% if (v.speed or 0) >= 5 %}disabled title="Vehicle moving hai"{% endif %}>
-                            <i class="bi bi-stop-circle"></i> Engine Kill
-                        </button>
-                        <button class="btn btn-success" id="psReleaseBtn">
-                            <i class="bi bi-play-circle"></i> Engine Release
-                        </button>
-                    </div>
-                    <div id="psCmdMsg" class="small mt-2"></div>
-                    {% else %}
-                    <p class="small text-muted mt-2 mb-0">
-                        Commands disabled hain (safe dry-run mode). Enable karne ke liye
-                        <a href="{{ url_for('personal_settings') }}#engine">Settings</a> mein
-                        <strong>Engine Commands</strong> toggle on karein. Disabled hone par bhi har command
-                        request <em>API Log</em> mein dry-run ke tor par record hoti hai.
-                    </p>
-                    {% endif %}
                 </div>
             </div>
 
             <div class="card shadow-sm mt-3">
                 <div class="card-body">
-                    <h6 class="card-title text-muted"><i class="bi bi-fuel-pump"></i> Fuel / RPM — last 24h <span class="ps-fresh" id="psFuelInfo"></span></h6>
-                    <canvas id="psFuelChart" height="110"></canvas>
-                    <div class="small text-muted mt-1">FuelConsumed device ke snapshots se (Live Map refresh ke saath collect hota hai).</div>
-                </div>
-            </div>
-
-            <div class="card shadow-sm mt-3">
-                <div class="card-body">
-                    <h6 class="card-title text-muted"><i class="bi bi-wrench"></i> Maintenance</h6>
-                    <div id="psMaintList" class="mb-2"><div class="text-muted small">Loading&hellip;</div></div>
-                    <form id="psMaintForm" class="row g-2 align-items-end">
-                        <div class="col-5"><input type="text" id="psMaintLabel" class="form-control form-control-sm" placeholder="Oil Change" required /></div>
-                        <div class="col-3"><input type="number" id="psMaintInterval" class="form-control form-control-sm" placeholder="5000 km" required /></div>
-                        <div class="col-3"><input type="number" id="psMaintLast" class="form-control form-control-sm" placeholder="last km" /></div>
-                        <div class="col-1"><button type="submit" class="btn btn-success btn-sm w-100">+</button></div>
-                    </form>
-                    <div id="psMaintMsg" class="small mt-1"></div>
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <h6 class="card-title text-muted mb-0"><i class="bi bi-fuel-pump"></i> Fuel &amp; Maintenance</h6>
+                        <a href="{{ url_for('personal_maintenance', vid=v.id) }}" class="btn btn-sm btn-outline-success">
+                            Open page <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </div>
+                    <div class="small text-muted mt-1">Fuel chart aur service rules (oil change interval aap set karte hain) alag page pe hain.</div>
                 </div>
             </div>
 
@@ -169,31 +155,9 @@
     </div>
 </div>
 
-<!-- Engine command confirmation modal -->
-<div class="modal fade" id="psCmdModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header py-2" id="psCmdModalHead">
-                <h6 class="modal-title" id="psCmdModalTitle">Confirm</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="small mb-2" id="psCmdModalText"></p>
-                <label class="form-label small">Confirm ke liye vehicle number type karein: <strong id="psCmdRegno"></strong></label>
-                <input type="text" class="form-control form-control-sm" id="psCmdConfirm" autocomplete="off" />
-                <div class="small text-muted mt-2">Speed abhi: <strong>{{ v.speed or 0 }} km/h</strong> — command sirf speed &lt; 5 par jata hai.</div>
-            </div>
-            <div class="modal-footer py-2">
-                <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-sm btn-danger" id="psCmdSendBtn" disabled>Send Command</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="/static/vendor/leaflet/1.9.4/leaflet.js?v=8006"></script>
-<script src="/static/vendor/chartjs/4.4.2/chart.umd.min.js?v=8006"></script>
 <script src="{{ url_for('static', filename='js/personal_vehicle_detail.js') }}?v={{ fleet_static_hash('js/personal_vehicle_detail.js') }}"></script>
 {% endblock %}

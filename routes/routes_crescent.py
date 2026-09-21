@@ -138,6 +138,18 @@ def personal_history():
     )
 
 
+@app.route('/personal/maintenance')
+def personal_maintenance():
+    """Fuel chart + per-vehicle maintenance rules (user-set intervals)."""
+    vehicles = cs.cached_vehicles()
+    vid = request.args.get('vid', type=int)
+    return render_template(
+        'personal/maintenance.html',
+        vehicles=vehicles, selected_vid=vid, configured=_configured(),
+        **_personal_hub_back(),
+    )
+
+
 @app.route('/personal/trips')
 def personal_trips():
     vehicles = cs.cached_vehicles()
@@ -449,8 +461,9 @@ def api_personal_settings_save():
 def api_personal_vehicle_command(vid):
     """Engine Kill / Release (immobilizer) — dangerous, fully audited.
 
-    Safety gates: commands must be enabled in Settings, vehicle speed must be
-    under 5 km/h, and the request must echo the reg no as confirmation.
+    Safety: typed reg-no confirmation. Kill only when Immobilizer Off;
+    Release only when Immobilizer On (from DeviceStatus). No speed gate
+    (matches vendor app). Every attempt is written to CrescentApiLog.
     """
     s = _settings_or_none()
     if not _configured():
@@ -464,8 +477,12 @@ def api_personal_vehicle_command(vid):
         return jsonify({'ok': False, 'error': 'Action engine_off ya engine_on hona chahiye.'}), 400
     if confirm.upper() != (v.regno or '').upper():
         return jsonify({'ok': False, 'error': f'Confirmation ghalat — reg no exactly type karein ({v.regno}).'}), 400
-    if (v.speed or 0) >= 5:
-        return jsonify({'ok': False, 'error': f'Vehicle moving hai ({v.speed} km/h) — command sirf speed < 5 par bhej sakte hain.'}), 400
+
+    imm = cs.immobilizer_state_from_raw(getattr(v, 'raw_json', None) or v)
+    if action == 'engine_off' and imm is True:
+        return jsonify({'ok': False, 'error': 'Immobilizer pehle se ON hai — Kill ki zaroorat nahi.'}), 400
+    if action == 'engine_on' and imm is False:
+        return jsonify({'ok': False, 'error': 'Immobilizer pehle se OFF hai — Release ki zaroorat nahi.'}), 400
 
     res = cs.send_command(s, v, action)
     status = 200 if res.get('ok') else 502
@@ -531,9 +548,27 @@ def api_personal_vehicle_fuel(vid):
     return jsonify({'ok': True, 'hours': hours, 'series': cs.fuel_series(s, v, hours=hours)})
 
 
+@app.route('/api/personal/maintenance')
+def api_personal_maintenance_fleet():
+    """Fleet-wide maintenance due list."""
+    s = _settings_or_none()
+    if not _configured():
+        return jsonify({'ok': False, 'error': 'Crescent credentials missing.'}), 400
+    rules = cs.fleet_maintenance_status(s)
+    return jsonify({
+        'ok': True,
+        'rules': rules,
+        'due': sum(1 for r in rules if r['due']),
+        'due_soon': sum(1 for r in rules if r['due_soon'] and not r['due']),
+    })
+
+
 @app.route('/api/personal/vehicle/<int:vid>/maintenance', methods=['GET', 'POST'])
 def api_personal_vehicle_maintenance(vid):
-    """Maintenance rules for one vehicle + live due-state."""
+    """Maintenance rules for one vehicle + live due-state.
+
+    Interval km is user-provided only — no server-side 5000 default.
+    """
     s = _settings_or_none()
     v = CrescentVehicleCache.query.get_or_404(vid)
     if request.method == 'POST':
@@ -545,12 +580,29 @@ def api_personal_vehicle_maintenance(vid):
                 db.session.delete(rule)
                 db.session.commit()
             return jsonify({'ok': True})
-        label = (p.get('label') or 'Service').strip()[:100]
+        if action == 'mark_done':
+            rule = CrescentMaintenanceRule.query.get(p.get('id'))
+            if not rule or rule.settings_id != s.id:
+                return jsonify({'ok': False, 'error': 'Rule nahi mili.'}), 404
+            rule.last_service_km = int(float(v.mileage or 0))
+            db.session.commit()
+            rules = cs.maintenance_status(s, v)
+            return jsonify({'ok': True, 'current_km': float(v.mileage or 0), 'rules': rules,
+                            'message': f'Marked done @ {rule.last_service_km} km'})
+        label = (p.get('label') or '').strip()[:100]
+        if not label:
+            return jsonify({'ok': False, 'error': 'Service name (label) zaroori hai.'}), 400
         try:
-            interval_km = max(100, int(p.get('interval_km') or 5000))
-            last_service_km = max(0, int(p.get('last_service_km') or 0))
+            if p.get('interval_km') in (None, ''):
+                return jsonify({'ok': False, 'error': 'Interval km aap set karein (server default nahi).'}), 400
+            interval_km = int(p.get('interval_km'))
+            last_service_km = int(p.get('last_service_km') if p.get('last_service_km') not in (None, '') else 0)
         except (TypeError, ValueError):
             return jsonify({'ok': False, 'error': 'interval/last_service numbers honi chahiye.'}), 400
+        if interval_km < 1:
+            return jsonify({'ok': False, 'error': 'Interval km 1 se kam nahi ho sakti.'}), 400
+        if last_service_km < 0:
+            return jsonify({'ok': False, 'error': 'Last service km negative nahi ho sakti.'}), 400
         rule = CrescentMaintenanceRule.query.filter_by(
             settings_id=s.id, device_id=v.device_id, label=label).first()
         if rule is None:
@@ -561,7 +613,8 @@ def api_personal_vehicle_maintenance(vid):
         rule.enabled = bool(p.get('enabled', True))
         db.session.commit()
     rules = cs.maintenance_status(s, v)
-    return jsonify({'ok': True, 'current_km': float(v.mileage or 0), 'rules': rules})
+    return jsonify({'ok': True, 'current_km': float(v.mileage or 0), 'rules': rules,
+                    'regno': v.regno, 'mileage': float(v.mileage or 0)})
 
 
 @app.route('/api/personal/accounts')

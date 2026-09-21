@@ -38,6 +38,7 @@
             set('psGps', v.gps_sat);
             set('psFence', v.fence);
             set('psDevStatus', v.device_status);
+            syncEngineButtons(v.device_status);
             const info = document.getElementById('psLiveInfo');
             if (info) info.textContent = '· auto-refreshing every ' + (res.poll_seconds || 30) + 's';
         }).catch(() => {});
@@ -54,41 +55,87 @@
     });
     setTimeout(relayoutMap, 120);
 
-    // ── Engine Kill / Release (typed confirmation + CSRF) ──────────
+    // ── Engine Kill / Release (inline confirm — no modal lock) ────
     const CSRF = (window.FleetConfig && window.FleetConfig.csrfToken) ||
         (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
     const killBtn = document.getElementById('psKillBtn');
     const releaseBtn = document.getElementById('psReleaseBtn');
+    const confirmBox = document.getElementById('psCmdConfirmBox');
+    const confirmInput = document.getElementById('psCmdConfirm');
+    const confirmText = document.getElementById('psCmdConfirmText');
+    const sendBtn = document.getElementById('psCmdSendBtn');
+    const cancelBtn = document.getElementById('psCmdCancelBtn');
     let pendingAction = null;
 
+    function immState(statusText) {
+        const s = String(statusText || '').toLowerCase().replace(/\s+/g, '');
+        if (s.indexOf('immobilizeron') >= 0 || s.indexOf('imoblizeron') >= 0) return true;
+        if (s.indexOf('immobilizeroff') >= 0 || s.indexOf('imoblizeroff') >= 0) return false;
+        return null;
+    }
+
+    function syncEngineButtons(statusText) {
+        const on = immState(statusText);
+        if (killBtn) {
+            killBtn.disabled = on === true;
+            killBtn.title = on === true ? 'Immobilizer pehle se ON hai' : '';
+        }
+        if (releaseBtn) {
+            releaseBtn.disabled = on !== true;
+            releaseBtn.title = on === true ? '' : 'Immobilizer Off — Release ki zaroorat nahi';
+        }
+    }
+
+    const initialStatus = (document.getElementById('psDevStatus') || {}).textContent || '';
+    syncEngineButtons(initialStatus);
+
+    function hideConfirm() {
+        pendingAction = null;
+        if (confirmBox) confirmBox.hidden = true;
+        if (confirmInput) confirmInput.value = '';
+        if (sendBtn) sendBtn.disabled = true;
+    }
+
     function askCommand(action) {
-        if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return;
+        const on = immState((document.getElementById('psDevStatus') || {}).textContent || '');
+        if (action === 'engine_off' && on === true) {
+            const msg = document.getElementById('psCmdMsg');
+            if (msg) msg.innerHTML = '<div class="alert alert-warning py-1 mb-0 small">Immobilizer pehle se ON hai.</div>';
+            return;
+        }
+        if (action === 'engine_on' && on !== true) {
+            const msg = document.getElementById('psCmdMsg');
+            if (msg) msg.innerHTML = '<div class="alert alert-warning py-1 mb-0 small">Immobilizer Off hai — Release ki zaroorat nahi.</div>';
+            return;
+        }
         pendingAction = action;
         const isKill = action === 'engine_off';
-        document.getElementById('psCmdModalTitle').textContent = isKill ? 'Engine Kill — Confirm' : 'Engine Release — Confirm';
-        document.getElementById('psCmdModalHead').className = 'modal-header py-2 ' + (isKill ? 'bg-danger' : 'bg-success');
-        document.getElementById('psCmdModalHead').querySelector('.modal-title').style.color = '#fff';
-        document.getElementById('psCmdModalText').innerHTML = isKill
-            ? 'Engine <b>OFF</b> command bheja jayega (immobilizer ON). Vehicle ka engine agla start hone par band ho jayega ya foran band ho sakta hai. <b>Chalte hue vehicle par mat bhejein.</b>'
-            : 'Engine <b>ON</b> (Release) command bheja jayega — immobilizer khul jayega aur vehicle normal chalegi.';
-        document.getElementById('psCmdRegno').textContent = regno;
-        document.getElementById('psCmdConfirm').value = '';
-        document.getElementById('psCmdSendBtn').disabled = true;
-        bootstrap.Modal.getOrCreateInstance(document.getElementById('psCmdModal')).show();
+        if (confirmText) {
+            confirmText.innerHTML = isKill
+                ? '<span class="text-danger"><b>Engine Kill</b> — immobilizer ON. Chalte hue vehicle par mat bhejein.</span>'
+                : '<span class="text-success"><b>Engine Release</b> — immobilizer khulega, vehicle normal chalegi.</span>';
+        }
+        if (sendBtn) {
+            sendBtn.className = 'btn btn-sm ' + (isKill ? 'btn-danger' : 'btn-success');
+            sendBtn.textContent = isKill ? 'Send Kill' : 'Send Release';
+            sendBtn.disabled = true;
+        }
+        if (confirmInput) confirmInput.value = '';
+        if (confirmBox) confirmBox.hidden = false;
+        if (confirmInput) confirmInput.focus();
     }
 
     if (killBtn) killBtn.addEventListener('click', () => askCommand('engine_off'));
     if (releaseBtn) releaseBtn.addEventListener('click', () => askCommand('engine_on'));
+    if (cancelBtn) cancelBtn.addEventListener('click', hideConfirm);
 
-    const confirmInput = document.getElementById('psCmdConfirm');
     if (confirmInput) confirmInput.addEventListener('input', () => {
-        document.getElementById('psCmdSendBtn').disabled =
+        if (sendBtn) sendBtn.disabled =
             confirmInput.value.trim().toUpperCase() !== regno.toUpperCase();
     });
 
-    const sendBtn = document.getElementById('psCmdSendBtn');
     if (sendBtn) sendBtn.addEventListener('click', () => {
-        if (!pendingAction) return;
+        if (!pendingAction || !confirmInput) return;
         sendBtn.disabled = true;
         const msg = document.getElementById('psCmdMsg');
         fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/command`, {
@@ -106,93 +153,6 @@
                     ${res.vendor_body ? '<code style="font-size:.65rem;">' + res.vendor_body + '</code>' : ''}</div>`;
             }
         }).catch(e => { msg.innerHTML = '<div class="alert alert-danger py-1 mb-0 small">Network error: ' + e + '</div>'; })
-          .finally(() => {
-            sendBtn.disabled = false;
-            const m = bootstrap.Modal.getInstance(document.getElementById('psCmdModal'));
-            if (m) m.hide();
-          });
+          .finally(() => { hideConfirm(); });
     });
-
-    // ── Fuel chart (last 24h from live snapshots) ─────────────────
-    function loadFuel() {
-        const el = document.getElementById('psFuelChart');
-        if (!el || typeof Chart === 'undefined') return;
-        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/fuel?hours=24`)
-            .then(r => r.json()).then(res => {
-                if (!res.ok) return;
-                const s = res.series || [];
-                const labels = s.map(x => x.ts.slice(11, 16));
-                const info = document.getElementById('psFuelInfo');
-                if (info) info.textContent = s.length ? `(${s.length} samples)` : '(snapshots collect ho rahe hain — thori dair mein data aayega)';
-                new Chart(el, {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [
-                            { label: 'Fuel delta', data: s.map(x => x.fuel_delta), borderColor: '#f59e0b', yAxisID: 'y1', pointRadius: 0, borderWidth: 2, tension: .3 },
-                            { label: 'Speed', data: s.map(x => x.speed), borderColor: '#10b981', pointRadius: 0, borderWidth: 1.5, tension: .3 },
-                        ],
-                    },
-                    options: {
-                        plugins: { legend: { labels: { boxWidth: 10, font: { size: 10 } } } },
-                        scales: {
-                            y: { beginAtZero: true, title: { display: true, text: 'km/h' } },
-                            y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: 'fuel' } },
-                        },
-                        animation: false,
-                    },
-                });
-            }).catch(() => {});
-    }
-    loadFuel();
-
-    // ── Maintenance rules ─────────────────────────────────────────
-    const maintList = document.getElementById('psMaintList');
-
-    function loadMaint() {
-        if (!maintList) return;
-        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`)
-            .then(r => r.json()).then(res => {
-                if (!res.ok) return;
-                if (!res.rules.length) { maintList.innerHTML = '<div class="text-muted small">Koi rule nahi — neeche se add karein.</div>'; return; }
-                maintList.innerHTML = res.rules.map(r => {
-                    const cls = r.due ? 'text-danger fw-bold' : (r.due_soon ? 'text-warning fw-bold' : 'text-success');
-                    return `<div class="ps-row justify-content-between">
-                        <span><b>${esc(r.label)}</b> — every ${r.interval_km} km (last @ ${r.last_service_km} km)</span>
-                        <span class="${cls}">${r.due ? 'OVERDUE' : r.remaining_km + ' km left'}
-                            <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" data-del="${r.id}">×</button></span>
-                    </div>`;
-                }).join('');
-                maintList.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-                    fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-                        body: JSON.stringify({ action: 'delete', id: Number(b.dataset.del) }),
-                    }).then(() => loadMaint());
-                }));
-            }).catch(() => {});
-    }
-
-    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
-
-    const maintForm = document.getElementById('psMaintForm');
-    if (maintForm) maintForm.addEventListener('submit', ev => {
-        ev.preventDefault();
-        fetch(`/api/personal/vehicle/${mapEl.dataset.vid}/maintenance`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({
-                label: document.getElementById('psMaintLabel').value.trim(),
-                interval_km: document.getElementById('psMaintInterval').value,
-                last_service_km: document.getElementById('psMaintLast').value || 0,
-            }),
-        }).then(r => r.json()).then(res => {
-            const msg = document.getElementById('psMaintMsg');
-            msg.innerHTML = res.ok ? '<span class="text-success">Rule saved.</span>'
-                                   : '<span class="text-danger">' + (res.error || 'Save failed') + '</span>';
-            if (res.ok) { maintForm.reset(); loadMaint(); }
-        }).catch(e => { alert('Network error: ' + e); });
-    });
-
-    loadMaint();
 })();

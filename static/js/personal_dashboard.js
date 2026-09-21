@@ -120,9 +120,9 @@
     let distChart = null, utilChart = null, scoreChart = null;
 
     function loadKPIs() {
-        const row = document.getElementById('psKpiRow');
-        if (!row) return;
         const meta = document.getElementById('psKpiMeta');
+        const hasCanvas = document.getElementById('psKpiDist');
+        if (!hasCanvas) return;
         if (typeof Chart === 'undefined') {
             if (meta) meta.textContent = 'Chart library load nahi hui (refresh karein).';
             return;
@@ -131,16 +131,35 @@
         fetch('/api/personal/fleet-kpis?days=14').then(r => r.json()).then(res => {
             if (!res.ok) { if (meta) meta.textContent = 'KPI error: ' + (res.error || 'load failed'); return; }
             const s = res.series || [];
-            const labels = s.map(x => x.date.slice(5));
+            if (!s.length) {
+                if (meta) meta.textContent = 'KPI data abhi empty hai — pehle Refresh / History load karein.';
+                return;
+            }
+            const labels = s.map(x => (x.date || '').slice(5) || x.date);
             const mk = (id, data, color, type, suffix) => {
                 const el = document.getElementById(id);
                 if (!el) return null;
                 return new Chart(el, {
                     type: type,
-                    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '33', fill: type === 'line', tension: .3, pointRadius: 2, borderWidth: 2 }] },
+                    data: {
+                        labels,
+                        datasets: [{
+                            data,
+                            borderColor: color,
+                            backgroundColor: color + '33',
+                            fill: type === 'line',
+                            tension: .3,
+                            pointRadius: 2,
+                            borderWidth: 2,
+                        }],
+                    },
                     options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, ticks: { callback: v => v + (suffix || '') } } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { callback: v => v + (suffix || '') } },
+                        },
                         animation: false,
                     },
                 });
@@ -148,11 +167,13 @@
             if (distChart) distChart.destroy();
             if (utilChart) utilChart.destroy();
             if (scoreChart) scoreChart.destroy();
-            distChart = mk('psKpiDist', s.map(x => x.distance_km), '#10b981', 'line');
-            utilChart = mk('psKpiUtil', s.map(x => x.utilization), '#3b82f6', 'bar', '%');
-            scoreChart = mk('psKpiScore', s.map(x => x.score), '#f59e0b', 'line');
-            const tot = s.reduce((a, x) => a + (x.distance_km || 0), 0);
-            if (meta) meta.textContent = `14 din mein total: ${tot.toFixed(0)} km · overspeed events: ${s.reduce((a, x) => a + (x.overspeed || 0), 0)}`;
+            distChart = mk('psKpiDist', s.map(x => Number(x.distance_km) || 0), '#10b981', 'line');
+            utilChart = mk('psKpiUtil', s.map(x => Number(x.utilization) || 0), '#3b82f6', 'bar', '%');
+            scoreChart = mk('psKpiScore', s.map(x => (x.score == null ? null : Number(x.score))), '#f59e0b', 'line');
+            const tot = s.reduce((a, x) => a + (Number(x.distance_km) || 0), 0);
+            if (meta) {
+                meta.textContent = `14 din mein total: ${tot.toFixed(0)} km · overspeed events: ${s.reduce((a, x) => a + (Number(x.overspeed) || 0), 0)}`;
+            }
         }).catch(e => { if (meta) meta.textContent = 'KPI network error: ' + e; });
     }
 
