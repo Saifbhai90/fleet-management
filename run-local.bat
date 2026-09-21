@@ -177,8 +177,9 @@ echo  Server: http://127.0.0.1:%LOCAL_PORT%
 echo  Press Ctrl+C to stop
 echo.
 
-:: Open browser only after Flask actually answers (not a blind 3s wait)
-start "" powershell -NoProfile -Command "for($i=0;$i -lt 90;$i++){ try { $r=Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 ('http://127.0.0.1:%LOCAL_PORT%/') -ErrorAction Stop; if($r.StatusCode -ge 200){ Start-Process ('http://127.0.0.1:%LOCAL_PORT%/'); break } } catch {} Start-Sleep -Seconds 1 }"
+:: Open the browser once Flask answers. /B keeps this in the server
+:: window — a separate PowerShell window was staying blank and stuck.
+start "" /B powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0scripts\open-local-browser.ps1" -Port %LOCAL_PORT%
 
 :: Start Flask (fresh process ensures no stale DB connections)
 python -c "from app import app; app.run(debug=True, host='127.0.0.1', port=%LOCAL_PORT%, use_reloader=False, threaded=True)"

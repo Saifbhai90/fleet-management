@@ -467,7 +467,7 @@
           <span>|</span>
           <strong>Rs {{ '{:,.0f}'.format(last_rec.amount|float) if last_rec.amount else '—' }}</strong>
         </span>
-        <a class="fuel-saved-edit" href="{{ url_for('fuel_expense_edit', pk=last_rec.id) }}" title="Edit last saved">Edit</a>
+        <a class="fuel-saved-edit" href="{{ url_for('fuel_expense_edit', pk=last_rec.id, design='mobile') }}" title="Edit last saved">Edit</a>
         {% else %}
         <span>No fuel expense saved yet.</span>
         {% endif %}
@@ -512,12 +512,13 @@
               <div id="vehicleLastEntryStrip" class="last-entry fuel-info-click fleet-enter-skip d-none" role="button" tabindex="0" title="Click for last entry details"></div>
             </div>
             <div style="margin-top:8px">
-              <label for="fuelPumpSelect">Fuel Pump Name</label>
+              <label for="fuelPumpSelect">Fuel Pump Name *</label>
               <div class="fuel-row">
                 {{ form.fuel_pump_id(class="form-select search-select", id="fuelPumpSelect") }}
                 <a class="fuel-side dash" id="fuelAddPumpBtn" href="{{ url_for('workspace_party_new', type='Pump', next=request.url) }}">+ Pump</a>
               </div>
               <div id="pumpBalanceHint" class="small mt-1 d-none"></div>
+              <div id="fuelPumpSelectError" class="field-error-msg d-none"></div>
             </div>
             <div class="fuel-grid-2" style="margin-top:8px">
               <div>
@@ -581,11 +582,12 @@
                 <div id="amountInputError" class="field-error-msg d-none"></div>
               </div>
               <div>
-                <label for="fuelPrice">Fuel Price</label>
+                <label for="fuelPrice">Fuel Price *</label>
                 <div class="fuel-price-wrap">
                   {{ form.fuel_price(class="form-control", id="fuelPrice", step="0.01", placeholder="0") }}
                   <button type="button" class="fuel-insights-chip" id="fuelPriceInsightsBtn" title="Price insights">Insights</button>
                 </div>
+                <div id="fuelPriceError" class="field-error-msg d-none"></div>
               </div>
               <div>
                 <label for="litersInput">Ltr</label>

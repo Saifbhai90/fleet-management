@@ -42,6 +42,7 @@ from forms import (
     OilExpenseFilterForm, OilExpenseForm,
     MaintenanceExpenseFilterForm, MaintenanceExpenseForm,
 )
+from fuel_expense_settings import fuel_expense_settings_payload
 from vehicle_sort_utils import vehicle_order_by
 from utils import (
     generate_excel_template, format_reading,
@@ -2347,6 +2348,20 @@ def _fuel_request_is_native_app():
         return False
 
 
+def _fuel_expense_resolved_previous(vehicle_id, fueling_date, current_reading, workspace_employee_id, exclude_id=None):
+    """Previous meter for this vehicle. Ignore the posted field — it is readonly and can keep the last vehicle's value."""
+    previous = _fuel_expense_previous_reading(
+        vehicle_id=vehicle_id,
+        fueling_date=fueling_date,
+        exclude_id=exclude_id,
+        workspace_employee_id=workspace_employee_id,
+        current_reading=current_reading,
+    )
+    if previous is None:
+        return 0
+    return previous
+
+
 def _fuel_add_design():
     return (request.values.get('design') or '').strip().lower()
 
@@ -2477,43 +2492,39 @@ def fuel_expense_add():
                 back_url=back_url,
                 **add_ctx,
             )
-        previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
-        if previous_reading is None:
-            previous_reading = _fuel_expense_previous_reading(
-                vehicle_id=vehicle_id,
-                fueling_date=fueling_date,
-                workspace_employee_id=workspace_employee_id,
-                current_reading=current_reading,
-            ) or 0
+        previous_reading = _fuel_expense_resolved_previous(
+            vehicle_id, fueling_date, current_reading, workspace_employee_id,
+        )
+        form.previous_reading.data = previous_reading
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
+        if curr_f <= prev_f:
+            flash('Current reading must be greater than the previous reading.', 'danger')
+            return render_template(
+                _fuel_add_form_template(),
+                form=form,
+                title='Add Fuel Expense',
+                back_url=back_url,
+                **add_ctx,
+            )
         km = curr_f - prev_f
         amount = form.amount.data
         fuel_price = form.fuel_price.data
+        if not fuel_price or float(fuel_price) <= 0:
+            flash('Fuel price is required so liters and MPG can be calculated.', 'danger')
+            return render_template(
+                _fuel_add_form_template(),
+                form=form,
+                title='Add Fuel Expense',
+                back_url=back_url,
+                **add_ctx,
+            )
         if _fuel_add_uses_mobile_form():
-            # Mobile-only guards: the client validates these too, but offline
+            # Mobile-only amount guard: the client validates this too, but offline
             # queue replays and stale posts must not create bad records.
-            if current_reading is not None and float(current_reading) <= prev_f:
-                flash('Current reading must be greater than the previous reading.', 'danger')
-                return render_template(
-                    _fuel_add_form_template(),
-                    form=form,
-                    title='Add Fuel Expense',
-                    back_url=back_url,
-                    **add_ctx,
-                )
             if not amount or float(amount) <= 0:
                 flash('Amount must be greater than 0.', 'danger')
-                return render_template(
-                    _fuel_add_form_template(),
-                    form=form,
-                    title='Add Fuel Expense',
-                    back_url=back_url,
-                    **add_ctx,
-                )
-            if not fuel_price or float(fuel_price) <= 0:
-                flash('Fuel price is required so liters and MPG can be calculated.', 'danger')
                 return render_template(
                     _fuel_add_form_template(),
                     form=form,
@@ -2536,8 +2547,6 @@ def fuel_expense_add():
         if payment_type == 'Cash':
             expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
         selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
-        reading_text = f"{prev_f:g} to {curr_f:g}"
-        fuel_expense_desc = f"Fueling expense / {vehicle.vehicle_no} / Reading {reading_text}"
         rec = FuelExpense(
             district_id=district_id, project_id=project_id, vehicle_id=vehicle_id,
             employee_id=workspace_employee_id,
@@ -2550,6 +2559,8 @@ def fuel_expense_add():
         db.session.add(rec)
         db.session.flush()
         _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id)
+        reading_text = f"{float(rec.previous_reading or 0):g} to {float(rec.current_reading or 0):g}"
+        fuel_expense_desc = f"Fueling expense / {vehicle.vehicle_no} / Reading {reading_text}"
         fuel_je = _workspace_post_expense_journal(
             employee_id=workspace_employee_id,
             reference_type='FuelExpense',
@@ -2697,6 +2708,24 @@ def fuel_expense_edit(pk):
         form.amount.data = rec.amount
         form.fuel_price.data = rec.fuel_price
         form.expense_by.data = _workspace_expense_by_for_reference(workspace_employee_id, 'FuelExpense', rec.id)
+
+    def _render_fuel_edit():
+        action_kwargs = {'pk': rec.id}
+        if _fuel_edit_uses_mobile_form():
+            action_kwargs['design'] = 'mobile'
+        return render_template(
+            _fuel_edit_form_template(),
+            form=form,
+            title='Edit Fuel Expense',
+            rec=rec,
+            form_action=url_for('fuel_expense_edit', **action_kwargs),
+            back_url=back_url,
+            return_to_path=request.form.get('return_to') or request.full_path,
+            fuel_market_scan=_read_fuel_market_scan() or None,
+            location_cascade=None,
+            fuel_expense_settings=fuel_expense_settings_payload(),
+        )
+
     if request.method == 'POST' and form.validate_on_submit():
         vehicle_id = form.vehicle_id.data
         if vehicle_id == 0:
@@ -2747,21 +2776,22 @@ def fuel_expense_edit(pk):
                 form_action=url_for('fuel_expense_edit', pk=rec.id),
                 location_cascade=None,
             )
-        previous_reading = form.previous_reading.data
         current_reading = form.current_reading.data
-        if previous_reading is None:
-            previous_reading = _fuel_expense_previous_reading(
-                vehicle_id=vehicle_id,
-                fueling_date=fueling_date,
-                exclude_id=pk,
-                workspace_employee_id=workspace_employee_id,
-                current_reading=current_reading,
-            ) or 0
+        previous_reading = _fuel_expense_resolved_previous(
+            vehicle_id, fueling_date, current_reading, workspace_employee_id, exclude_id=pk,
+        )
+        form.previous_reading.data = previous_reading
         prev_f = float(previous_reading)
         curr_f = float(current_reading)
+        if curr_f <= prev_f:
+            flash('Current reading must be greater than the previous reading.', 'danger')
+            return _render_fuel_edit()
         km = curr_f - prev_f
         amount = form.amount.data
         fuel_price = form.fuel_price.data
+        if not fuel_price or float(fuel_price) <= 0:
+            flash('Fuel price is required so liters and MPG can be calculated.', 'danger')
+            return _render_fuel_edit()
         amount_f = float(amount) if amount else 0
         fuel_price_f = float(fuel_price) if fuel_price else 0
         liters = round(amount_f / fuel_price_f, 2) if fuel_price_f else None
@@ -2778,8 +2808,6 @@ def fuel_expense_edit(pk):
             if payment_type == 'Cash':
                 expense_by_val = expense_by_val or _workspace_default_hbl_expense_by(workspace_employee_id)
             selected_credit_account_id = _workspace_account_id_from_expense_by(expense_by_val, workspace_employee_id)
-            reading_text = f"{prev_f:g} to {curr_f:g}"
-            fuel_expense_desc = f"Fueling expense / {vehicle_obj.vehicle_no} / Reading {reading_text}"
             _workspace_reverse_expense_journals('FuelExpense', rec.id, workspace_employee_id)
             rec.district_id = district_id
             rec.project_id = project_id
@@ -2802,6 +2830,8 @@ def fuel_expense_edit(pk):
             rec.km_in_task = km_in_task
             rec.meter_reading_matched = meter_reading_matched
             _resequence_vehicle_fuel_expenses(vehicle_id, workspace_employee_id)
+            reading_text = f"{float(rec.previous_reading or 0):g} to {float(rec.current_reading or 0):g}"
+            fuel_expense_desc = f"Fueling expense / {vehicle_obj.vehicle_no} / Reading {reading_text}"
             fuel_je = _workspace_post_expense_journal(
                 employee_id=workspace_employee_id,
                 reference_type='FuelExpense',
@@ -2878,23 +2908,27 @@ def fuel_expense_edit(pk):
                     app.logger.exception('Fuel async attachment queue save (edit)')
                     flash('Fuel update save ho gayi lekin files queue me add nahi ho sakin.', 'warning')
             flash('Fuel expense updated.', 'success')
+            save_action = (request.form.get('_save_action') or '').strip()
+            if save_action == 'save_add':
+                next_args = {
+                    'district_id': rec.district_id or 0,
+                    'project_id': rec.project_id or 0,
+                    'vehicle_id': rec.vehicle_id,
+                    'payment_type': payment_type,
+                    'last_id': rec.id,
+                }
+                if expense_by_val:
+                    next_args['expense_by'] = expense_by_val
+                if _fuel_edit_uses_mobile_form():
+                    next_args['design'] = 'mobile'
+                return redirect(url_for('fuel_expense_add', **next_args))
+            if save_action == 'save_list':
+                return redirect(url_for('fuel_expense_list'))
             return redirect(back_url)
         except Exception:
             db.session.rollback()
             raise
-    from fuel_expense_settings import fuel_expense_settings_payload
-    return render_template(
-        _fuel_edit_form_template(),
-        form=form,
-        title='Edit Fuel Expense',
-        rec=rec,
-        form_action=url_for('fuel_expense_edit', pk=rec.id),
-        back_url=back_url,
-        return_to_path=request.full_path,
-        fuel_market_scan=_read_fuel_market_scan() or None,
-        location_cascade=None,
-        fuel_expense_settings=fuel_expense_settings_payload(),
-    )
+    return _render_fuel_edit()
 
 
 def _fuel_expense_viewer_allowed(rec):
