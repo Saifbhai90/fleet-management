@@ -67,6 +67,24 @@
     box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
   }
   #oilSubmitOverlay .progress { height: 1.25rem; }
+  /* Product search: typed text must stay visible. The closed field keeps
+     "-- Search / Select --" as an item, which hides the real input. */
+  #entryRow .ts-wrapper .ts-control:has(> input:not(:placeholder-shown)) > input {
+    opacity: 1 !important;
+    position: relative !important;
+    left: auto !important;
+    width: auto !important;
+    min-width: 8ch !important;
+    flex: 1 1 auto !important;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a !important;
+    caret-color: #0f172a;
+    z-index: 2;
+  }
+  #entryRow .ts-wrapper .ts-control:has(> input:not(:placeholder-shown)) .item,
+  #entryRow .ts-wrapper .ts-control:has(> input:not(:placeholder-shown)) .placeholder {
+    display: none !important;
+  }
 </style>
 <div class="container-fluid oil-form-wrap expense-mobile-form-page py-2">
   <script src="{{ url_for('static', filename='js/expense_batch_upload.js') }}?v=1001"></script>
