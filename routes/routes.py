@@ -84,6 +84,7 @@ from utils import (
     emg_amb_reg_matches_vehicle_no,
 )
 from services.driver_job_history import build_driver_job_history, job_history_counts
+from services.expense_cloud_retry import promote_local_expense_media
 from auth_utils import (
     get_required_permission, user_has_permission, user_can_access, check_password,
     is_endpoint_allowed_for_any_authed, csrf_exempt_origin_is_allowed,
@@ -2122,19 +2123,29 @@ def _expense_attachment_r2_ready():
 def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folder, upload_root, rel_prefix):
     """Store image/video on R2 when configured, else under upload_root/rel_prefix. Returns DB file_path value."""
     if _expense_attachment_r2_ready():
-        try:
-            from r2_storage import upload_image_file, upload_binary_file, upload_pdf_file
-            file_storage.seek(0)
-            if file_type == 'image':
-                url = upload_image_file(file_storage, folder=r2_folder)
-            elif file_type == 'pdf':
-                url = upload_pdf_file(file_storage, folder=r2_folder)
-            else:
-                url = upload_binary_file(file_storage, folder=r2_folder, original_filename=original_fn)
-            if url:
-                return url
-        except Exception as e:
-            app.logger.warning('R2 expense media upload failed (%s): %s', r2_folder, e)
+        from r2_storage import upload_image_file, upload_binary_file, upload_pdf_file
+        last_err = None
+        for attempt in range(3):
+            try:
+                file_storage.seek(0)
+                if file_type == 'image':
+                    url = upload_image_file(file_storage, folder=r2_folder)
+                elif file_type == 'pdf':
+                    url = upload_pdf_file(file_storage, folder=r2_folder)
+                else:
+                    url = upload_binary_file(file_storage, folder=r2_folder, original_filename=original_fn)
+                if url:
+                    return url
+            except Exception as e:
+                last_err = e
+                app.logger.warning(
+                    'R2 expense media upload failed (%s) attempt %s: %s',
+                    r2_folder, attempt + 1, e,
+                )
+                if attempt < 2:
+                    _time_mod.sleep(2 * (attempt + 1))
+        if last_err:
+            app.logger.warning('R2 expense media fell back to server disk (%s): %s', r2_folder, last_err)
     file_storage.seek(0)
     fn = secure_filename(original_fn or '') or 'file'
     base, ext = os.path.splitext(fn)
@@ -2499,6 +2510,12 @@ def _process_expense_upload_job(kind, expense_id: int):
             rec.upload_status = 'success'
             rec.upload_error = None
         _safe_commit()
+        try:
+            promoted = promote_local_expense_media(limit=20)
+            if promoted:
+                app.logger.info('Moved %s local expense file(s) to Cloudflare after %s upload', promoted, kind)
+        except Exception:
+            app.logger.exception('Expense cloud retry after upload failed')
 
 
 def _prepare_maintenance_upload_manifest(files, expense_id):

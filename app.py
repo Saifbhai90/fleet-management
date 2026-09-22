@@ -1281,6 +1281,11 @@ if _run_startup_tasks:
         except Exception as e:
             app.logger.warning('Fleet score snapshot scheduler failed to start: %s', e)
         try:
+            from expense_cloud_retry import start_expense_cloud_retry_scheduler
+            start_expense_cloud_retry_scheduler(app)
+        except Exception as e:
+            app.logger.warning('Expense cloud retry scheduler failed to start: %s', e)
+        try:
             from services.memory_guard import start_memory_guard
             start_memory_guard(app)
         except Exception as e:
