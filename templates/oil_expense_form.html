@@ -1628,6 +1628,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  {% if not rec %}
+  function _focusDistrictField() {
+    if (!districtSelect) return false;
+    if (districtSelect.tomselect) {
+      districtSelect.tomselect.focus();
+      return true;
+    }
+    return false;
+  }
+  window.setTimeout(function() {
+    if (!_focusDistrictField()) window.setTimeout(_focusDistrictField, 300);
+  }, 200);
+  {% endif %}
+
   if (oilAttachmentFiles) {
     oilAttachmentFiles.addEventListener('change', function() { updateAttachmentHint(''); });
     document.addEventListener('paste', function(e) {
