@@ -64,6 +64,7 @@ from forms import (
 from datetime import datetime, date, time, timezone
 from datetime import timedelta
 from decimal import Decimal
+import bisect
 import base64
 import csv
 from io import StringIO, BytesIO
@@ -73,7 +74,7 @@ from PIL import Image
 from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert, select
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, load_only
 from utils import (
     generate_csv_response, parse_date, generate_excel_template, format_cnic, format_phone, format_date_ddmmyyyy, format_reading,
     format_time_ampm,
@@ -5104,12 +5105,14 @@ def _build_vehicle_activity_index(from_date, to_date, vehicle_nos):
     """vehicle_no (upper) -> list of (parsed_dt, VehicleActivityRecord), sorted by dt"""
     if not vehicle_nos:
         return {}
+    wanted = list({v.strip().upper() for v in vehicle_nos if v and v.strip()})
+    if not wanted:
+        return {}
+    # Match the stored registration exactly so vehicle_no + task_date indexes apply.
     activity_rows = VehicleActivityRecord.query.filter(
         VehicleActivityRecord.task_date >= from_date,
         VehicleActivityRecord.task_date <= to_date,
-        func.upper(func.trim(VehicleActivityRecord.vehicle_no)).in_(
-            [v.strip().upper() for v in vehicle_nos if v]
-        ),
+        VehicleActivityRecord.vehicle_no.in_(wanted),
     ).all()
     d = {}
     for act in activity_rows:
@@ -5121,6 +5124,47 @@ def _build_vehicle_activity_index(from_date, to_date, vehicle_nos):
     for kn, lst in d.items():
         lst.sort(key=lambda x: x[0])
     return d
+
+
+def _moving_activity_times(vehicle_no, from_date, to_date):
+    """Sorted movement times for one vehicle.
+
+    Only distance > 0, and only this vehicle, so a whole project is not one
+    in-memory copy of every GPS point.
+    """
+    vehicle_no = (vehicle_no or '').strip()
+    if not vehicle_no:
+        return []
+    rows = (
+        VehicleActivityRecord.query
+        .with_entities(VehicleActivityRecord.record_date_time)
+        .filter(
+            VehicleActivityRecord.vehicle_no == vehicle_no,
+            VehicleActivityRecord.task_date >= from_date,
+            VehicleActivityRecord.task_date <= to_date,
+            VehicleActivityRecord.distance > 0,
+        )
+        .all()
+    )
+    times = []
+    for (raw,) in rows:
+        adt = _parse_activity_datetime(raw)
+        if adt:
+            times.append(adt)
+    times.sort()
+    return times
+
+
+def _first_time_in_window(sorted_times, start_dt, end_dt, strictly_after=False):
+    if not sorted_times or start_dt is None:
+        return None
+    idx = bisect.bisect_right(sorted_times, start_dt) if strictly_after else bisect.bisect_left(sorted_times, start_dt)
+    if idx >= len(sorted_times):
+        return None
+    hit = sorted_times[idx]
+    if end_dt is not None and hit > end_dt:
+        return None
+    return hit
 
 
 def _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt):
@@ -5279,13 +5323,48 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
     def _norm_vno(vno):
         return (vno or '').strip().upper()
 
-    all_emg = EmergencyTaskRecord.query.filter(
+    emg_q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
         EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
         EmergencyTaskRecord.completed_date_time.isnot(None),
         EmergencyTaskRecord.excel_created_date.isnot(None),
-    ).order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
+    )
+    # Apply vehicle / district / project in SQL. Loading every Green/Yellow task
+    # for three weeks (about 40k rows) was exhausting the web instance and
+    # returning 502 when only one vehicle was selected.
+    if (vehicle_id or district_id or project_id
+            or (not is_master_or_admin and (allowed_vehicles or allowed_districts or allowed_projects))):
+        vq = Vehicle.query.with_entities(Vehicle.vehicle_no)
+        if vehicle_id:
+            vq = vq.filter(Vehicle.id == vehicle_id)
+        if district_id:
+            vq = vq.filter(Vehicle.district_id == district_id)
+        if project_id:
+            vq = vq.filter(Vehicle.project_id == project_id)
+        if not is_master_or_admin:
+            if allowed_vehicles:
+                vq = vq.filter(Vehicle.id.in_(list(allowed_vehicles)))
+            if allowed_districts:
+                vq = vq.filter(Vehicle.district_id.in_(list(allowed_districts)))
+            if allowed_projects:
+                vq = vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
+        scope_regs = list({_norm_vno(no) for (no,) in vq.all() if no and str(no).strip()})
+        if not scope_regs:
+            return []
+        emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no.in_(scope_regs))
+    emg_q = emg_q.options(load_only(
+        EmergencyTaskRecord.id,
+        EmergencyTaskRecord.task_date,
+        EmergencyTaskRecord.task_id_ext,
+        EmergencyTaskRecord.amb_reg_no,
+        EmergencyTaskRecord.excel_created_date,
+        EmergencyTaskRecord.completed_date_time,
+        EmergencyTaskRecord.category,
+    ))
+    all_emg = emg_q.order_by(
+        EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()
+    ).all()
     if not all_emg:
         return []
 
@@ -5329,93 +5408,92 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
     if not filtered:
         return []
 
-    need_nos = list({(emg.amb_reg_no or '').strip().upper() for emg, v in filtered})
-    act_index = _build_vehicle_activity_index(from_date, to_date, need_nos)
+    by_vehicle = {}
+    for emg, v in filtered:
+        by_vehicle.setdefault((v.vehicle_no or '').strip(), []).append((emg, v))
 
     out = []
-    for emg, v in filtered:
-        kn = (emg.amb_reg_no or '').strip().upper()
-        assign_dt = _parse_emg_datetime(emg.excel_created_date)
-        close_dt = _parse_emg_datetime(emg.completed_date_time)
-        # Late mode: Vehicle Start / delay only need task date + activity (not assign→move lag).
-        if status == 'late_only' and start_time_limit is not None:
-            if not emg.task_date:
-                continue
-            # Keep create/close for display when present; do not require them for start.
-            sorted_acts = act_index.get(kn) or []
-            v_start_dt, _v_act = _first_activity_after_start_time(
-                sorted_acts, emg.task_date, start_time_limit
-            )
-        else:
-            if not assign_dt or not close_dt or close_dt < assign_dt:
-                continue
-            sorted_acts = act_index.get(kn) or []
-            v_start_dt, _v_act = _first_activity_after_task_assign(sorted_acts, assign_dt, close_dt)
-
-        if v_start_dt is None:
-            delay_minutes = None
-        else:
+    for vno, items in by_vehicle.items():
+        move_times = _moving_activity_times(vno, from_date, to_date)
+        for emg, v in items:
+            assign_dt = _parse_emg_datetime(emg.excel_created_date)
+            close_dt = _parse_emg_datetime(emg.completed_date_time)
+            # Late mode: Vehicle Start / delay only need task date + activity (not assign→move lag).
             if status == 'late_only' and start_time_limit is not None:
-                expected_dt = datetime.combine(v_start_dt.date(), start_time_limit)
-                delay_minutes = (v_start_dt - expected_dt).total_seconds() / 60.0
-            elif status == 'early_only' and end_time_limit is not None:
-                expected_dt = datetime.combine(v_start_dt.date(), end_time_limit)
-                delay_minutes = (expected_dt - v_start_dt).total_seconds() / 60.0
+                if not emg.task_date:
+                    continue
+                day_start = datetime.combine(emg.task_date, start_time_limit)
+                day_end = datetime.combine(emg.task_date, time.max)
+                v_start_dt = _first_time_in_window(move_times, day_start, day_end, strictly_after=True)
             else:
-                delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
-            if delay_minutes < 0:
-                delay_minutes = 0.0
+                if not assign_dt or not close_dt or close_dt < assign_dt:
+                    continue
+                v_start_dt = _first_time_in_window(move_times, assign_dt, close_dt)
 
-        if delay_limit is not None:
-            if check_type == 'above' and (delay_minutes is None or not (delay_minutes > delay_limit)):
-                continue
-            if check_type == 'below' and (delay_minutes is None or not (delay_minutes < delay_limit)):
-                continue
-
-        # Late: only starts strictly after selected Start Time (no 0m / exact 08:00 rows)
-        if status == 'late_only' and start_time_limit is not None:
-            if v_start_dt is None or delay_minutes is None or delay_minutes <= 0:
-                continue
-            if end_time_limit is not None and v_start_dt.time() > end_time_limit:
-                continue
-        elif start_time_limit is not None or end_time_limit is not None:
             if v_start_dt is None:
-                continue
-            if not _vehicle_start_in_time_window(v_start_dt.time(), start_time_limit, end_time_limit):
-                continue
+                delay_minutes = None
+            else:
+                if status == 'late_only' and start_time_limit is not None:
+                    expected_dt = datetime.combine(v_start_dt.date(), start_time_limit)
+                    delay_minutes = (v_start_dt - expected_dt).total_seconds() / 60.0
+                elif status == 'early_only' and end_time_limit is not None:
+                    expected_dt = datetime.combine(v_start_dt.date(), end_time_limit)
+                    delay_minutes = (expected_dt - v_start_dt).total_seconds() / 60.0
+                else:
+                    delay_minutes = (v_start_dt - assign_dt).total_seconds() / 60.0
+                if delay_minutes < 0:
+                    delay_minutes = 0.0
 
-        if delay_minutes is None:
-            delay_display = '-'
-            delay_kind = ''
-        elif status == 'late_only':
-            formatted = _format_task_delay_display(delay_minutes)
-            delay_display = formatted + ' late' if formatted != '0m' else '0m'
-            delay_kind = 'late'
-        elif status == 'early_only':
-            formatted = _format_task_delay_display(delay_minutes)
-            delay_display = formatted + ' early' if formatted != '0m' else '0m'
-            delay_kind = 'early'
-        else:
-            delay_display = _format_task_delay_display(delay_minutes)
-            delay_kind = 'normal' if delay_minutes == 0 else 'late'
+            if delay_limit is not None:
+                if check_type == 'above' and (delay_minutes is None or not (delay_minutes > delay_limit)):
+                    continue
+                if check_type == 'below' and (delay_minutes is None or not (delay_minutes < delay_limit)):
+                    continue
 
-        p = v.project
-        d = v.district
-        out.append({
-            'emg': emg,
-            'vehicle': v,
-            'project': p,
-            'district': d,
-            'task_id': (emg.task_id_ext or '').strip() or '-',
-            'category': (emg.category or '').strip() or '-',
-            'assign_dt': assign_dt,
-            'close_dt': close_dt,
-            'vehicle_start_dt': v_start_dt,
-            'delay_minutes': None if delay_minutes is None else round(float(delay_minutes), 2),
-            'delay_display': delay_display,
-            'status': status,
-            'delay_kind': delay_kind,
-        })
+            # Late: only starts strictly after selected Start Time (no 0m / exact 08:00 rows)
+            if status == 'late_only' and start_time_limit is not None:
+                if v_start_dt is None or delay_minutes is None or delay_minutes <= 0:
+                    continue
+                if end_time_limit is not None and v_start_dt.time() > end_time_limit:
+                    continue
+            elif start_time_limit is not None or end_time_limit is not None:
+                if v_start_dt is None:
+                    continue
+                if not _vehicle_start_in_time_window(v_start_dt.time(), start_time_limit, end_time_limit):
+                    continue
+
+            if delay_minutes is None:
+                delay_display = '-'
+                delay_kind = ''
+            elif status == 'late_only':
+                formatted = _format_task_delay_display(delay_minutes)
+                delay_display = formatted + ' late' if formatted != '0m' else '0m'
+                delay_kind = 'late'
+            elif status == 'early_only':
+                formatted = _format_task_delay_display(delay_minutes)
+                delay_display = formatted + ' early' if formatted != '0m' else '0m'
+                delay_kind = 'early'
+            else:
+                delay_display = _format_task_delay_display(delay_minutes)
+                delay_kind = 'normal' if delay_minutes == 0 else 'late'
+
+            p = v.project
+            d = v.district
+            out.append({
+                'emg': emg,
+                'vehicle': v,
+                'project': p,
+                'district': d,
+                'task_id': (emg.task_id_ext or '').strip() or '-',
+                'category': (emg.category or '').strip() or '-',
+                'assign_dt': assign_dt,
+                'close_dt': close_dt,
+                'vehicle_start_dt': v_start_dt,
+                'delay_minutes': None if delay_minutes is None else round(float(delay_minutes), 2),
+                'delay_display': delay_display,
+                'status': status,
+                'delay_kind': delay_kind,
+            })
     return out
 
 
