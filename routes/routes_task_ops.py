@@ -148,7 +148,7 @@ def red_task_list():
         query = query.filter(RedTask.district_id == district_id)
     if project_id:
         query = query.filter(RedTask.project_id == project_id)
-    rows = query.order_by(RedTask.task_date.desc(), RedTask.id.desc()).all()
+    rows = query.order_by(RedTask.task_date.asc(), RedTask.id.asc()).all()
     search = (request.args.get('search') or '').strip()
     if search:
         tokens = [t.lower() for t in search.split() if t]

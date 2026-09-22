@@ -277,7 +277,7 @@ function goPage(n){var u=new URLSearchParams(window.location.search);u.set('page
     function sortTable(column) {
         const urlParams = new URLSearchParams(window.location.search);
         const currentSort = urlParams.get('sort_by');
-        const currentOrder = urlParams.get('sort_order') || 'desc';
+        const currentOrder = urlParams.get('sort_order') || 'asc';
         let newOrder = 'asc';
         if (currentSort === column && currentOrder === 'asc') { newOrder = 'desc'; }
         urlParams.set('sort_by', column);

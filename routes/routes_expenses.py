@@ -3713,7 +3713,7 @@ def oil_expense_list():
             wo_q = wo_q.filter(OilWorkOrder.district_id.in_(list(allowed_districts)))
         if allowed_vehicles:
             wo_q = wo_q.filter(OilWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
-    open_work_orders = wo_q.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).limit(200).all()
+    open_work_orders = wo_q.order_by(OilWorkOrder.opened_on.asc(), OilWorkOrder.id.asc()).limit(200).all()
     return render_template(
         'oil_expense_list.html',
         form=form,
@@ -5729,7 +5729,7 @@ def maintenance_work_order_list():
     # Note: do not use selectinload(MaintenanceWorkOrder.attachments) — attachments is lazy='dynamic'
     # and SQLAlchemy rejects eager loading on dynamic relationships (500 on this page).
     work_orders = query.order_by(
-        MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()
+        MaintenanceWorkOrder.opened_on.asc(), MaintenanceWorkOrder.id.asc()
     ).all()
     from list_visibility import expense_or_work_order_needs_upload_media_columns
     show_upload_media_columns = (
@@ -5833,7 +5833,7 @@ def maintenance_work_order_export():
     if vehicle_id:
         query = query.filter(MaintenanceWorkOrder.vehicle_id == vehicle_id)
 
-    work_orders = query.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).all()
+    work_orders = query.order_by(MaintenanceWorkOrder.opened_on.asc(), MaintenanceWorkOrder.id.asc()).all()
 
     status_label = {'open': 'Open', 'in_progress': 'In Progress', 'closed': 'Closed'}
     headers = [
@@ -6363,7 +6363,7 @@ def oil_work_order_list():
         query = query.filter(OilWorkOrder.vehicle_id == vehicle_id)
 
     work_orders = query.order_by(
-        OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()
+        OilWorkOrder.opened_on.asc(), OilWorkOrder.id.asc()
     ).all()
     rows = []
     for wo in work_orders:
@@ -6462,7 +6462,7 @@ def oil_work_order_export():
     if vehicle_id:
         query = query.filter(OilWorkOrder.vehicle_id == vehicle_id)
 
-    work_orders = query.order_by(OilWorkOrder.opened_on.desc(), OilWorkOrder.id.desc()).all()
+    work_orders = query.order_by(OilWorkOrder.opened_on.asc(), OilWorkOrder.id.asc()).all()
 
     status_label = {'open': 'Open', 'in_progress': 'In Progress', 'closed': 'Closed'}
     headers = [
@@ -7314,7 +7314,7 @@ def maintenance_expense_list():
             wo_q = wo_q.filter(MaintenanceWorkOrder.district_id.in_(list(allowed_districts)))
         if allowed_vehicles:
             wo_q = wo_q.filter(MaintenanceWorkOrder.vehicle_id.in_(list(allowed_vehicles)))
-    open_work_orders = wo_q.order_by(MaintenanceWorkOrder.opened_on.desc(), MaintenanceWorkOrder.id.desc()).limit(200).all()
+    open_work_orders = wo_q.order_by(MaintenanceWorkOrder.opened_on.asc(), MaintenanceWorkOrder.id.asc()).limit(200).all()
     return render_template(
         'maintenance_expense_list.html',
         form=form,
@@ -7536,7 +7536,7 @@ def maintenance_expense_history():
         query = query.join(MaintenanceExpenseItem, MaintenanceExpenseItem.maintenance_expense_id == MaintenanceExpense.id)
         query = query.filter(MaintenanceExpenseItem.product_id == product_id)
 
-    rows = query.order_by(MaintenanceExpense.expense_date.desc(), MaintenanceExpense.id.desc()).all()
+    rows = query.order_by(MaintenanceExpense.expense_date.asc(), MaintenanceExpense.id.asc()).all()
     invoice_ids = [r.id for r in rows]
     repeat_map = {}
     if invoice_ids:

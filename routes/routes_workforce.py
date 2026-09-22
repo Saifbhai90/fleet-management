@@ -333,7 +333,7 @@ def driver_job_left_list():
         if flt is not None:
             query = query.filter(flt)
 
-    left_records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    left_records = query.order_by(DriverStatusChange.change_date.asc()).all()
 
     # Filter dropdown choices by user scope
     project_q = Project.query
@@ -464,7 +464,7 @@ def driver_job_left_export():
                 District, DriverStatusChange.left_district_id == District.id
             ).filter(flt)
     
-    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    records = query.order_by(DriverStatusChange.change_date.asc()).all()
     
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -526,7 +526,7 @@ def driver_job_left_print():
                 District, DriverStatusChange.left_district_id == District.id
             ).filter(flt)
     
-    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    records = query.order_by(DriverStatusChange.change_date.asc()).all()
     return render_template('driver_job_left_print.html', records=records, q=q, project_id=project_id, district_id=district_id)
 
 
@@ -595,7 +595,7 @@ def driver_rejoin_list():
         if flt is not None:
             query = query.filter(flt)
 
-    rejoin_records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    rejoin_records = query.order_by(DriverStatusChange.change_date.asc()).all()
 
     # Filter dropdown choices by user scope
     project_q = Project.query
@@ -644,7 +644,7 @@ def driver_rejoin_print():
         flt = _multi_word_filter(search, Driver.name, Driver.driver_id, Project.name, Vehicle.vehicle_no)
         if flt is not None:
             query = query.filter(flt)
-    records = query.order_by(DriverStatusChange.change_date.desc()).all()
+    records = query.order_by(DriverStatusChange.change_date.asc()).all()
     return render_template('driver_rejoin_print.html', records=records, search=search)
 
 

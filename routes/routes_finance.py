@@ -258,7 +258,7 @@ def payment_vouchers_list():
     
     # Sorting
     sort_by = request.args.get('sort_by', 'payment_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     if sort_by == 'payment_date':
         query = query.order_by(PaymentVoucher.payment_date.desc() if sort_order == 'desc' else PaymentVoucher.payment_date.asc())
@@ -267,7 +267,7 @@ def payment_vouchers_list():
     elif sort_by == 'amount':
         query = query.order_by(PaymentVoucher.amount.desc() if sort_order == 'desc' else PaymentVoucher.amount.asc())
     else:
-        query = query.order_by(PaymentVoucher.payment_date.desc())
+        query = query.order_by(PaymentVoucher.payment_date.asc())
     
     search = (request.args.get('search') or '').strip()
     if search:
@@ -450,7 +450,7 @@ def receipt_vouchers_list():
                 continue
     
     sort_by = request.args.get('sort_by', 'receipt_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     if sort_by == 'receipt_date':
         query = query.order_by(ReceiptVoucher.receipt_date.desc() if sort_order == 'desc' else ReceiptVoucher.receipt_date.asc())
@@ -459,7 +459,7 @@ def receipt_vouchers_list():
     elif sort_by == 'amount':
         query = query.order_by(ReceiptVoucher.amount.desc() if sort_order == 'desc' else ReceiptVoucher.amount.asc())
     else:
-        query = query.order_by(ReceiptVoucher.receipt_date.desc())
+        query = query.order_by(ReceiptVoucher.receipt_date.asc())
     
     search = (request.args.get('search') or '').strip()
     if search:
@@ -569,7 +569,7 @@ def bank_entries_list():
                 BankEntry.description.ilike(like),
             ))
 
-    query = query.order_by(BankEntry.entry_date.desc())
+    query = query.order_by(BankEntry.entry_date.asc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     entries = pagination.items
 
@@ -1032,7 +1032,7 @@ def employee_expense_list():
                 EmployeeExpense.payment_mode.ilike(like),
             ))
 
-    query = query.order_by(EmployeeExpense.expense_date.desc())
+    query = query.order_by(EmployeeExpense.expense_date.asc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     expenses = pagination.items
 
@@ -2555,7 +2555,7 @@ def fund_transfers_list():
     show_upload_media_columns = query.filter(_ft_not_ideal_attachment).limit(1).first() is not None
 
     overall_amount_total = query.with_entities(db.func.coalesce(db.func.sum(FundTransfer.amount), 0)).scalar() or 0
-    query = query.order_by(FundTransfer.transfer_date.desc(), FundTransfer.id.desc())
+    query = query.order_by(FundTransfer.transfer_date.asc(), FundTransfer.id.asc())
     transfers = query.paginate(page=page, per_page=per_page, error_out=False)
     page_amount_subtotal = sum((ft.amount or 0) for ft in (transfers.items or []))
     category_choices = [name for name, _label in _get_fund_transfer_category_choices(include_all_label=True)[1:]]
@@ -2966,7 +2966,7 @@ def journal_vouchers_list():
         query = query.filter(JournalEntry.entry_date >= from_date)
     elif to_date:
         query = query.filter(JournalEntry.entry_date <= to_date)
-    query = query.order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
+    query = query.order_by(JournalEntry.entry_date.asc(), JournalEntry.id.asc())
 
     search = (request.args.get('search') or '').strip()
     if search:

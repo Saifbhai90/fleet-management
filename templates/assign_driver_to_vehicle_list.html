@@ -305,10 +305,10 @@
   window.sortTable = function (column) {
     var urlParams = new URLSearchParams(window.location.search);
     var currentSort = urlParams.get('sort_by');
-    var currentOrder = urlParams.get('sort_order') || 'desc';
+    var currentOrder = urlParams.get('sort_order') || 'asc';
     var newOrder = 'asc';
     if (currentSort === column && currentOrder === 'asc') { newOrder = 'desc'; }
-    // Assign Date defaults to newest-first on first click
+    // Assign Date defaults to oldest-first on first click
     if (column === 'assign_date' && currentSort !== 'assign_date') { newOrder = 'desc'; }
     urlParams.set('sort_by', column);
     urlParams.set('sort_order', newOrder);

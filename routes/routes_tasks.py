@@ -510,7 +510,7 @@ def task_report_list():
         _task_report_list_query_options(
             query, vehicle_joined=vehicle_joined, include_parking=include_parking
         )
-        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
+        .order_by(VehicleDailyTask.task_date.asc(), VehicleDailyTask.id)
     )
     # Footer totals need the full filtered set enriched; search also requires all
     # rows in memory. Scoped EMG/mileage lookups keep this path cheap.
@@ -626,7 +626,7 @@ def task_report_list_export_pdf():
         _task_report_list_query_options(
             query, vehicle_joined=vehicle_joined, include_parking=bool(search)
         )
-        .order_by(VehicleDailyTask.task_date.desc(), VehicleDailyTask.id)
+        .order_by(VehicleDailyTask.task_date.asc(), VehicleDailyTask.id)
         .all()
     )
     rows = _task_report_list_rows(tasks)

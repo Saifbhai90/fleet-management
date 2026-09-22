@@ -252,7 +252,7 @@
     function sortTable(column) {
         const urlParams = new URLSearchParams(window.location.search);
         const currentSort = urlParams.get('sort_by');
-        const currentOrder = urlParams.get('sort_order') || 'desc';
+        const currentOrder = urlParams.get('sort_order') || 'asc';
         let newOrder = (currentSort === column && currentOrder === 'asc') ? 'desc' : 'asc';
         urlParams.set('sort_by', column);
         urlParams.set('sort_order', newOrder);

@@ -68,7 +68,7 @@ def export_vehicles(id):
 # ────────────────────────────────────────────────
 # Assignment: Project → Company
 # ────────────────────────────────────────────────
-def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_order='desc'):
+def _assign_project_to_company_data(search=None, sort_by='assign_date', sort_order='asc'):
     """Query assigned projects (optionally filtered by search). Returns list of Project."""
     q = Project.query.filter(Project.company_id.isnot(None))
     if search:
@@ -110,7 +110,7 @@ def assign_project_to_company():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     sort_by = request.args.get('sort_by', 'assign_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
 
     def _dmy(s):
         from datetime import datetime as _dt
@@ -615,7 +615,7 @@ def desassign_district_from_project(project_id, district_id):
 # ────────────────────────────────────────────────
 # Assignment: Vehicle → District
 # ────────────────────────────────────────────────
-def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=None, sort_by='assign_date', sort_order='desc'):
+def _assign_vehicle_to_district_data(search=None, project_id=None, district_id=None, sort_by='assign_date', sort_order='asc'):
     """Query assigned vehicles (optionally filtered by search, project_id, district_id). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.district_id.isnot(None))
     if project_id:
@@ -666,7 +666,7 @@ def assign_vehicle_to_district():
     project_id = request.args.get('project_id', type=int)
     district_id = request.args.get('district_id', type=int)
     sort_by = request.args.get('sort_by', 'assign_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     # Auto-select if only 1 option available
     disable_project = False
@@ -1043,7 +1043,7 @@ def assign_vehicle_to_parking_list():
     from_date_str = request.args.get('from_date', '').strip()
     to_date_str = request.args.get('to_date', '').strip()
     sort_by = request.args.get('sort_by', 'assign_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     # Auto-select if only 1 option available
     disable_project = False
@@ -1097,7 +1097,7 @@ def assign_vehicle_to_parking_list():
     )
 
 
-def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None, from_date=None, to_date=None, sort_by='assign_date', sort_order='desc'):
+def _assign_vehicle_to_parking_data(search=None, project_id=None, district_id=None, from_date=None, to_date=None, sort_by='assign_date', sort_order='asc'):
     """Query vehicles with parking assigned (optionally filtered by search, project_id, district_id, date range). Returns list of Vehicle."""
     query = Vehicle.query.filter(Vehicle.parking_station_id.isnot(None))
     if project_id:
@@ -1494,7 +1494,7 @@ def assign_driver_to_vehicle_list():
         from_date = parse_date(from_date_raw) if from_date_raw else None
         to_date = parse_date(to_date_raw) if to_date_raw else None
         sort_by = request.args.get('sort_by', 'assign_date')
-        sort_order = request.args.get('sort_order', 'desc')
+        sort_order = request.args.get('sort_order', 'asc')
         
         # Auto-select if only 1 option available
         disable_project = False
@@ -1577,7 +1577,7 @@ def _assign_driver_to_vehicle_data(
     from_date=None,
     to_date=None,
     sort_by='assign_date',
-    sort_order='desc',
+    sort_order='asc',
 ):
     """Query (Driver, Vehicle) pairs for assigned drivers. Optional filters."""
     query = db.session.query(Driver, Vehicle).join(Vehicle, Driver.vehicle_id == Vehicle.id)

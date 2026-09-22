@@ -49,7 +49,7 @@ def project_transfers():
     
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort_by', 'transfer_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     query = ProjectTransfer.query
     
@@ -166,7 +166,7 @@ def project_transfers_export():
         if flt is not None:
             query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(flt)
     
-    transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(ProjectTransfer.transfer_date.asc()).all()
     
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -213,7 +213,7 @@ def project_transfers_print():
         if flt is not None:
             query = query.join(Project).join(Company, ProjectTransfer.new_company_id == Company.id).filter(flt)
     
-    transfers = query.order_by(ProjectTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(ProjectTransfer.transfer_date.asc()).all()
     return render_template('project_transfers_print.html', transfers=transfers, search=search)
 
 # ==========================================
@@ -236,7 +236,7 @@ def vehicle_transfers():
     district_id = request.args.get('district_id', type=int) or 0
     q = (request.args.get('q') or '').strip()
     sort_by = request.args.get('sort_by', 'transfer_date')
-    sort_order = request.args.get('sort_order', 'desc')
+    sort_order = request.args.get('sort_order', 'asc')
     
     # Auto-select if only 1 option available
     disable_project = False
@@ -541,7 +541,7 @@ def vehicle_transfers_export():
         if flt is not None:
             query = query.filter(flt)
 
-    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(VehicleTransfer.transfer_date.asc()).all()
 
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -600,7 +600,7 @@ def vehicle_transfers_print():
                 District, VehicleTransfer.new_district_id == District.id
             ).filter(flt)
     
-    transfers = query.order_by(VehicleTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(VehicleTransfer.transfer_date.asc()).all()
     return render_template('vehicle_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
 
 @app.route('/get_vehicle_current_info/<int:vehicle_id>')
@@ -691,7 +691,7 @@ def driver_transfers():
     district_id  = request.args.get('district_id', type=int) or 0
     q            = (request.args.get('q') or '').strip()
     sort_by      = request.args.get('sort_by', 'transfer_date')
-    sort_order   = request.args.get('sort_order', 'desc')
+    sort_order   = request.args.get('sort_order', 'asc')
     from_date_str = (request.args.get('from_date') or '').strip()
     to_date_str   = (request.args.get('to_date') or '').strip()
     from_date_val = None
@@ -1113,7 +1113,7 @@ def driver_transfers_export():
                 District, Vehicle.district_id == District.id
             ).filter(flt)
     
-    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(DriverTransfer.transfer_date.asc()).all()
     
     output = io.BytesIO()
     workbook = xlsxwriter.Workbook(output)
@@ -1181,6 +1181,6 @@ def driver_transfers_print():
                 District, Vehicle.district_id == District.id
             ).filter(flt)
     
-    transfers = query.order_by(DriverTransfer.transfer_date.desc()).all()
+    transfers = query.order_by(DriverTransfer.transfer_date.asc()).all()
     return render_template('driver_transfers_print.html', transfers=transfers, q=q, project_id=project_id, district_id=district_id)
 

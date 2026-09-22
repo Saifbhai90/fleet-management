@@ -1983,7 +1983,7 @@ def _workspace_opening_expense_rows(
     col_total="",
     col_remarks="",
     sort_by="date",
-    sort_order="desc",
+    sort_order="asc",
 ):
     sort_map = {
         "date": WorkspaceOpeningExpense.opening_date,
@@ -3268,8 +3268,8 @@ def workspace_fund_transfers_list():
     show_upload_media_columns = query.filter(_wsft_not_ideal).limit(1).first() is not None
 
     pagination = query.order_by(
-        WorkspaceFundTransfer.transfer_date.desc(),
-        WorkspaceFundTransfer.id.desc(),
+        WorkspaceFundTransfer.transfer_date.asc(),
+        WorkspaceFundTransfer.id.asc(),
     ).paginate(page=page, per_page=per_page, error_out=False)
 
     account_display_map = _build_workspace_account_display_map(emp.id, active_only=False)
@@ -6487,7 +6487,7 @@ def workspace_journal_vouchers_list():
     elif to_date:
         query = query.filter(WorkspaceJournalEntry.entry_date <= to_date)
 
-    query = query.order_by(WorkspaceJournalEntry.entry_date.desc(), WorkspaceJournalEntry.id.desc())
+    query = query.order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc())
 
     # Apply District filter
     if district_id_int:
@@ -6983,7 +6983,7 @@ def workspace_journal_vouchers_export():
         query = query.filter(WorkspaceJournalEntry.project_id == int(project_id))
 
     # Get all entries without pagination
-    entries = query.order_by(WorkspaceJournalEntry.entry_date.desc(), WorkspaceJournalEntry.id.desc()).all()
+    entries = query.order_by(WorkspaceJournalEntry.entry_date.asc(), WorkspaceJournalEntry.id.asc()).all()
 
     # Calculate totals for each entry
     totals_map = {}

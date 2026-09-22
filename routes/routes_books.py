@@ -283,7 +283,7 @@ def book_assignment_list():
     if status_filter:
         query = query.filter(BookAssignment.status == status_filter)
 
-    query = query.order_by(BookAssignment.status.asc(), BookAssignment.issue_date.desc())
+    query = query.order_by(BookAssignment.status.asc(), BookAssignment.issue_date.asc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template('books/assignment_list.html',
@@ -366,7 +366,7 @@ def api_vehicle_book_history(vehicle_id):
         BookAssignment.vehicle_id == vehicle_id
     ).join(
         PhysicalBook, BookAssignment.book_id == PhysicalBook.id
-    ).order_by(BookAssignment.issue_date.desc()).all()
+    ).order_by(BookAssignment.issue_date.asc()).all()
 
     result = []
     for a in assignments:
