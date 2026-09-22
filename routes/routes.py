@@ -5363,7 +5363,7 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
         EmergencyTaskRecord.category,
     ))
     all_emg = emg_q.order_by(
-        EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()
+        EmergencyTaskRecord.task_date.asc(), EmergencyTaskRecord.id.asc()
     ).all()
     if not all_emg:
         return []
@@ -5494,6 +5494,11 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
                 'status': status,
                 'delay_kind': delay_kind,
             })
+    out.sort(key=lambda row: (
+        row['emg'].task_date or date.min,
+        row.get('assign_dt') or datetime.min,
+        row['emg'].id or 0,
+    ))
     return out
 
 
