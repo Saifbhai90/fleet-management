@@ -2038,12 +2038,110 @@ def _task_id_digits(tid_raw) -> str:
     return re.sub(r'\D', '', str(tid_raw or '').replace('PHF-', '').replace('phf-', ''))
 
 
+def _task_lookup_keys(tid_raw) -> list:
+    """Numeric id plus PHF- form, so EMG and list cache rows match."""
+    digits = _task_id_digits(tid_raw)
+    if not digits:
+        return []
+    keys = [digits, f'PHF-{digits}']
+    raw = str(tid_raw or '').strip()
+    if raw and raw not in keys:
+        keys.append(raw)
+    return keys
+
+
+def _closed_task_digits(task_ids) -> set:
+    """Task ids already Completed/Cancelled in EMG (any date) or detail cache.
+
+    Fleet map must not treat a stale Incomplete list row as active. Overnight
+    closes live on the create-date EMG row, which is not "today".
+    """
+    from models import EmergencyTaskRecord, UfoneTaskDetailCache
+
+    keys = []
+    seen = set()
+    for raw in task_ids or []:
+        for key in _task_lookup_keys(raw):
+            if key not in seen:
+                seen.add(key)
+                keys.append(key)
+    if not keys:
+        return set()
+
+    closed = set()
+    try:
+        for tid_ext, status in (
+            EmergencyTaskRecord.query
+            .filter(EmergencyTaskRecord.task_id_ext.in_(keys))
+            .with_entities(EmergencyTaskRecord.task_id_ext, EmergencyTaskRecord.status)
+            .all()
+        ):
+            if not _status_is_closed(status):
+                continue
+            digits = _task_id_digits(tid_ext)
+            if digits:
+                closed.add(digits)
+    except Exception as e:
+        logger.warning('closed task EMG lookup failed: %s', e)
+
+    try:
+        for tid, status in (
+            UfoneTaskDetailCache.query
+            .filter(UfoneTaskDetailCache.task_id.in_(keys))
+            .with_entities(UfoneTaskDetailCache.task_id, UfoneTaskDetailCache.task_status)
+            .all()
+        ):
+            if not _status_is_closed(status):
+                continue
+            digits = _task_id_digits(tid)
+            if digits:
+                closed.add(digits)
+    except Exception as e:
+        logger.warning('closed task detail lookup failed: %s', e)
+    return closed
+
+
+def _drop_closed_active_tasks(out: dict, closed: set) -> None:
+    if not out or not closed:
+        return
+    for key in [k for k, task in out.items() if (task.get('task_id') or '') in closed]:
+        out.pop(key, None)
+
+
+def _mark_task_cache_closed(tid, status) -> None:
+    """Set matching list-cache rows to Completed/Cancelled. Failures stay local."""
+    from models import UfoneTaskCache
+    from app import db
+
+    keys = _task_lookup_keys(tid)
+    if not keys:
+        return
+    label = status or 'Completed'
+    try:
+        with db.session.begin_nested():
+            rows = (
+                UfoneTaskCache.query
+                .filter(UfoneTaskCache.task_id.in_(keys))
+                .all()
+            )
+            changed = 0
+            for crow in rows:
+                if not _status_is_closed(crow.status):
+                    crow.status = label
+                    changed += 1
+        if changed:
+            logger.info('ufone task cache marked closed tid=%s rows=%s', keys[0], changed)
+    except Exception as e:
+        logger.warning('mark task cache closed failed tid=%s: %s', tid, e)
+
+
 def build_active_ufone_tasks_by_reg() -> dict:
     """Map normalized vehicle reg → today's open Ufone/EMG task (Fleet Tracking).
 
     Primary: EmergencyTaskRecord Incomplete/In-Process rows (all of today).
-    Fallback: ufone_task_cache open rows (same day) not already in map —
-    but never when EMG already marks that task Completed/Cancelled (stale cache).
+    Fallback: ufone_task_cache open rows touched today, not already in the map.
+    A task is dropped when EMG on any date, or the detail cache, already marks
+    it Completed/Cancelled. List-cache Incomplete can lag an overnight close.
     """
     from services.utils import normalize_vehicle_reg_key
 
@@ -2070,27 +2168,14 @@ def build_active_ufone_tasks_by_reg() -> dict:
         _add(out, t.get('ambulance') or '', t.get('task_id') or t.get('id'),
              t.get('patient_name'), t.get('status'), t.get('district'), t.get('address'))
 
+    rows = []
     try:
         from datetime import datetime as _dt
         from sqlalchemy import or_
-        from models import EmergencyTaskRecord, UfoneTaskCache
+        from models import UfoneTaskCache
         from utils import pk_date
 
         today = pk_date()
-        # EMG is source of truth for close: skip cache rows already Completed today.
-        closed_tids = set()
-        for (tid_ext, status) in (
-            EmergencyTaskRecord.query
-            .filter(EmergencyTaskRecord.task_date == today)
-            .with_entities(EmergencyTaskRecord.task_id_ext, EmergencyTaskRecord.status)
-            .all()
-        ):
-            if not _status_is_closed(status):
-                continue
-            digits = _task_id_digits(tid_ext)
-            if digits:
-                closed_tids.add(digits)
-
         start = _dt.combine(today, _dt.min.time())
         rows = (
             UfoneTaskCache.query
@@ -2102,16 +2187,21 @@ def build_active_ufone_tasks_by_reg() -> dict:
             .limit(500)
             .all()
         )
-        for row in rows:
-            if _status_is_closed(row.status):
-                continue
-            tid_num = _task_id_digits(row.task_id)
-            if tid_num and tid_num in closed_tids:
-                continue
-            _add(out, row.ambulance_reg or '', row.task_id, row.patient_name,
-                 row.status, row.district, row.address or '')
     except Exception as e:
         logger.warning('build_active_ufone_tasks_by_reg cache fallback failed: %s', e)
+
+    closed = _closed_task_digits(
+        [t.get('task_id') for t in out.values()] + [row.task_id for row in rows]
+    )
+    _drop_closed_active_tasks(out, closed)
+    for row in rows:
+        if _status_is_closed(row.status):
+            continue
+        tid_num = _task_id_digits(row.task_id)
+        if tid_num and tid_num in closed:
+            continue
+        _add(out, row.ambulance_reg or '', row.task_id, row.patient_name,
+             row.status, row.district, row.address or '')
 
     return out
 
@@ -2481,6 +2571,7 @@ def _persist_tasks(account_id: int, tasks: list):
             for r in UfoneTaskCache.query.filter_by(account_id=account_id)
             .filter(UfoneTaskCache.task_id.in_(tids)).all()
         }
+        closed_digits = _closed_task_digits(tids)
         for t in tasks:
             tid = str(t.get('task_id') or t.get('id') or '')
             if not tid:
@@ -2490,11 +2581,19 @@ def _persist_tasks(account_id: int, tasks: list):
                 row = UfoneTaskCache(account_id=account_id, task_id=tid)
                 db.session.add(row)
                 existing[tid] = row
+            incoming = t.get('status')
+            # A later list poll still saying Incomplete must not reopen a close
+            # that EMG or the detail cache already recorded.
+            if _status_is_closed(row.status) and not _status_is_closed(incoming):
+                incoming = row.status
+            elif (_task_id_digits(tid) in closed_digits
+                    and not _status_is_closed(incoming)):
+                incoming = 'Completed'
             row.patient_name = t.get('patient_name')
             row.phone = t.get('phone')
             row.address = t.get('address')
             row.ambulance_reg = t.get('ambulance')
-            row.status = t.get('status')
+            row.status = incoming
             row.district = t.get('district')
             row.tehsil = t.get('tehsil')
             row.facility = t.get('facility_name')
@@ -3177,19 +3276,7 @@ def sync_emergency_report_to_db(account_id: int, items: list,
             # Keep Fleet Dashboard task badges in sync: EMG close must clear
             # stale Incomplete rows in ufone_task_cache (VPS/list poll may lag).
             if _status_is_closed(new_status):
-                try:
-                    tid_num = _task_id_digits(tid)
-                    cache_keys = {str(tid), tid_num, f'PHF-{tid_num}'} if tid_num else {str(tid)}
-                    cache_keys.discard('')
-                    for crow in (
-                        UfoneTaskCache.query
-                        .filter(UfoneTaskCache.task_id.in_(list(cache_keys)))
-                        .all()
-                    ):
-                        if not _status_is_closed(crow.status):
-                            crow.status = new_status or 'Completed'
-                except Exception:
-                    pass
+                _mark_task_cache_closed(tid, new_status)
         db.session.commit()
         if events:
             try:
