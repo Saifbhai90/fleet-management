@@ -97,7 +97,7 @@ def personal_live():
         'personal/live.html',
         vehicles=vehicles, stats=cs.status_counts(vehicles), settings=s,
         configured=_configured(),
-        poll_seconds=(s.poll_seconds if s else 30),
+        poll_seconds=(s.poll_seconds if s and s.poll_seconds else 5),
         **_personal_hub_back(),
     )
 
@@ -450,7 +450,7 @@ def api_personal_settings_save():
         username=(p.get('username') or '').strip(),
         password=(p.get('password') or '').strip() or None,
         alt_api_base=alt,
-        poll_seconds=max(10, min(poll, 600)),
+        poll_seconds=max(5, min(poll, 600)),
         fcm_token=(p.get('fcm_token') if 'fcm_token' in p else None),
         commands_enabled=(bool(p.get('commands_enabled')) if 'commands_enabled' in p else None),
     )
@@ -679,7 +679,7 @@ def api_personal_stream():
     s = _settings_or_none()
     if not s or not _configured():
         return jsonify({'ok': False, 'error': 'Crescent not configured.'}), 400
-    poll = max(10, min(s.poll_seconds or 30, 600))
+    poll = max(5, min(int(s.poll_seconds or 5), 600))
 
     def gen():
         import time as _time

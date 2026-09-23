@@ -50,43 +50,53 @@
         return L.divIcon({
             className: '',
             html: `<div style="position:relative;width:${w}px;height:${h}px;">
-                     <img src="${url}" style="width:100%;height:100%;object-fit:contain;transform:rotate(${rot}deg);transform-origin:50% 50%;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">
+                     <img src="${url}" style="width:100%;height:100%;object-fit:contain;transform:rotate(${rot}deg);transform-origin:50% 50%;transition:transform .8s linear;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4));">
                      ${ring}${speedTag}
                    </div>`,
             iconSize: [w, h], iconAnchor: [w / 2, h / 2],
         });
     }
 
-    // Move a marker to a new position ONLY animating when the point actually
-    // changed — and never while the user is zooming/panning (transitions on
-    // Leaflet's transform make markers drift during zoom otherwise).
-    function moveMarker(marker, latlng) {
-        const old = marker._ll;
-        const moved = !old || old[0] !== latlng[0] || old[1] !== latlng[1];
-        if (moved && !map._psInteracting) {
-            const el = marker.getElement();
-            if (el) el.style.transition = 'transform 1s linear';
-            marker.setLatLng(latlng);
-            clearTimeout(marker._animT);
-            marker._animT = setTimeout(() => {
-                const el2 = marker.getElement();
-                if (el2) el2.style.transition = 'none';
-            }, 1050);
-        } else {
-            marker.setLatLng(latlng);
-        }
+    // Ease onto the latest GPS point in about a second. A long slide keeps
+    // the icon behind the coordinate the phone already shows.
+    function moveMarker(marker, latlng, durationMs) {
+        const target = L.latLng(latlng[0], latlng[1]);
+        const from = marker.getLatLng();
+        marker._target = target;
         marker._ll = latlng;
+        if (!from) {
+            marker.setLatLng(target);
+            return;
+        }
+        const same = Math.abs(from.lat - target.lat) < 1e-7 && Math.abs(from.lng - target.lng) < 1e-7;
+        if (same) return;
+        let meters = 0;
+        try { meters = map.distance(from, target); } catch (e) { meters = 0; }
+        if (map._psInteracting || meters > 2500) {
+            if (marker._raf) cancelAnimationFrame(marker._raf);
+            marker._raf = null;
+            marker.setLatLng(target);
+            return;
+        }
+        const startLat = from.lat;
+        const startLng = from.lng;
+        const start = performance.now();
+        const dur = Math.max(400, Math.min(durationMs || 1000, 1000));
+        if (marker._raf) cancelAnimationFrame(marker._raf);
+        function step(now) {
+            if (marker._target !== target) return;
+            const t = Math.min(1, (now - start) / dur);
+            marker.setLatLng([
+                startLat + (target.lat - startLat) * t,
+                startLng + (target.lng - startLng) * t,
+            ]);
+            if (t < 1) marker._raf = requestAnimationFrame(step);
+            else marker._raf = null;
+        }
+        marker._raf = requestAnimationFrame(step);
     }
 
-    // kill any in-flight marker animation the instant the view changes
-    map.on('zoomstart movestart', () => {
-        map._psInteracting = true;
-        Object.values(markers).forEach(m => {
-            const el = m.getElement();
-            if (el) el.style.transition = 'none';
-            clearTimeout(m._animT);
-        });
-    });
+    map.on('zoomstart movestart', () => { map._psInteracting = true; });
     map.on('zoomend moveend', () => { map._psInteracting = false; });
 
     // legend
@@ -105,8 +115,8 @@
     const freshText = document.getElementById('tbFreshText');
     let selectedId = null;
     let fitDone = false;
-    let pollSeconds = parseInt((document.getElementById('psPollInfo') || { dataset: {} }).dataset.poll || '30', 10);
-    if (!isFinite(pollSeconds) || pollSeconds < 10) pollSeconds = 30;
+    let pollSeconds = parseInt((document.getElementById('psPollInfo') || { dataset: {} }).dataset.poll || '5', 10);
+    if (!isFinite(pollSeconds) || pollSeconds < 5) pollSeconds = 5;
     let secondsLeft = pollSeconds;
     let lastVehicles = [];
 
@@ -162,7 +172,7 @@
                 markers[v.id]._ll = latlng;
                 markers[v.id]._sig = sig;
             } else {
-                moveMarker(markers[v.id], latlng);           // position (animated only on real change)
+                moveMarker(markers[v.id], latlng, 1000);
                 if (markers[v.id]._sig !== sig) {             // visuals only when something changed
                     markers[v.id].setIcon(vehicleIcon(v, isSel));
                     markers[v.id]._sig = sig;
@@ -216,7 +226,8 @@
     function pollNow() {
         fetch('/api/personal/positions').then(r => r.json()).then(res => {
             if (res.ok) {
-                pollSeconds = res.poll_seconds || 30;
+                const next = parseInt(res.poll_seconds, 10);
+                if (isFinite(next) && next >= 5) pollSeconds = next;
                 secondsLeft = pollSeconds;
                 render(res.vehicles);
             }
