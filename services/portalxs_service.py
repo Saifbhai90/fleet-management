@@ -626,11 +626,39 @@ def classify_feed_status(meta: dict, vehicles: list[dict]) -> str:
     return 'OFFLINE'
 
 
+def apply_saved_group_names(account_id: int, vehicles: list[dict]) -> list[dict]:
+    """Fill a blank GPS group from the group saved on the vehicle mapping.
+
+    PortalXS leaves some vehicles with no group. A saved group keeps them
+    out of Unassigned, and a real group from GPS still wins.
+    """
+    if not vehicles or not account_id:
+        return vehicles or []
+    from models import PortalXSVehicleMapping
+
+    saved = {}
+    for mapping in PortalXSVehicleMapping.query.filter_by(account_id=account_id).all():
+        group = (mapping.group_name or '').strip()
+        reg = (mapping.portalxs_regno or '').strip()
+        if reg and group:
+            saved[reg] = group
+    if not saved:
+        return vehicles
+    for vehicle in vehicles:
+        if (vehicle.get('GroupName') or '').strip():
+            continue
+        group = saved.get((vehicle.get('RegNo') or '').strip())
+        if group:
+            vehicle['GroupName'] = group
+    return vehicles
+
+
 def build_live_positions_payload(account_id: int, force: bool = False,
                                  vehicles: Optional[list[dict]] = None) -> dict:
     """Vehicles plus freshness fields. Existing vehicle keys are unchanged."""
     if vehicles is None:
         vehicles = serve_live_positions(account_id, force=force)
+    apply_saved_group_names(account_id, vehicles or [])
     annotated = annotate_vehicle_freshness(vehicles)
     meta = get_live_feed_meta(account_id)
     return {
@@ -934,7 +962,10 @@ def _fetch_live_positions(account_id: int, force: bool = False) -> list[dict]:
                     db.session.add(mapping)
                     existing[v['RegNo']] = mapping
 
-                mapping.group_name = v.get('GroupName', '')
+                incoming_group = (v.get('GroupName') or '').strip()
+                if incoming_group:
+                    mapping.group_name = incoming_group
+                v['GroupName'] = (mapping.group_name or '').strip()
                 mapping.make_model = v.get('MakeAndModel', '')
                 mapping.last_lat = v['LAT'] or None
                 mapping.last_lon = v['LON'] or None
