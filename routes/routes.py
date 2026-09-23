@@ -3992,38 +3992,63 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
                            check_type='', speed_limit=None,
                            allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                            is_master_or_admin=True):
-    query = db.session.query(
-        VehicleActivityRecord, Vehicle, Project, District
-    ).outerjoin(
-        Vehicle, Vehicle.vehicle_no == VehicleActivityRecord.vehicle_no
-    ).outerjoin(
+    """Speeding rows only.
+
+    The activity table is millions of GPS points. Loading every point for a
+    district and then dropping the ones under the limit exhausted the web
+    instance (502). Scope vehicles first, then ask the database for rows that
+    already pass the speed check.
+    """
+    vehicle_q = db.session.query(Vehicle, Project, District).outerjoin(
         Project, Vehicle.project_id == Project.id
     ).outerjoin(
         District, Vehicle.district_id == District.id
     )
-
-    if from_date:
-        query = query.filter(VehicleActivityRecord.task_date >= from_date)
-    if to_date:
-        query = query.filter(VehicleActivityRecord.task_date <= to_date)
-
     if not is_master_or_admin:
         if allowed_projects:
-            query = query.filter(Vehicle.project_id.in_(list(allowed_projects)))
+            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
         if allowed_districts:
-            query = query.filter(Vehicle.district_id.in_(list(allowed_districts)))
+            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
         if allowed_vehicles:
-            query = query.filter(Vehicle.id.in_(list(allowed_vehicles)))
-
+            vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
     if project_id:
-        query = query.filter(Vehicle.project_id == project_id)
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
     if district_id:
-        query = query.filter(Vehicle.district_id == district_id)
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
     if vehicle_id:
-        query = query.filter(Vehicle.id == vehicle_id)
+        vehicle_q = vehicle_q.filter(Vehicle.id == vehicle_id)
+
+    by_no = {}
+    for vehicle, project, district in vehicle_q.all():
+        reg = (vehicle.vehicle_no or '').strip()
+        if reg:
+            by_no[reg] = (vehicle, project, district)
+    if not by_no or not from_date or not to_date:
+        return []
+
+    query = VehicleActivityRecord.query.options(load_only(
+        VehicleActivityRecord.id,
+        VehicleActivityRecord.task_date,
+        VehicleActivityRecord.vehicle_no,
+        VehicleActivityRecord.record_date_time,
+        VehicleActivityRecord.location,
+        VehicleActivityRecord.speed,
+        VehicleActivityRecord.reason,
+    )).filter(
+        VehicleActivityRecord.task_date >= from_date,
+        VehicleActivityRecord.task_date <= to_date,
+        VehicleActivityRecord.vehicle_no.in_(list(by_no.keys())),
+    )
+    if speed_limit is not None and check_type == 'above':
+        query = query.filter(VehicleActivityRecord.speed > speed_limit)
+    elif speed_limit is not None and check_type == 'below':
+        query = query.filter(or_(
+            VehicleActivityRecord.speed < speed_limit,
+            VehicleActivityRecord.speed.is_(None),
+        ))
 
     out = []
-    for rec, vehicle, project, district in query.order_by(VehicleActivityRecord.task_date.desc(), VehicleActivityRecord.id.desc()).all():
+    for rec in query.all():
         speed_val = float(rec.speed or 0)
         if speed_limit is not None:
             if check_type == 'above' and not (speed_val > speed_limit):
@@ -4052,6 +4077,7 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
             if len(parts) == 2 and parts[1].strip():
                 location_text = parts[1].strip()
 
+        vehicle, project, district = by_no.get((rec.vehicle_no or '').strip(), (None, None, None))
         out.append({
             'rec': rec,
             'vehicle': vehicle,
@@ -4063,7 +4089,10 @@ def _speed_monitoring_rows(from_date=None, to_date=None, project_id=0, district_
             'check_result': check_result,
         })
 
-    out.sort(key=lambda r: r['record_dt'] or datetime.min, reverse=True)
+    out.sort(key=lambda r: (
+        r['record_dt'] or datetime.min,
+        (r['rec'].id or 0) if r.get('rec') else 0,
+    ))
     return out
 
 
