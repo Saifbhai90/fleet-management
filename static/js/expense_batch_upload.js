@@ -310,8 +310,11 @@
                   Math.min(99, pct)
                 );
               }
-            }).then(function () {
+            }).then(function (j) {
               state.batchStatus[idx] = 'ok';
+              if (j && j.skipped && j.skipped.length) {
+                state.rejectedFiles = (state.rejectedFiles || []).concat(j.skipped);
+              }
             }).catch(function (err) {
               markFailedFrom(idx, err);
               throw err;
@@ -323,6 +326,20 @@
     }
 
     function finishOk() {
+      if (state.rejectedFiles && state.rejectedFiles.length) {
+        showProgress(
+          ov,
+          'Kuch files cloud par nahi gayin',
+          state.rejectedFiles.join('; '),
+          100,
+          'Yeh files kharab ya adhuri thin. Baqi files cloud par hain. In ko phone se dubara select karke bhejein.'
+        );
+        window.setTimeout(function () {
+          if (typeof cfg.onSuccessRedirect === 'function') cfg.onSuccessRedirect(state.listUrl || cfg.fallbackListUrl || '/');
+          else window.location.href = state.listUrl || cfg.fallbackListUrl || '/';
+        }, 4000);
+        return;
+      }
       showProgress(ov, 'Upload queue me lag gayi', 'Background me Cloudflare par jaa rahi hain — list par status dekhein.', 100);
       var listUrl = state.listUrl || '/';
       window.setTimeout(function () {

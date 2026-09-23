@@ -71,6 +71,7 @@ from io import StringIO, BytesIO
 import io
 import xlsxwriter
 from PIL import Image
+from services.expense_media_store import MediaRejected, store_verified_media, validate_saved_file
 from sqlalchemy import func, text, inspect, or_, cast, and_, false, delete, insert, select
 from sqlalchemy import String as SAString
 from sqlalchemy.exc import OperationalError, IntegrityError, DataError
@@ -2122,42 +2123,51 @@ def _expense_attachment_r2_ready():
 
 
 def _save_expense_attachment_path(file_storage, file_type, original_fn, r2_folder, upload_root, rel_prefix):
-    """Store image/video on R2 when configured, else under upload_root/rel_prefix. Returns DB file_path value."""
-    if _expense_attachment_r2_ready():
-        from r2_storage import upload_image_file, upload_binary_file, upload_pdf_file
-        last_err = None
-        for attempt in range(3):
-            try:
-                file_storage.seek(0)
-                if file_type == 'image':
-                    url = upload_image_file(file_storage, folder=r2_folder)
-                elif file_type == 'pdf':
-                    url = upload_pdf_file(file_storage, folder=r2_folder)
-                else:
-                    url = upload_binary_file(file_storage, folder=r2_folder, original_filename=original_fn)
-                if url:
-                    return url
-            except Exception as e:
-                last_err = e
-                app.logger.warning(
-                    'R2 expense media upload failed (%s) attempt %s: %s',
-                    r2_folder, attempt + 1, e,
-                )
-                if attempt < 2:
-                    _time_mod.sleep(2 * (attempt + 1))
-        if last_err:
-            app.logger.warning('R2 expense media fell back to server disk (%s): %s', r2_folder, last_err)
-    file_storage.seek(0)
-    fn = secure_filename(original_fn or '') or 'file'
-    base, ext = os.path.splitext(fn)
-    if not base:
-        base = 'file'
-    unique = f"{base}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
-    subdir = os.path.join(upload_root, rel_prefix.replace('/', os.sep))
-    os.makedirs(subdir, exist_ok=True)
-    path = os.path.join(subdir, unique)
-    file_storage.save(path)
-    return '/'.join((rel_prefix.strip('/'), unique))
+    """Store a checked image or video on Cloudflare and return its URL.
+
+    The file is rejected when it cannot be opened or the cloud copy is a
+    different size. A failed cloud upload is not saved on the server disk.
+    """
+    if file_type == 'pdf':
+        if _expense_attachment_r2_ready():
+            from r2_storage import upload_pdf_file
+            file_storage.seek(0)
+            url = upload_pdf_file(file_storage, folder=r2_folder)
+            if url:
+                return url
+            raise RuntimeError('PDF cloud upload failed')
+        file_storage.seek(0)
+        fn = secure_filename(original_fn or '') or 'file'
+        base, ext = os.path.splitext(fn)
+        unique = f"{base or 'file'}_{pk_now().strftime('%Y%m%d%H%M%S')}{ext}"
+        subdir = os.path.join(upload_root, rel_prefix.replace('/', os.sep))
+        os.makedirs(subdir, exist_ok=True)
+        path = os.path.join(subdir, unique)
+        file_storage.save(path)
+        return '/'.join((rel_prefix.strip('/'), unique))
+    last_err = None
+    for attempt in range(3):
+        try:
+            file_storage.seek(0)
+            return store_verified_media(
+                file_storage,
+                file_type,
+                original_fn,
+                r2_folder,
+                upload_root=upload_root,
+                rel_prefix=rel_prefix,
+            )
+        except MediaRejected:
+            raise
+        except Exception as e:
+            last_err = e
+            app.logger.warning(
+                'Cloud expense media upload failed (%s) attempt %s: %s',
+                r2_folder, attempt + 1, e,
+            )
+            if attempt < 2:
+                _time_mod.sleep(2 * (attempt + 1))
+    raise last_err or RuntimeError('Cloud expense media upload failed')
 
 
 def _expense_attachment_max_bytes():
@@ -2323,6 +2333,22 @@ def _prepare_expense_upload_manifest(files, kind, expense_id):
         temp_path = os.path.join(batch_dir, unique)
         f.seek(0)
         f.save(temp_path)
+        written = os.path.getsize(temp_path) if os.path.isfile(temp_path) else 0
+        if sz is not None and written != sz:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+            skipped.append(f'{fn} (incomplete, got {written} of {sz} bytes)')
+            continue
+        bad = validate_saved_file(temp_path, ftype, fn)
+        if bad:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+            skipped.append(f'{fn} ({bad})')
+            continue
         manifest.append({
             'temp_path': temp_path,
             'original_name': fn,
@@ -2425,16 +2451,21 @@ def _process_expense_upload_job(kind, expense_id: int):
         except Exception:
             manifest = []
         if not manifest:
-            rec.upload_status = 'success'
-            rec.upload_failed = 0
-            rec.upload_error = None
+            if not (rec.upload_error or '').strip():
+                rec.upload_status = 'success'
+                rec.upload_failed = 0
+                rec.upload_error = None
             rec.upload_finished_at = pk_now()
             _safe_commit()
             return
+        prior_rejected = [
+            ln for ln in (rec.upload_error or '').splitlines()
+            if ln.startswith('Rejected:')
+        ]
         rec.upload_status = 'processing'
         rec.upload_started_at = pk_now()
         rec.upload_finished_at = None
-        rec.upload_error = None
+        rec.upload_error = '\n'.join(prior_rejected) if prior_rejected else None
         _safe_commit()
 
         # Re-fetch after session was released
@@ -2444,6 +2475,7 @@ def _process_expense_upload_job(kind, expense_id: int):
 
         remaining = []
         errors = []
+        rejected = 0
         done = int(rec.upload_done or 0)
         for item in manifest:
             temp_path = (item.get('temp_path') or '').strip()
@@ -2465,6 +2497,9 @@ def _process_expense_upload_job(kind, expense_id: int):
                         app.config['UPLOAD_FOLDER'],
                         f"{cfg['folder']}/{rec.id}",
                     )
+                if not (stored or '').startswith('http://') and not (stored or '').startswith('https://'):
+                    if _expense_attachment_r2_ready():
+                        raise RuntimeError('file was not stored on cloud')
                 db.session.add(cfg['attachment_model'](
                     **{
                         cfg['fk_field']: rec.id,
@@ -2478,14 +2513,23 @@ def _process_expense_upload_job(kind, expense_id: int):
                     os.remove(temp_path)
                 except OSError:
                     pass
+            except MediaRejected as ex:
+                rejected += 1
+                app.logger.warning('%s rejected unreadable file (%s): %s', cfg['log_prefix'], original_name or temp_path, ex)
+                errors.append(f'Rejected: {original_name or "file"}: {ex}')
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
             except Exception as ex:
                 app.logger.warning('%s queued upload failed (%s): %s', cfg['log_prefix'], original_name or temp_path, ex)
                 errors.append(f'{original_name or "file"}: {ex}')
                 remaining.append(item)
             rec.upload_done = done
-            rec.upload_failed = len(remaining)
+            rec.upload_failed = len(remaining) + rejected + len(prior_rejected)
             rec.upload_manifest_json = json.dumps(remaining)
-            rec.upload_error = '\n'.join(errors[-10:]) if errors else None
+            note_lines = prior_rejected + errors
+            rec.upload_error = '\n'.join(note_lines[-12:]) if note_lines else None
             try:
                 _safe_commit()
                 # Re-fetch rec after session release so next iteration has live object
@@ -2499,17 +2543,18 @@ def _process_expense_upload_job(kind, expense_id: int):
         rec = db.session.get(cfg['record_model'], expense_id)
         if not rec:
             return
-        rec.upload_failed = len(remaining)
+        note_lines = prior_rejected + errors
+        rec.upload_failed = len(remaining) + rejected + len(prior_rejected)
         rec.upload_manifest_json = json.dumps(remaining)
-        rec.upload_error = '\n'.join(errors[-10:]) if errors else None
+        rec.upload_error = '\n'.join(note_lines[-12:]) if note_lines else None
         rec.upload_finished_at = pk_now()
-        if remaining and done > 0:
-            rec.upload_status = 'partial'
-        elif remaining:
-            rec.upload_status = 'error'
-        else:
+        if not remaining and not note_lines:
             rec.upload_status = 'success'
             rec.upload_error = None
+        elif done > 0:
+            rec.upload_status = 'partial'
+        else:
+            rec.upload_status = 'error'
         _safe_commit()
         try:
             promoted = promote_local_expense_media(limit=20)
@@ -2523,10 +2568,38 @@ def _prepare_maintenance_upload_manifest(files, expense_id):
     return _prepare_expense_upload_manifest(files, 'maintenance', expense_id)
 
 
+def _stamp_rejected_uploads(rec, skipped):
+    """Remember files that were refused so the list does not show a clean success."""
+    names = [s for s in (skipped or []) if s]
+    if not names:
+        return
+    lines = [f'Rejected: {s}' for s in names]
+    prev = [ln for ln in (rec.upload_error or '').splitlines() if ln.strip()]
+    fresh = [ln for ln in lines if ln not in prev]
+    if not fresh:
+        return
+    rec.upload_error = '\n'.join(prev + fresh)
+    rec.upload_failed = int(rec.upload_failed or 0) + len(fresh)
+    queued = 0
+    try:
+        queued = len(json.loads(rec.upload_manifest_json or '[]'))
+    except Exception:
+        queued = 0
+    if queued == 0 and int(rec.upload_done or 0) == 0:
+        rec.upload_status = 'error'
+        rec.upload_finished_at = pk_now()
+    elif rec.upload_status == 'success':
+        rec.upload_status = 'partial'
+
+
 def _append_expense_upload_manifest(rec, kind, files, *, start_worker=True):
     """Queue uploaded files on disk for background R2 upload; append to existing manifest."""
     manifest, skipped = _prepare_expense_upload_manifest(files, kind, rec.id)
+    if not manifest and not skipped:
+        return 0, skipped
     if not manifest:
+        _stamp_rejected_uploads(rec, skipped)
+        db.session.commit()
         return 0, skipped
     try:
         existing = json.loads(rec.upload_manifest_json or '[]')
@@ -2536,10 +2609,10 @@ def _append_expense_upload_manifest(rec, kind, files, *, start_worker=True):
     rec.upload_total = int(rec.upload_total or 0) + len(manifest)
     rec.upload_manifest_json = json.dumps(combined)
     rec.upload_status = 'processing'
-    rec.upload_error = None
     if not rec.upload_started_at:
         rec.upload_started_at = pk_now()
     rec.upload_finished_at = None
+    _stamp_rejected_uploads(rec, skipped)
     db.session.commit()
     if start_worker:
         _start_expense_upload_worker(kind, rec.id)

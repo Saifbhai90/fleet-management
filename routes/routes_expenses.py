@@ -67,6 +67,7 @@ from routes import (
     _prepare_oil_work_order_upload_manifest,
     _prepare_work_order_upload_manifest,
     _read_fuel_market_scan,
+    _stamp_rejected_uploads,
     _start_expense_delete_cleanup_worker,
     _start_fuel_upload_worker,
     _start_maintenance_upload_worker,
@@ -2627,6 +2628,7 @@ def fuel_expense_add():
                     rec.upload_started_at = None
                     rec.upload_manifest_json = None
                     rec.upload_finished_at = pk_now()
+                _stamp_rejected_uploads(rec, skipped_att)
                 db.session.commit()
                 if manifest:
                     _start_fuel_upload_worker(rec.id)
@@ -2897,6 +2899,7 @@ def fuel_expense_edit(pk):
                         rec.upload_started_at = None
                         rec.upload_manifest_json = None
                         rec.upload_finished_at = pk_now()
+                    _stamp_rejected_uploads(rec, skipped_att)
                     db.session.commit()
                     if manifest:
                         _start_fuel_upload_worker(rec.id)
@@ -4391,6 +4394,7 @@ def oil_expense_form(pk=None):
                         rec.upload_started_at = None
                         rec.upload_manifest_json = None
                         rec.upload_finished_at = pk_now()
+                    _stamp_rejected_uploads(rec, skipped_att)
                     db.session.commit()
                     if manifest:
                         _start_oil_upload_worker(rec.id)
@@ -5966,6 +5970,7 @@ def maintenance_work_order_form(pk=None):
                         rec.upload_started_at = None
                         rec.upload_manifest_json = None
                         rec.upload_finished_at = pk_now()
+                    _stamp_rejected_uploads(rec, skipped_att)
                     db.session.commit()
                     if manifest:
                         _start_work_order_upload_worker(rec.id)
@@ -6595,6 +6600,7 @@ def oil_work_order_form(pk=None):
                         rec.upload_started_at = None
                         rec.upload_manifest_json = None
                         rec.upload_finished_at = pk_now()
+                    _stamp_rejected_uploads(rec, skipped_att)
                     db.session.commit()
                     if manifest:
                         _start_oil_work_order_upload_worker(rec.id)
@@ -8325,6 +8331,7 @@ def maintenance_expense_form(pk=None):
                         rec.upload_started_at = None
                         rec.upload_manifest_json = None
                         rec.upload_finished_at = pk_now()
+                    _stamp_rejected_uploads(rec, skipped_att)
                     db.session.commit()
                     if manifest:
                         _start_maintenance_upload_worker(rec.id)

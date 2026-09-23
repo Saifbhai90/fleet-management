@@ -15,6 +15,7 @@ from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 import r2_storage
+from services.expense_media_store import MediaRejected, store_verified_media
 
 from models import (
     db,
@@ -97,11 +98,8 @@ def promote_local_expense_media(limit=25):
                 try:
                     with open(full, 'rb') as fp:
                         stored = FileStorage(stream=fp, filename=name)
-                        if ftype == 'video':
-                            url = r2_storage.upload_binary_file(stored, folder=folder, original_filename=name)
-                        else:
-                            url = r2_storage.upload_image_file(stored, folder=folder)
-                    if not url:
+                        url = store_verified_media(stored, ftype, name, folder)
+                    if not url or not str(url).startswith('http'):
                         continue
                     row.file_path = url
                     db.session.commit()
@@ -111,6 +109,13 @@ def promote_local_expense_media(limit=25):
                     except OSError:
                         pass
                     logger.info('Moved %s id=%s to R2', model.__tablename__, row.id)
+                except MediaRejected:
+                    db.session.rollback()
+                    logger.warning(
+                        'Leaving unreadable %s id=%s on disk until a good file is sent',
+                        model.__tablename__,
+                        row.id,
+                    )
                 except Exception:
                     db.session.rollback()
                     logger.warning(
