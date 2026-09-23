@@ -82,6 +82,7 @@ from utils import (
     make_driver_profile_share_token, load_driver_profile_share_token,
     emg_amb_reg_matches_vehicle,
     emg_amb_reg_matches_vehicle_no,
+    strip_ufone_reg_tag,
 )
 from services.driver_job_history import build_driver_job_history, job_history_counts
 from services.expense_cloud_retry import promote_local_expense_media
@@ -5369,6 +5370,9 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
     def _norm_vno(vno):
         return (vno or '').strip().upper()
 
+    def _emg_reg_key(amb_reg_no):
+        return _norm_vno(strip_ufone_reg_tag(amb_reg_no) or amb_reg_no)
+
     emg_q = EmergencyTaskRecord.query.filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
@@ -5395,10 +5399,20 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
                 vq = vq.filter(Vehicle.district_id.in_(list(allowed_districts)))
             if allowed_projects:
                 vq = vq.filter(Vehicle.project_id.in_(list(allowed_projects)))
-        scope_regs = list({_norm_vno(no) for (no,) in vq.all() if no and str(no).strip()})
+        scope_regs = []
+        seen_regs = set()
+        for (no,) in vq.all():
+            reg = (no or '').strip()
+            key = reg.upper()
+            if not reg or key in seen_regs:
+                continue
+            seen_regs.add(key)
+            scope_regs.append(reg)
         if not scope_regs:
             return []
-        emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no.in_(scope_regs))
+        # Emergency rows keep a trailing tag (GBD-24-395-COW / GBD-24-395 COW).
+        # Exact vehicle_no match dropped the whole COW project.
+        emg_q = emg_q.filter(or_(*(emg_amb_reg_matches_vehicle(no) for no in scope_regs)))
     emg_q = emg_q.options(load_only(
         EmergencyTaskRecord.id,
         EmergencyTaskRecord.task_date,
@@ -5414,7 +5428,7 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
     if not all_emg:
         return []
 
-    vnos = list({_norm_vno(e.amb_reg_no) for e in all_emg if e.amb_reg_no})
+    vnos = list({_emg_reg_key(e.amb_reg_no) for e in all_emg if e.amb_reg_no})
     db_vehicles = Vehicle.query.options(
         joinedload(Vehicle.parking_station),
         joinedload(Vehicle.project),
@@ -5430,7 +5444,7 @@ def _task_start_delay_rows(from_date, to_date, project_id=0, district_id=0, vehi
 
     filtered = []
     for emg in all_emg:
-        vno = _norm_vno(emg.amb_reg_no)
+        vno = _emg_reg_key(emg.amb_reg_no)
         if not vno:
             continue
         if target_no and vno != target_no:
@@ -9816,20 +9830,89 @@ def _fmt_duration(delta):
     return f'{h:02d}:{m:02d}'
 
 
+def _unexecuted_activity_km(points, start_dt, end_dt):
+    """Sum distance for points whose time is inside the task window. points are sorted."""
+    if not points or start_dt is None or end_dt is None:
+        return 0.0
+    i = bisect.bisect_left(points, (start_dt,))
+    total = 0.0
+    n = len(points)
+    while i < n:
+        adt, dist = points[i]
+        if adt > end_dt:
+            break
+        total += dist
+        i += 1
+    return total
+
+
 def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehicle_id=0, category='', shift='',
                           check_type='', running_km_limit=None,
                           allowed_projects=None, allowed_districts=None, allowed_vehicles=None,
                           is_master_or_admin=True):
+    """Unexecuted rows without one GPS query per task.
+
+    The old path loaded every Green/Yellow task, then every activity point of
+    that vehicle-day, once per task. A district/project day was enough to
+    exhaust the web instance. Vehicles are scoped first. Running KM is one
+    distance query, then summed inside each task's assign-to-close window.
+    """
     allowed_projects = set(allowed_projects or [])
     allowed_districts = set(allowed_districts or [])
     allowed_vehicles = set(allowed_vehicles or [])
-    selected_district = db.session.get(District, district_id) if district_id else None
-    selected_district_name = (selected_district.name or '').strip().lower() if selected_district else ''
 
     def _norm_vno(vno):
         return (vno or '').strip().upper()
 
-    emg_q = EmergencyTaskRecord.query.filter(
+    def _emg_reg_key(amb_reg_no):
+        return _norm_vno(strip_ufone_reg_tag(amb_reg_no) or amb_reg_no)
+
+    if not is_master_or_admin and not allowed_vehicles:
+        return []
+
+    vehicle_q = Vehicle.query.options(
+        joinedload(Vehicle.district),
+        joinedload(Vehicle.project),
+    )
+    if not is_master_or_admin:
+        vehicle_q = vehicle_q.filter(Vehicle.id.in_(list(allowed_vehicles)))
+        if allowed_districts:
+            vehicle_q = vehicle_q.filter(Vehicle.district_id.in_(list(allowed_districts)))
+        if allowed_projects:
+            vehicle_q = vehicle_q.filter(Vehicle.project_id.in_(list(allowed_projects)))
+    if district_id:
+        vehicle_q = vehicle_q.filter(Vehicle.district_id == district_id)
+    if project_id:
+        vehicle_q = vehicle_q.filter(Vehicle.project_id == project_id)
+    if vehicle_id:
+        vehicle_q = vehicle_q.filter(Vehicle.id == vehicle_id)
+
+    assigned_project_pairs = set(
+        (int(pid), int(did))
+        for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
+    )
+    by_no = {}
+    for vehicle in vehicle_q.all():
+        if not vehicle.project_id or not vehicle.district_id:
+            continue
+        if (int(vehicle.project_id), int(vehicle.district_id)) not in assigned_project_pairs:
+            continue
+        reg = (vehicle.vehicle_no or '').strip()
+        if reg:
+            by_no[_norm_vno(reg)] = vehicle
+    if not by_no:
+        return []
+
+    emg_q = EmergencyTaskRecord.query.options(load_only(
+        EmergencyTaskRecord.id,
+        EmergencyTaskRecord.task_date,
+        EmergencyTaskRecord.task_id_ext,
+        EmergencyTaskRecord.amb_reg_no,
+        EmergencyTaskRecord.district_name,
+        EmergencyTaskRecord.excel_created_date,
+        EmergencyTaskRecord.completed_date_time,
+        EmergencyTaskRecord.category,
+    )).filter(
         EmergencyTaskRecord.task_date >= from_date,
         EmergencyTaskRecord.task_date <= to_date,
         EmergencyTaskRecord.category.in_(['Green', 'Yellow']),
@@ -9838,112 +9921,136 @@ def _unexecuted_task_rows(from_date, to_date, district_id=0, project_id=0, vehic
     )
     if category in ('Green', 'Yellow'):
         emg_q = emg_q.filter(EmergencyTaskRecord.category == category)
-    if vehicle_id:
-        v = db.session.get(Vehicle, vehicle_id)
-        emg_q = emg_q.filter(EmergencyTaskRecord.amb_reg_no == (v.vehicle_no if v else ''))
 
-    emg_rows = emg_q.order_by(EmergencyTaskRecord.task_date.desc(), EmergencyTaskRecord.id.desc()).all()
-    emg_vnos = [_norm_vno(r.amb_reg_no) for r in emg_rows if r.amb_reg_no]
-    db_vehicles = Vehicle.query.filter(Vehicle.vehicle_no.in_(emg_vnos)).all() if emg_vnos else []
-    vehicle_map = {_norm_vno(v.vehicle_no): v for v in db_vehicles}
+    regs = [(v.vehicle_no or '').strip() for v in by_no.values()]
+    emg_rows = []
+    seen_ids = set()
+    for offset in range(0, len(regs), 30):
+        part = [reg for reg in regs[offset:offset + 30] if reg]
+        if not part:
+            continue
+        matched = emg_q.filter(or_(*(emg_amb_reg_matches_vehicle(reg) for reg in part))).all()
+        for rec in matched:
+            if rec.id in seen_ids:
+                continue
+            seen_ids.add(rec.id)
+            emg_rows.append(rec)
+    if not emg_rows:
+        return []
 
-    # Global eligibility guard (applies to all users): only include records where
-    # district-project assignment exists and vehicle has district deployment in master data.
-    assigned_project_pairs = set(
-        (int(pid), int(did))
-        for pid, did in db.session.query(project_district.c.project_id, project_district.c.district_id).all()
-    )
+    pending = []
+    act_from = None
+    act_to = None
+    for rec in emg_rows:
+        assign_dt = _parse_emg_datetime(rec.excel_created_date)
+        close_dt = _parse_emg_datetime(rec.completed_date_time)
+        if not assign_dt or not close_dt or close_dt < assign_dt:
+            continue
+        vehicle = by_no.get(_emg_reg_key(rec.amb_reg_no))
+        if not vehicle:
+            continue
+        row_shift = _shift_from_datetime(assign_dt)
+        if shift in ('day', 'night') and row_shift.lower() != shift:
+            continue
+        pending.append((rec, vehicle, assign_dt, close_dt, row_shift))
+        start_day = assign_dt.date()
+        end_day = close_dt.date()
+        if act_from is None or start_day < act_from:
+            act_from = start_day
+        if act_to is None or end_day > act_to:
+            act_to = end_day
+    if not pending:
+        return []
 
-    saved_map = {r.emergency_task_record_id: r for r in UnexecutedTaskRecord.query.filter(
-        UnexecutedTaskRecord.emergency_task_record_id.in_([r.id for r in emg_rows])
-    ).all()} if emg_rows else {}
+    moves = {}
+    plates = list({(vehicle.vehicle_no or '').strip() for _, vehicle, _, _, _ in pending if vehicle.vehicle_no})
+    if plates and act_from and act_to:
+        activity_rows = (
+            VehicleActivityRecord.query.with_entities(
+                VehicleActivityRecord.vehicle_no,
+                VehicleActivityRecord.record_date_time,
+                VehicleActivityRecord.distance,
+            ).filter(
+                VehicleActivityRecord.vehicle_no.in_(plates),
+                VehicleActivityRecord.task_date >= act_from,
+                VehicleActivityRecord.task_date <= act_to,
+                VehicleActivityRecord.distance > 0,
+            ).all()
+        )
+        for vehicle_no, raw_dt, dist in activity_rows:
+            adt = _parse_activity_datetime(raw_dt)
+            if not adt:
+                continue
+            moves.setdefault(_norm_vno(vehicle_no), []).append((adt, float(dist or 0)))
+        for points in moves.values():
+            points.sort(key=lambda item: item[0])
+
+    emg_ids = [rec.id for rec, _, _, _, _ in pending]
+    saved_map = {}
+    for offset in range(0, len(emg_ids), 500):
+        saved_rows = UnexecutedTaskRecord.query.options(
+            joinedload(UnexecutedTaskRecord.driver)
+        ).filter(
+            UnexecutedTaskRecord.emergency_task_record_id.in_(emg_ids[offset:offset + 500])
+        ).all()
+        for saved in saved_rows:
+            saved_map[saved.emergency_task_record_id] = saved
+
+    vehicle_ids = list({vehicle.id for _, vehicle, _, _, _ in pending})
+    drivers_by_vid = {}
+    if vehicle_ids:
+        for driver in Driver.query.filter(
+            Driver.vehicle_id.in_(vehicle_ids),
+            Driver.status == 'Active',
+        ).order_by(Driver.name).all():
+            drivers_by_vid.setdefault(driver.vehicle_id, []).append(driver)
+
+    extra_ids = set()
+    for rec, vehicle, _, _, _ in pending:
+        saved = saved_map.get(rec.id)
+        if not saved or not saved.driver_id:
+            continue
+        if all(driver.id != saved.driver_id for driver in drivers_by_vid.get(vehicle.id, [])):
+            extra_ids.add(saved.driver_id)
+    extra_drivers = {}
+    if extra_ids:
+        for driver in Driver.query.filter(Driver.id.in_(list(extra_ids))).all():
+            extra_drivers[driver.id] = driver
 
     out_rows = []
-    for r in emg_rows:
-        assign_dt = _parse_emg_datetime(r.excel_created_date)
-        close_dt = _parse_emg_datetime(r.completed_date_time)
-        if not assign_dt or not close_dt:
-            continue
-        if close_dt < assign_dt:
-            continue
-
-        v = vehicle_map.get(_norm_vno(r.amb_reg_no))
-        if not v or not v.project_id or not v.district_id:
-            continue
-        if (int(v.project_id), int(v.district_id)) not in assigned_project_pairs:
-            continue
-
-        # Apply user scope first (like Tracker Difference Report behavior).
-        if not is_master_or_admin:
-            if not v:
-                continue
-            # Vehicle scope is mandatory for non-admin users.
-            if not allowed_vehicles or v.id not in allowed_vehicles:
-                continue
-            if allowed_districts and v.district_id not in allowed_districts:
-                continue
-            if allowed_projects and v.project_id not in allowed_projects:
-                continue
-
-        # Apply explicit filter values strictly. If vehicle mapping is missing, fallback to EMG district text
-        # for district filter; for project/vehicle filters skip unmapped rows.
-        if district_id:
-            if v:
-                if v.district_id != district_id:
-                    continue
-            else:
-                emg_district_name = (r.district_name or '').strip().lower()
-                if not selected_district_name or emg_district_name != selected_district_name:
-                    continue
-        if project_id and (not v or v.project_id != project_id):
-            continue
-        if vehicle_id and (not v or v.id != vehicle_id):
-            continue
-
-        activity_km = 0.0
-        if v:
-            acts = VehicleActivityRecord.query.filter(
-                VehicleActivityRecord.vehicle_no == v.vehicle_no,
-                VehicleActivityRecord.task_date >= assign_dt.date(),
-                VehicleActivityRecord.task_date <= close_dt.date(),
-            ).all()
-            for a in acts:
-                adt = _parse_activity_datetime(a.record_date_time)
-                if adt and assign_dt <= adt <= close_dt:
-                    activity_km += float(a.distance or 0)
-        activity_km = round(activity_km, 2)
-
+    for rec, vehicle, assign_dt, close_dt, row_shift in pending:
+        activity_km = round(
+            _unexecuted_activity_km(moves.get(_norm_vno(vehicle.vehicle_no)) or [], assign_dt, close_dt),
+            2,
+        )
         if running_km_limit is not None:
             if check_type == 'above' and not (activity_km > running_km_limit):
                 continue
             if check_type == 'below' and not (activity_km < running_km_limit):
                 continue
-
-        total_time = close_dt - assign_dt
-        row_shift = _shift_from_datetime(assign_dt)
-        if shift in ('day', 'night') and row_shift.lower() != shift:
-            continue
-
-        saved = saved_map.get(r.id)
-        assigned_drivers = Driver.query.filter_by(vehicle_id=(v.id if v else None), status='Active').order_by(Driver.name).all() if v else []
-        if saved and saved.driver_id:
-            _saved_drv = db.session.get(Driver, saved.driver_id)
-            if _saved_drv and all(d.id != _saved_drv.id for d in assigned_drivers):
-                assigned_drivers.append(_saved_drv)
-
+        saved = saved_map.get(rec.id)
+        assigned_drivers = list(drivers_by_vid.get(vehicle.id) or [])
+        if saved and saved.driver_id and all(driver.id != saved.driver_id for driver in assigned_drivers):
+            extra = extra_drivers.get(saved.driver_id)
+            if extra:
+                assigned_drivers.append(extra)
         out_rows.append({
-            'emg': r,
-            'vehicle': v,
-            'district': v.district if v and v.district else None,
-            'project': v.project if v and v.project else None,
+            'emg': rec,
+            'vehicle': vehicle,
+            'district': vehicle.district,
+            'project': vehicle.project,
             'assign_dt': assign_dt,
             'close_dt': close_dt,
-            'total_time': _fmt_duration(total_time),
+            'total_time': _fmt_duration(close_dt - assign_dt),
             'activity_km': activity_km,
             'shift': row_shift,
             'drivers': assigned_drivers,
             'saved': saved,
         })
+    out_rows.sort(key=lambda row: (
+        row['emg'].task_date or date.min,
+        row['emg'].id or 0,
+    ), reverse=True)
     return out_rows
 
 
