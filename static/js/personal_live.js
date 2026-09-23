@@ -57,8 +57,8 @@
         });
     }
 
-    // Ease onto the latest GPS point in about a second. A long slide keeps
-    // the icon behind the coordinate the phone already shows.
+    // Glide across the 5 second gap so the vehicle moves smoothly instead of
+    // jumping from the last point to the new one.
     function moveMarker(marker, latlng, durationMs) {
         const target = L.latLng(latlng[0], latlng[1]);
         const from = marker.getLatLng();
@@ -81,7 +81,7 @@
         const startLat = from.lat;
         const startLng = from.lng;
         const start = performance.now();
-        const dur = Math.max(400, Math.min(durationMs || 1000, 1000));
+        const dur = Math.max(1000, Math.min(durationMs || 5000, 5000));
         if (marker._raf) cancelAnimationFrame(marker._raf);
         function step(now) {
             if (marker._target !== target) return;
@@ -172,7 +172,7 @@
                 markers[v.id]._ll = latlng;
                 markers[v.id]._sig = sig;
             } else {
-                moveMarker(markers[v.id], latlng, 1000);
+                moveMarker(markers[v.id], latlng, 5000);
                 if (markers[v.id]._sig !== sig) {             // visuals only when something changed
                     markers[v.id].setIcon(vehicleIcon(v, isSel));
                     markers[v.id]._sig = sig;
