@@ -634,6 +634,12 @@
 
             {% endif %}
 
+            {% if can_see_page('report_driver_roster') %}
+
+            {{ report_link(url_for('report_driver_roster', nav_from='reports'), 'fa-solid fa-address-book', 'Driver Roster', 'rc-tile--driver-roster', 'District, parking, vehicle, phone, CNIC, assign date and education') }}
+
+            {% endif %}
+
             {% if can_see_page('driver_seat_available_report') %}
 
             {{ report_link(url_for('driver_seat_available_report', nav_from='reports'), 'fa-solid fa-id-badge', 'Driver Seat Available', 'rc-tile--seat') }}
@@ -2857,6 +2863,8 @@ html.capacitor-native .rc-web-only { display: none !important; }
 .rc-tile--oil .rc-tile-icon > i,
 
 .rc-tile--driver-profile .rc-tile-icon > i,
+
+.rc-tile--driver-roster .rc-tile-icon > i,
 
 .rc-tile--active-drivers .rc-tile-icon > i,
 

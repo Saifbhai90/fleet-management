@@ -332,6 +332,7 @@ PERMISSION_TREE = {
         ('report_vehicle_profile', 'Vehicle Profile'),
         ('report_engine_chassis', 'Engine & Chassis Number'),
         ('report_bank_account', 'Bank Account Details'),
+        ('report_driver_roster', 'Driver Roster'),
         ('report_driver_profile', 'Driver Profile'),
         ('driver_update_text', 'Driver Profile – Driver Update Text'),
         ('report_ai', 'Create Report with AI'),
@@ -1060,6 +1061,7 @@ SECTION_PAGE_GROUPS = {
         ('Vehicle Profile', [('report_vehicle_profile', 'Vehicle Profile')]),
         ('Engine & Chassis Number', [('report_engine_chassis', 'Engine & Chassis Number')]),
         ('Bank Account Details', [('report_bank_account', 'Bank Account Details')]),
+        ('Driver Roster', [('report_driver_roster', 'Driver Roster')]),
         ('Driver Profile', [
             ('report_driver_profile', 'Driver Profile'),
             ('driver_update_text', 'Driver Update Text'),
@@ -1368,6 +1370,7 @@ PAGE_VISIBLE = {
     'report_vehicle_profile': ['reports', 'report_vehicle_profile'],
     'report_engine_chassis': ['reports', 'report_engine_chassis'],
     'report_bank_account': ['reports', 'report_bank_account'],
+    'report_driver_roster': ['reports', 'report_driver_roster'],
     'report_driver_profile': ['reports', 'report_driver_profile'],
     'driver_update_text': ['reports', 'driver_update_text'],
     'active_drivers_report': ['reports', 'active_drivers_report'],

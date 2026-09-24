@@ -13,7 +13,7 @@ from flask import (
 )
 from app import app, db, csrf
 from models import (
-    Vehicle, Driver, Project, District, Company, ParkingStation,
+    Vehicle, Driver, Project, District, Company, ParkingStation, project_district,
     VehicleDailyTask, EmergencyTaskRecord, VehicleMileageRecord,
     VehicleActivityRecord, DriverAttendance, FuelExpense,
     DriverTransfer, DriverStatusChange, Employee, EmployeePost,
@@ -2303,6 +2303,276 @@ def report_bank_account():
         location_cascade=_fuel_expense_location_cascade_dict(),
         disable_district=disable_district,
         is_master_or_admin=is_master_or_admin,
+    )
+
+
+def _driver_roster_district_name(driver):
+    vehicle = driver.vehicle
+    if vehicle is not None and vehicle.district is not None and (vehicle.district.name or '').strip():
+        return vehicle.district.name.strip()
+    if driver.district is not None and (driver.district.name or '').strip():
+        return driver.district.name.strip()
+    return (driver.driver_district or '').strip() or '-'
+
+
+def _driver_roster_project_name(driver):
+    vehicle = driver.vehicle
+    if vehicle is not None and vehicle.project is not None and (vehicle.project.name or '').strip():
+        return vehicle.project.name.strip()
+    if driver.project is not None and (driver.project.name or '').strip():
+        return driver.project.name.strip()
+    return '-'
+
+
+def _driver_roster_filters(user_context):
+    is_master_or_admin = user_context.get('is_master_or_admin', False)
+    allowed_projects = user_context.get('allowed_projects', set())
+    allowed_districts = user_context.get('allowed_districts', set())
+    allowed_vehicles = user_context.get('allowed_vehicles', set())
+    allowed_shifts = user_context.get('allowed_shifts', set())
+
+    district_id = request.args.get('district_id', type=int) or 0
+    project_id = request.args.get('project_id', type=int) or 0
+    vehicle_id = request.args.get('vehicle_id', type=int) or 0
+    parking_id = request.args.get('parking_id', type=int) or 0
+    driver_status = (request.args.get('driver_status') or 'active').strip().lower()
+    if driver_status not in ('active', 'left', 'all'):
+        driver_status = 'active'
+    search = (request.args.get('q') or '').strip()
+
+    disable_district = False
+    disable_project = False
+    disable_vehicle = False
+    if not is_master_or_admin:
+        if len(allowed_districts) == 1:
+            if not district_id:
+                district_id = next(iter(allowed_districts))
+            disable_district = True
+        if len(allowed_projects) == 1:
+            if not project_id:
+                project_id = next(iter(allowed_projects))
+            disable_project = True
+        if len(allowed_vehicles) == 1:
+            if not vehicle_id:
+                vehicle_id = next(iter(allowed_vehicles))
+            disable_vehicle = True
+
+    return {
+        'is_master_or_admin': is_master_or_admin,
+        'allowed_projects': allowed_projects,
+        'allowed_districts': allowed_districts,
+        'allowed_vehicles': allowed_vehicles,
+        'allowed_shifts': allowed_shifts,
+        'district_id': district_id,
+        'project_id': project_id,
+        'vehicle_id': vehicle_id,
+        'parking_id': parking_id,
+        'driver_status': driver_status,
+        'search': search,
+        'disable_district': disable_district,
+        'disable_project': disable_project,
+        'disable_vehicle': disable_vehicle,
+    }
+
+
+def _driver_roster_rows(filters):
+    query = Driver.query.options(
+        db.joinedload(Driver.vehicle).joinedload(Vehicle.district),
+        db.joinedload(Driver.vehicle).joinedload(Vehicle.project),
+        db.joinedload(Driver.vehicle).joinedload(Vehicle.parking_station),
+        db.joinedload(Driver.district),
+        db.joinedload(Driver.project),
+    )
+
+    driver_status = filters['driver_status']
+    if driver_status == 'active':
+        query = query.filter(Driver.status != 'Left')
+    elif driver_status == 'left':
+        query = query.filter(Driver.status == 'Left')
+
+    if not filters['is_master_or_admin']:
+        allowed_vehicles = filters['allowed_vehicles']
+        allowed_projects = filters['allowed_projects']
+        allowed_districts = filters['allowed_districts']
+        allowed_shifts = filters['allowed_shifts']
+        if allowed_vehicles:
+            query = query.filter(Driver.vehicle_id.in_(list(allowed_vehicles)))
+        elif allowed_projects or allowed_districts:
+            if allowed_projects:
+                query = query.filter(Driver.project_id.in_(list(allowed_projects)))
+            if allowed_districts:
+                query = query.filter(Driver.district_id.in_(list(allowed_districts)))
+        if allowed_shifts:
+            query = query.filter(Driver.shift.in_(list(allowed_shifts)))
+
+    district_id = filters['district_id']
+    if district_id:
+        in_district = db.session.query(Vehicle.id).filter(Vehicle.district_id == district_id)
+        with_any_district = db.session.query(Vehicle.id).filter(Vehicle.district_id.isnot(None))
+        query = query.filter(or_(
+            Driver.vehicle_id.in_(in_district),
+            and_(
+                or_(Driver.vehicle_id.is_(None), ~Driver.vehicle_id.in_(with_any_district)),
+                Driver.district_id == district_id,
+            ),
+        ))
+
+    project_id = filters['project_id']
+    if project_id:
+        in_project = db.session.query(Vehicle.id).filter(Vehicle.project_id == project_id)
+        with_any_project = db.session.query(Vehicle.id).filter(Vehicle.project_id.isnot(None))
+        query = query.filter(or_(
+            Driver.vehicle_id.in_(in_project),
+            and_(
+                or_(Driver.vehicle_id.is_(None), ~Driver.vehicle_id.in_(with_any_project)),
+                Driver.project_id == project_id,
+            ),
+        ))
+
+    vehicle_id = filters['vehicle_id']
+    if vehicle_id:
+        query = query.filter(Driver.vehicle_id == vehicle_id)
+
+    parking_id = filters['parking_id']
+    if parking_id:
+        parked = db.session.query(Vehicle.id).filter(Vehicle.parking_station_id == parking_id)
+        query = query.filter(Driver.vehicle_id.in_(parked))
+
+    search = filters['search']
+    if search:
+        like = f'%{search}%'
+        vehicle_match = db.session.query(Vehicle.id).filter(Vehicle.vehicle_no.ilike(like))
+        query = query.filter(or_(
+            Driver.name.ilike(like),
+            Driver.cnic_no.ilike(like),
+            Driver.phone1.ilike(like),
+            Driver.phone2.ilike(like),
+            Driver.vehicle_id.in_(vehicle_match),
+        ))
+
+    rows = []
+    for driver in query.all():
+        vehicle = driver.vehicle
+        parking_name = '-'
+        vehicle_no = '-'
+        if vehicle is not None:
+            vehicle_no = (vehicle.vehicle_no or '').strip() or '-'
+            station = vehicle.parking_station
+            if station is not None and (station.name or '').strip():
+                parking_name = station.name.strip()
+        assign_date = driver.assign_date.strftime('%d-%m-%Y') if driver.assign_date else '-'
+        rows.append({
+            'district': _driver_roster_district_name(driver),
+            'project': _driver_roster_project_name(driver),
+            'parking': parking_name,
+            'vehicle_no': vehicle_no,
+            'name': (driver.name or '').strip() or '-',
+            'phone1': (driver.phone1 or '').strip() or '-',
+            'phone2': (driver.phone2 or '').strip() or '-',
+            'cnic': (driver.cnic_no or '').strip() or '-',
+            'assign_date': assign_date,
+            'education': (driver.education or '').strip() or '-',
+        })
+
+    def _blank_last(value):
+        if value == '-':
+            return (1, '')
+        return (0, value.lower())
+
+    rows.sort(key=lambda row: (
+        _blank_last(row['district']),
+        _blank_last(row['project']),
+        _blank_last(row['parking']),
+        _blank_last(row['vehicle_no']),
+        _blank_last(row['name']),
+    ))
+    return rows
+
+
+@app.route('/reports/driver-roster')
+def report_driver_roster():
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    filters = _driver_roster_filters(user_context)
+    rows = _driver_roster_rows(filters)
+
+    dist_q = District.query.order_by(District.name)
+    if not filters['is_master_or_admin'] and filters['allowed_districts']:
+        dist_q = dist_q.filter(District.id.in_(list(filters['allowed_districts'])))
+    district_choices = [(0, '-- All Districts --')] + [(d.id, d.name) for d in dist_q.all()]
+
+    proj_q = Project.query.order_by(Project.name)
+    if not filters['is_master_or_admin'] and filters['allowed_projects']:
+        proj_q = proj_q.filter(Project.id.in_(list(filters['allowed_projects'])))
+    if filters['district_id']:
+        proj_q = proj_q.join(project_district, Project.id == project_district.c.project_id).filter(
+            project_district.c.district_id == filters['district_id']
+        )
+    project_choices = [(0, '-- All Projects --')] + [(p.id, p.name) for p in proj_q.all()]
+
+    veh_q = Vehicle.query
+    if not filters['is_master_or_admin'] and filters['allowed_vehicles']:
+        veh_q = veh_q.filter(Vehicle.id.in_(list(filters['allowed_vehicles'])))
+    if not filters['is_master_or_admin'] and filters['allowed_projects'] and not filters['allowed_vehicles']:
+        veh_q = veh_q.filter(Vehicle.project_id.in_(list(filters['allowed_projects'])))
+    if not filters['is_master_or_admin'] and filters['allowed_districts'] and not filters['allowed_vehicles']:
+        veh_q = veh_q.filter(Vehicle.district_id.in_(list(filters['allowed_districts'])))
+    if filters['district_id']:
+        veh_q = veh_q.filter(Vehicle.district_id == filters['district_id'])
+    if filters['project_id']:
+        veh_q = veh_q.filter(Vehicle.project_id == filters['project_id'])
+    vehicle_choices = [(0, '-- All Vehicles --')] + [
+        (v.id, v.vehicle_no) for v in veh_q.order_by(*vehicle_order_by()).all()
+    ]
+
+    park_q = ParkingStation.query.order_by(ParkingStation.name)
+    if not filters['is_master_or_admin'] and filters['allowed_districts']:
+        park_q = park_q.filter(ParkingStation.id.in_(
+            db.session.query(Vehicle.parking_station_id).filter(
+                Vehicle.district_id.in_(list(filters['allowed_districts'])),
+                Vehicle.parking_station_id.isnot(None),
+            )
+        ))
+    parking_choices = [(0, '-- All Parking Places --')] + [(p.id, p.name) for p in park_q.all()]
+
+    return render_template(
+        'report_driver_roster.html',
+        rows=rows,
+        total=len(rows),
+        district_id=filters['district_id'],
+        project_id=filters['project_id'],
+        vehicle_id=filters['vehicle_id'],
+        parking_id=filters['parking_id'],
+        driver_status=filters['driver_status'],
+        search=filters['search'],
+        district_choices=district_choices,
+        project_choices=project_choices,
+        vehicle_choices=vehicle_choices,
+        parking_choices=parking_choices,
+        disable_district=filters['disable_district'],
+        disable_project=filters['disable_project'],
+        disable_vehicle=filters['disable_vehicle'],
+        location_cascade=_fuel_expense_location_cascade_dict(),
+    )
+
+
+@app.route('/reports/driver-roster/export')
+def report_driver_roster_export():
+    user_id = session.get('user_id')
+    user_context = get_user_context(user_id) if user_id else {}
+    filters = _driver_roster_filters(user_context)
+    rows = _driver_roster_rows(filters)
+    headers = [
+        'District', 'Project', 'Parking Place', 'Vehicle No', 'Driver Name',
+        'Phone No 1', 'Phone No 2', 'CNIC', 'Assign Date', 'Education',
+    ]
+    sheet_rows = [[
+        row['district'], row['project'], row['parking'], row['vehicle_no'], row['name'],
+        row['phone1'], row['phone2'], row['cnic'], row['assign_date'], row['education'],
+    ] for row in rows]
+    return generate_excel_template(
+        headers, sheet_rows, required_columns=[],
+        filename=f'driver_roster_{pk_now().strftime("%Y%m%d_%H%M%S")}.xlsx',
     )
 
 
