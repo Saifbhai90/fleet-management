@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ============================================================
 #  CONFIG
 # ============================================================
-BASE_URL = "https://bpocops.ufone.com"
+BASE_URL = "https://bpocops.ptcl.com.pk"
 AES_KEY = AES_IV = b'9090808080809090'  # hardcoded in login page JS
 SESSION_DIR = os.environ.get("UFONE_SESSION_DIR", os.getcwd())
 _RETRY_ATTEMPTS = 3
@@ -130,7 +130,7 @@ class UfoneClient:
                 if age > 12 * 3600:
                     return False
             for k, v in (data.get("cookies") or {}).items():
-                self.session.cookies.set(k, v, domain="bpocops.ufone.com")
+                self.session.cookies.set(k, v, domain="bpocops.ptcl.com.pk")
             return True
         except Exception:
             return False

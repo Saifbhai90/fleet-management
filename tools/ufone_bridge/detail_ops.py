@@ -484,7 +484,7 @@ def _build_phone_status() -> dict:
     try:
         t0 = _t.perf_counter()
         req = Request(
-            'https://bpocops.ufone.com/login.aspx',
+            'https://bpocops.ptcl.com.pk/login.aspx',
             headers={'User-Agent': 'ufone-phone-status/1.0'},
         )
         with urlopen(req, timeout=8) as r:

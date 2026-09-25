@@ -103,7 +103,7 @@ def main() -> int:
             client,
             'curl -sS -o /dev/null -w "HTTP %{http_code} time=%{time_total}\\n" '
             '--connect-timeout 15 --max-time 40 '
-            '-I https://bpocops.ufone.com/Login.aspx',
+            '-I https://bpocops.ptcl.com.pk/Login.aspx',
             check=False,
         )
         if 'HTTP 200' not in out and 'HTTP 30' not in out and 'HTTP 40' not in out:

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Pakistan VPS Ufone → Render bridge worker.
 
-Fetches live ambulances / tasks / emergency report from bpocops.ufone.com
+Fetches live ambulances / tasks / emergency report from bpocops.ptcl.com.pk
 using a Pakistan IP, then POSTs raw payloads to Fleet Manager ingest API.
 """
 from __future__ import annotations

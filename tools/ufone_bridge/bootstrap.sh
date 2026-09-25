@@ -20,10 +20,10 @@ fi
 chmod 600 .env
 
 # Prove Ufone TLS from this IP
-echo "=== TLS probe bpocops.ufone.com ==="
+echo "=== TLS probe bpocops.ptcl.com.pk ==="
 curl -sS -o /dev/null -w "HTTP %{http_code} time=%{time_total}s\n" \
   --connect-timeout 15 --max-time 40 \
-  -I "https://bpocops.ufone.com/Login.aspx" || {
+  -I "https://bpocops.ptcl.com.pk/Login.aspx" || {
   echo "FAIL: Ufone TLS/HTTP probe failed from this VPS — stop and investigate"
   exit 2
 }
