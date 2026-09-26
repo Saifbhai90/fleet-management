@@ -30,16 +30,6 @@
     <div class="tab-content ws-tab-content" id="workspaceReportTabContent">
       <div class="tab-pane fade {{ 'show active' if active_tab == 'w-expense' else '' }}" id="w-expense" role="tabpanel">
         <div class="ws-panel">
-          {% if not show_expense_summary %}
-          <div class="text-center py-4 px-3">
-            <h6 class="mb-2 fw-semibold">Expense Reports</h6>
-            <p class="text-muted small mb-4 mx-auto" style="max-width: 420px;">Workspace tracked expenses ka digest — Fuel, Oil, Maintenance, Employee, Opening aur Fuel/Oil Opening ek hi jagah filters aur KPI cards ke sath.</p>
-            <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="btn btn-primary btn-lg px-4 workspace-report-link">
-              <i class="bi bi-pie-chart-fill me-2"></i>Expense Summary
-            </a>
-            <div class="small text-muted mt-3">Is button se hi breakdown report khulti hai; filters aur export yahi screen par milenge.</div>
-          </div>
-          {% else %}
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
               <h6 class="mb-0">Expense Summary</h6>
@@ -55,32 +45,40 @@
           <form method="get" class="row g-2 align-items-end mb-3">
             <input type="hidden" name="tab" value="w-expense">
             <input type="hidden" name="expense_summary" value="1">
-                    <div class="col-lg-2 col-md-3">
-          <label class="form-label form-label-sm mb-1">From Date</label>
-          <select class="form-select form-select-sm search-select" name="district_id" id="districtSelect" data-placeholder="Search district..."
-            data-cascade-child="#projectSelect"
-            data-cascade-url="/api/cascade/projects?parent={value}"
-            data-cascade-value-key="id"
-            data-cascade-text-key="name"
-            data-cascade-placeholder="-- All Projects --"
-            data-cascade-placeholder-value="0"
-            data-cascade-source="locationCascadeData"
-            data-cascade-cache-prefix="proj_d">
-            <option value="0">All Districts</option>
-            {% for d in districts %}
-            <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-lg-3 col-md-3">
-          <label class="form-label form-label-sm mb-1">To Date</label>
-          <select class="form-select form-select-sm search-select" name="project_id" id="projectSelect" data-placeholder="Search project...">
-            <option value="0">All Projects</option>
-            {% for p in projects %}
-            <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label form-label-sm mb-1">From Date</label>
+              <input type="text" name="from_date" value="{{ from_date.strftime('%d-%m-%Y') if from_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label form-label-sm mb-1">To Date</label>
+              <input type="text" name="to_date" value="{{ to_date.strftime('%d-%m-%Y') if to_date else '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label form-label-sm mb-1">District</label>
+              <select class="form-select form-select-sm search-select" name="district_id" id="districtSelect" data-placeholder="Search district..."
+                data-cascade-child="#projectSelect"
+                data-cascade-url="/api/cascade/projects?parent={value}"
+                data-cascade-value-key="id"
+                data-cascade-text-key="name"
+                data-cascade-placeholder="-- All Projects --"
+                data-cascade-placeholder-value="0"
+                data-cascade-source="locationCascadeData"
+                data-cascade-cache-prefix="proj_d">
+                <option value="0">All Districts</option>
+                {% for d in districts %}
+                <option value="{{ d.id }}" {{ 'selected' if district_id == d.id else '' }}>{{ d.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6 col-lg-2">
+              <label class="form-label form-label-sm mb-1">Project</label>
+              <select class="form-select form-select-sm search-select" name="project_id" id="projectSelect" data-placeholder="Search project...">
+                <option value="0">All Projects</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {{ 'selected' if project_id == p.id else '' }}>{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <div class="col-lg-2 col-md-12 d-flex gap-2">
               <button class="btn btn-primary btn-sm w-100" type="submit">Apply</button>
               <a href="{{ url_for('workspace_reports', tab='w-expense', expense_summary=1) }}" class="btn btn-outline-secondary btn-sm">Reset</a>
@@ -159,7 +157,6 @@
               </tfoot>
             </table>
           </div>
-          {% endif %}
         </div>
       </div>
 
