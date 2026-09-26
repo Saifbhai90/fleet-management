@@ -21,32 +21,40 @@
     <div class="card shadow-sm border-0 mt-3 mb-3">
         <div class="card-body py-2">
             <form method="GET" action="" class="row g-2 align-items-end">
-                        <div class="col-6 col-md-2">
-          <label class="form-label form-label-sm mb-1">From Date</label>
-          <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
-            data-cascade-child="#projectSelect"
-            data-cascade-url="/api/cascade/projects?parent={value}"
-            data-cascade-value-key="id"
-            data-cascade-text-key="name"
-            data-cascade-placeholder="-- All Projects --"
-            data-cascade-placeholder-value="0"
-            data-cascade-source="locationCascadeData"
-            data-cascade-cache-prefix="proj_d">
-            <option value="0">-- All Districts --</option>
-            {% for d in districts %}
-            <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-6 col-md-2">
-          <label class="form-label form-label-sm mb-1">To Date</label>
-          <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
-            <option value="0">-- All Projects --</option>
-            {% for p in projects %}
-            <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">From Date</label>
+                    <input type="text" name="from_date" value="{{ from_date or '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">To Date</label>
+                    <input type="text" name="to_date" value="{{ to_date or '' }}" class="form-control form-control-sm datepicker" placeholder="dd-mm-yyyy" autocomplete="off">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">District</label>
+                    <select name="district_id" id="districtSelect" class="form-select form-select-sm search-select"
+                        data-cascade-child="#projectSelect"
+                        data-cascade-url="/api/cascade/projects?parent={value}"
+                        data-cascade-value-key="id"
+                        data-cascade-text-key="name"
+                        data-cascade-placeholder="-- All Projects --"
+                        data-cascade-placeholder-value="0"
+                        data-cascade-source="locationCascadeData"
+                        data-cascade-cache-prefix="proj_d">
+                        <option value="0">-- All Districts --</option>
+                        {% for d in districts %}
+                        <option value="{{ d.id }}" {% if district_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label form-label-sm mb-1">Project</label>
+                    <select name="project_id" id="projectSelect" class="form-select form-select-sm search-select">
+                        <option value="0">-- All Projects --</option>
+                        {% for p in projects %}
+                        <option value="{{ p.id }}" {% if project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="col-6 col-md-2 d-flex gap-1">
                     <button type="submit" class="btn btn-warning btn-sm flex-fill">
                         <i class="bi bi-funnel me-1"></i>Filter
